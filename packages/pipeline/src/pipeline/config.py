@@ -21,6 +21,8 @@ class PipelineConfig(Frozen):
     instrument: Instrument
     # Free tier limit; the paid tier will raise it.
     max_duration_s: float = Field(default=300.0, gt=0)
+    # Isolate the instrument with Demucs before transcribing (optional install; TD-1).
+    separation: bool = False
     # Guitar only: used by the tab stage.
     tuning: Tuning = Tuning.STANDARD
     capo: int = Field(default=0, ge=0, le=12)

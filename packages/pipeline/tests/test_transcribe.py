@@ -61,7 +61,8 @@ def test_cached_run_does_not_load_the_model(tmp_path: Path) -> None:
     run_pipeline(source, tmp_path, cfg, default_stages())
 
     transcribe = TranscribeStage()
-    result = run_pipeline(source, tmp_path, cfg, [default_stages()[0], transcribe])
+    upstream = default_stages()[:2]  # normalize, separate
+    result = run_pipeline(source, tmp_path, cfg, [*upstream, transcribe])
 
     assert {r.stage: r.status for r in result.stages}[StageName.TRANSCRIBE] == "cached"
     assert transcribe._model is None

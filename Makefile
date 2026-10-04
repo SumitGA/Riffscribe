@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run view check lint fmt typecheck test test-accuracy rust clean
+.PHONY: help setup setup-separation run view check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -14,6 +14,9 @@ help: ## List available targets
 
 setup: ## Install dependencies and build the Rust extension
 	uv sync
+
+setup-separation: ## Also install optional Demucs source separation (~630 MB, torch)
+	uv sync --group separation
 
 run: ## Transcribe FILE=<audio> [INSTRUMENT=guitar|piano] [OUT=out] [ARGS="--force"]
 	@test -n "$(FILE)" || { echo 'usage: make run FILE=path/to/audio.m4a [INSTRUMENT=piano] [ARGS="--force"]'; exit 1; }
@@ -41,6 +44,9 @@ test: ## Fast tests (skips the accuracy suite)
 
 test-accuracy: ## Slow accuracy tests with real models
 	uv run pytest -m accuracy
+
+test-separation: ## Demucs tests (needs make setup-separation)
+	uv run --group separation pytest -m separation
 
 rust: ## cargo fmt check, clippy and cargo test
 	cd $(PIPELINE_DIR) && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test

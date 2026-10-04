@@ -18,6 +18,7 @@ from pipeline.config import Instrument
 from pipeline.midi import write_notes
 from pipeline.stage import Stage, StageContext, StageInputs
 from pipeline.stages.normalize import NormalizedAudio
+from pipeline.stages.separate import SeparatedAudio
 from pipeline.types import ArtifactRef, Frozen, StageName, StageOutput
 
 # Playable range per instrument, so the model can't report impossible notes.
@@ -53,16 +54,17 @@ class NoteEvents(StageOutput):
 
 class TranscribeStage(Stage[NoteEvents]):
     name = StageName.TRANSCRIBE
-    version = "3"  # 2: note decoding moved to Rust; 3: onset envelope output
-    requires = (NormalizedAudio,)
+    # 2: note decoding moved to Rust; 3: onset envelope output; 4: reads the separate stage
+    version = "4"
+    requires = (NormalizedAudio, SeparatedAudio)
     output_type = NoteEvents
 
     def __init__(self) -> None:
         self._model: BasicPitch | None = None  # loaded on first run, not when cached
 
     def run(self, inputs: StageInputs, ctx: StageContext) -> NoteEvents:
-        normalized = inputs.get(NormalizedAudio)
-        audio, rate = soundfile.read(inputs.path(normalized.audio), dtype="float32")
+        source = inputs.get(SeparatedAudio).audio or inputs.get(NormalizedAudio).audio
+        audio, rate = soundfile.read(inputs.path(source), dtype="float32")
         if rate % MODEL_RATE:
             raise ValueError(f"expected a multiple of {MODEL_RATE} Hz, got {rate} Hz")
         audio = resample_poly(audio, 1, rate // MODEL_RATE).astype(np.float32)

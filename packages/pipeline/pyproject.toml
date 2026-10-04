@@ -12,10 +12,15 @@ dependencies = [
     "numpy>=2",           # audio arrays (BSD-3)
     "onnxruntime>=1.18",  # runs the Basic Pitch model on CPU (MIT)
     "pydantic>=2.8,<3",   # typed stage inputs/outputs and manifests (MIT)
-    "scipy>=1.13",        # K-weighting filters for loudness; librosa needs it later (BSD-3)
+    "scipy>=1.13",        # loudness filters, resampling, FFTs for tempo (BSD-3)
     "soundfile>=0.12",    # FLAC read/write; bundles libsndfile, LGPL-2.1 (BSD-3)
     "typer>=0.12",        # CLI, `python -m pipeline` (MIT)
 ]
+
+[project.optional-dependencies]
+# Demucs source separation, off by default (ADR-0004, TD-1). Pulls in torch (~630 MB).
+# demucs: MIT; its dependency lameenc is LGPL-3.0 (MP3 encoding, unused by us).
+separation = ["demucs>=4.1"]
 
 [project.scripts]
 tabscribe-pipeline = "pipeline.cli:app"

@@ -47,6 +47,18 @@ transcription on CPU. Demucs is an optional extra we can switch on.
 - When we add full-band support (out of scope for v1), separation becomes mandatory and so does
   a GPU or much slower CPU jobs.
 
+**Measured (commit 9, Apple Silicon CPU, `htdemucs_6s`).** Install: ~630 MB (torch). Model load
+~16 s; separating 30 s of audio takes 12 s, so ~2 minutes for a 5-minute clip; peak memory
+1.9 GB (the whole default pipeline peaks at 372 MB). On our synthetic solo guitar clip only 12 %
+of the energy landed in the "guitar" stem and 75 % in "other": transcribing that stem would
+have lost most of the notes. For v1's solo recordings, passthrough is the more accurate choice,
+not just the cheaper one.
+
+**How to use it anyway.** `make setup-separation` (or `uv sync --group separation`) installs
+Demucs; `--separation` turns it on per run; `make test-separation` runs its test. Without the
+install, the stage fails with a message saying how to add it. Demucs pulls in `lameenc`
+(LGPL-3.0, an MP3 encoder we never call), another reason to keep it out of the default install.
+
 **Revisit when** many users upload noisy or mixed recordings, or the accuracy tests plateau.
 
 ---

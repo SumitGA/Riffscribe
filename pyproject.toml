@@ -1,6 +1,14 @@
 # Monorepo root: a virtual uv workspace (no package of its own).
 # Shared tool config (ruff, mypy, pytest) lives here so every Python package follows the same rules.
 
+[tool.uv]
+# Supported platforms: Linux (servers, CI) and Apple Silicon Macs (development). Intel Macs are
+# left out because demucs pins numpy<2 there, which conflicts with the rest of the pipeline.
+environments = [
+    "sys_platform == 'linux'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
 [tool.uv.workspace]
 members = ["packages/pipeline"]
 
@@ -16,6 +24,9 @@ dev = [
     "ruff>=0.6",
     "pyloudnorm>=0.1.1",  # reference implementation that tests check our loudness against (MIT)
 ]
+
+# `uv sync --group separation` adds Demucs; not part of the default install or CI.
+separation = ["tabscribe-pipeline[separation]"]
 
 [tool.ruff]
 line-length = 100
@@ -36,7 +47,9 @@ explicit_package_bases = true
 mypy_path = "packages/pipeline/src:packages/pipeline/tests"
 
 [[tool.mypy.overrides]]
-module = ["mido", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile"]
+module = [
+    "demucs", "demucs.*", "mido", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile", "torch",
+]
 ignore_missing_imports = true
 
 # Only imported by the fixtures' make_reference.py scripts, which run in throwaway envs.
@@ -47,9 +60,10 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["packages/pipeline/tests"]
 pythonpath = ["packages/pipeline/tests"]  # test helpers such as basic_pitch_oracle
-addopts = "--import-mode=importlib -m 'not accuracy'"
+addopts = "--import-mode=importlib -m 'not accuracy and not separation'"
 markers = [
     "unit: fast tests, no ML models",
     "golden: compares deterministic stage output with committed snapshots",
     "accuracy: runs real models and checks mir_eval metrics against baselines",
+    "separation: needs the optional Demucs install (`uv sync --group separation`)",
 ]

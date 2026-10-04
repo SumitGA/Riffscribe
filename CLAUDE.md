@@ -67,6 +67,8 @@ pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 
 ## Conventions
 - `make check` runs every CI check (lint, types, tests, Rust); `make help` lists all shortcuts.
+- Supported dev/CI platforms: Linux and Apple Silicon macOS (`[tool.uv] environments`); Intel Macs are excluded because Demucs pins numpy<2 there.
+- Optional Demucs separation: `make setup-separation`, then `--separation`; its tests run with `make test-separation`, not in CI.
 - Python: uv, ruff, mypy --strict, pytest. Rust: cargo fmt, clippy `-D warnings`, cargo test. TypeScript: strict mode, eslint.
 - Every deliberate trade-off or piece of technical debt gets an entry in `docs/tech-debt/README.md` (concept, pros, cons, when to revisit) in the same commit.
 - Pipeline tests are golden-file tests on short fixture clips. Track note-level F1 with `mir_eval` and fail CI on regressions.

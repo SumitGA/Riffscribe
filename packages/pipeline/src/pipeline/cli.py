@@ -37,9 +37,12 @@ def transcribe(
     force: Annotated[bool, typer.Option(help="Ignore the cache and re-run everything.")] = False,
     tuning: Annotated[Tuning, typer.Option(help="Guitar tuning for the tab.")] = Tuning.STANDARD,
     capo: Annotated[int, typer.Option(min=0, max=12, help="Guitar capo fret.")] = 0,
+    separation: Annotated[
+        bool, typer.Option(help="Isolate the instrument with Demucs first (optional install).")
+    ] = False,
 ) -> None:
     """Transcribe AUDIO, writing each stage's artifacts under --out."""
-    cfg = PipelineConfig(instrument=instrument, tuning=tuning, capo=capo)
+    cfg = PipelineConfig(instrument=instrument, tuning=tuning, capo=capo, separation=separation)
     force_from = StageName.SOURCE if force else from_stage
     try:
         result = run_pipeline(audio, out, cfg, default_stages(), force_from=force_from)
