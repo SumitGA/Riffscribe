@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 from typing import ClassVar
 
+import numpy as np
 import pytest
+import soundfile
 from typer.testing import CliRunner
 
 from pipeline.cli import app
@@ -207,11 +209,22 @@ def test_artifact_names_cannot_escape_stage_dir(tmp_path: Path) -> None:
             ctx.path(bad)
 
 
-def test_cli_transcribe_runs_and_caches(source: Path, workdir: Path) -> None:
-    args = ["transcribe", str(source), "--out", str(workdir), "--instrument", "guitar"]
+def test_cli_transcribe_runs_and_caches(tmp_path: Path, workdir: Path) -> None:
+    wav = tmp_path / "clip.wav"
+    sr = 44_100
+    soundfile.write(wav, 0.1 * np.sin(2 * np.pi * 220 * np.arange(2 * sr) / sr), sr)
+    args = ["transcribe", str(wav), "--out", str(workdir), "--instrument", "guitar"]
     first = CliRunner().invoke(app, args)
     second = CliRunner().invoke(app, args)
 
     assert first.exit_code == 0, first.output
-    assert "source      ran" in first.output
-    assert "source      cached" in second.output
+    assert "normalize   ran" in first.output
+    assert "normalize   cached" in second.output
+
+
+def test_cli_reports_invalid_input(source: Path, workdir: Path) -> None:
+    args = ["transcribe", str(source), "--out", str(workdir), "--instrument", "guitar"]
+    result = CliRunner().invoke(app, args)
+
+    assert result.exit_code == 1
+    assert "could not decode audio" in result.output

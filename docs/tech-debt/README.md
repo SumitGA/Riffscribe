@@ -16,6 +16,8 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-6](#td-6-cache-key-hashes-the-whole-config) | Cache key hashes the whole config | Pipeline | Config grows or re-runs get expensive |
 | [TD-7](#td-7-stage-versions-are-bumped-by-hand) | Stage versions are bumped by hand | Pipeline | A stale-result bug slips past golden tests |
 | [TD-8](#td-8-small-partly-synthetic-test-fixtures) | Small, partly synthetic test fixtures | Testing | Before claiming accuracy numbers publicly |
+| [TD-9](#td-9-ffmpeg-as-an-external-program) | ffmpeg as an external program | Pipeline | Building the production worker image |
+| [TD-10](#td-10-our-own-loudness-meter-instead-of-pyloudnorm) | Our own loudness meter instead of pyloudnorm | Pipeline | If a standards-compliance issue is reported |
 
 ---
 
@@ -195,3 +197,61 @@ clips for piano. We avoid MAESTRO because its licence is non-commercial.
 
 **Revisit before** publishing accuracy claims. Grow a held-out set of real phone recordings that
 is never used for tuning.
+
+---
+
+## TD-9: ffmpeg as an external program
+
+**Concept.** Phones record in compressed formats (m4a/AAC, mp3, ogg). Turning those into plain
+samples is *decoding*, and ffmpeg can decode almost anything. You can use it in two ways:
+*link* it as a library into our process (e.g. PyAV), or *run* the `ffmpeg` program and read its
+output. Licences care about this difference: the LGPL lets commercial apps use a library if users
+can swap it, and some ffmpeg builds are GPL (because of extra codecs), which would put
+obligations on the code that links them.
+
+**What we did.** `normalize` runs the `ffmpeg` program (`FFMPEG_BINARY` env var, default
+`ffmpeg`), which writes raw samples to a temp file that we load in one allocation.
+
+**Pros**
+- Decodes every format users will send, with one well-tested tool.
+- Running it as a separate program keeps a clean licence boundary; our code never links it.
+- A crash or hang in a decoder can't take down the worker (there is a 120 s timeout).
+
+**Cons**
+- One more thing to install on every machine (dev, CI, the worker image).
+- About 20–50 ms to start a process; irrelevant next to transcription time.
+- **We must ship an LGPL build** (configured without `--enable-gpl` and `--enable-nonfree`) in
+  the production image. Homebrew and Ubuntu packages are GPL builds; fine for dev and CI, which
+  are not distributed.
+- A file the user can't decode and an ffmpeg bug both look like "could not decode". We treat both
+  as bad input (no retry).
+
+**Revisit when** building the Phase 2 worker image: pin an LGPL ffmpeg build and record its
+configure flags.
+
+---
+
+## TD-10: Our own loudness meter instead of pyloudnorm
+
+**Concept.** *Loudness normalization* makes every recording equally loud, so later stages see
+consistent levels. *LUFS* (ITU-R BS.1770) is the standard way to measure loudness the way ears
+hear it: filter the audio (K-weighting), measure energy in 400 ms blocks, then ignore silent and
+very quiet blocks (*gating*). pyloudnorm implements this, but it copies the whole recording into
+several 64-bit arrays: about 260 MB of extra memory for a 5-minute clip.
+
+**What we did.** `pipeline/loudness.py` implements the same algorithm (about 40 lines) and filters
+the audio 2 seconds at a time. pyloudnorm stays as a *test oracle*: a test checks that both agree
+within 0.05 LU on several signals and sample rates. Together with other changes, a 5-minute
+normalize went from 614 MB to 178 MB peak memory, and 105 MB of that is Python and its libraries.
+
+**Pros**
+- Memory stays flat no matter how long the clip is, which means smaller, cheaper worker VMs.
+- One less runtime dependency.
+
+**Cons**
+- Our code to maintain. The test against pyloudnorm protects us, but only for the signals it
+  covers.
+- Mono only (all we need; v1 downmixes everything to mono).
+
+**Revisit when** someone reports loudness differences against a reference meter, or we need
+multichannel.

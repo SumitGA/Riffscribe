@@ -14,6 +14,7 @@ dev = [
     "mypy>=1.11",
     "pytest>=8",
     "ruff>=0.6",
+    "pyloudnorm>=0.1.1",  # reference implementation that tests check our loudness against (MIT)
 ]
 
 [tool.ruff]
@@ -33,6 +34,10 @@ plugins = ["pydantic.mypy"]
 files = ["packages/pipeline/src", "packages/pipeline/tests"]
 explicit_package_bases = true
 mypy_path = "packages/pipeline/src"
+
+[[tool.mypy.overrides]]
+module = ["pyloudnorm", "scipy", "scipy.*", "soundfile"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["packages/pipeline/tests"]

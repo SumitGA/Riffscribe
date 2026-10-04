@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v6
+      # Ubuntu's ffmpeg is a GPL build; fine for tests, not for shipping (TD-9).
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .

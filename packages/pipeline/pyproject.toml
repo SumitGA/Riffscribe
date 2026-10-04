@@ -8,8 +8,11 @@ version = "0.1.0"
 description = "Audio -> MIDI -> MusicXML -> guitar tab transcription pipeline"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "pydantic>=2.8,<3",  # typed stage inputs/outputs and manifests
-    "typer>=0.12",       # CLI (`python -m pipeline`)
+    "numpy>=2",           # audio arrays (BSD-3)
+    "pydantic>=2.8,<3",   # typed stage inputs/outputs and manifests (MIT)
+    "scipy>=1.13",        # K-weighting filters for loudness; librosa needs it later (BSD-3)
+    "soundfile>=0.12",    # FLAC read/write; bundles libsndfile, LGPL-2.1 (BSD-3)
+    "typer>=0.12",        # CLI, `python -m pipeline` (MIT)
 ]
 
 [project.scripts]
