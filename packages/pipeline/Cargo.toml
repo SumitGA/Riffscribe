@@ -3,7 +3,7 @@ name = "tabcore"
 version = "0.1.0"
 edition = "2024"
 publish = false
-description = "CPU-bound pipeline kernels (tab fingering search) exposed to Python via PyO3"
+description = "CPU-bound pipeline kernels (note decoding, tab fingering) exposed to Python via PyO3"
 
 [lib]
 name = "_tabcore"
@@ -11,6 +11,8 @@ path = "rust/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# Zero-copy access to numpy arrays; must match the pyo3 minor version (BSD-2-Clause).
+numpy = "0.29"
 # abi3: one wheel works on every CPython >= 3.12.
 # `extension-module` is enabled only by maturin (pyproject.toml) so `cargo test` can link.
 pyo3 = { version = "0.29", features = ["abi3-py312"] }

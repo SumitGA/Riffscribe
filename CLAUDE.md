@@ -12,7 +12,7 @@ Mobile app. A user uploads or records audio and gets back editable sheet music a
 - **Queue:** `JobQueue` interface. Redis Streams for local dev and the MVP; SQS on the AWS scale-up path.
 - **Object storage:** Cloudflare R2 through the S3 API (boto3 + `S3_ENDPOINT_URL`); S3-compatible server locally. Clients use presigned URLs only. No provider-specific SDK calls (ADR-0002).
 - **Auth:** managed provider issuing JWTs (default: AWS Cognito). The API only validates JWTs and never stores passwords.
-- **ML pipeline (CPU-only by default):** Basic Pitch on ONNX Runtime for audio→MIDI, librosa for beat and tempo, music21 for MusicXML, and a Rust tab-fingering module (Viterbi over playable positions). Demucs (htdemucs) source separation is an optional extra, off by default (`separate` is a passthrough).
+- **ML pipeline (CPU-only by default):** Basic Pitch for audio→MIDI: the model file is vendored in `pipeline/models/basic_pitch/` and run with ONNX Runtime; its pre/post-processing is ported in `pipeline/basic_pitch.py` (the `basic-pitch` package can't install on Python 3.12, see TD-11), our port of librosa's beat tracker for beat and tempo, fed by Basic Pitch onset activations (`pipeline/beats.py`; librosa itself is not a dependency, ADR-0005), our own MusicXML writer (`pipeline/musicxml.py`, ADR-0006; music21 is not a dependency), and a Rust tab-fingering module (Viterbi over playable positions). Demucs (htdemucs) source separation is an optional extra, off by default (`separate` is a passthrough).
 - **Infra (MVP):** self-hosted OpenStack VMs, docker-compose (or k3s), CPU workers only, Postgres on a VM with nightly backups to R2, Terraform via the OpenStack provider (ADR-0004).
 - **Infra (scale-up path):** AWS. API on ECS Fargate; GPU workers on an EC2 GPU autoscaling group or EKS + KEDA, scaled on queue depth.
 - **Licences:** check every model and library licence before adding it. The app is commercial, so no non-commercial weights (for example, madmom's pretrained models are non-commercial).
@@ -33,7 +33,7 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 3. `POST /jobs/{id}/submit` validates the upload (size, duration, format, quota) and enqueues the job.
 4. Workers run the stages in order: `normalize → separate → transcribe → quantize → notation → tab`. Each stage reads and writes artifacts under `s3://…/users/{user_id}/jobs/{job_id}/{stage}/`.
 5. Workers record job and stage status in Postgres. The client polls `GET /jobs/{id}` and also receives an Expo push notification on completion.
-6. Outputs: MusicXML, MIDI and alphaTex. User edits are saved as new `score_versions`; originals are never overwritten.
+6. Outputs: MusicXML (notation; for guitar also `tab.musicxml` with a TAB staff) and MIDI. alphaTex and Guitar Pro 7 are derived from the MusicXML by alphaTab's exporters (`AlphaTexExporter`, `Gp7Exporter`), so the pipeline doesn't write them. User edits are saved as new `score_versions`; originals are never overwritten.
 
 ## Scalability rules (non-negotiable)
 - **Stateless API.** No local disk state and no in-memory sessions. Any instance can serve any request. API p95 latency target is under 200 ms.
@@ -56,6 +56,7 @@ services/worker/        Queue consumer; thin wrapper around packages/pipeline
 packages/pipeline/      Transcription library — NO infra dependencies
   src/pipeline/           Python package (stages, runner, CLI)
   rust/                   Rust crate built into pipeline._tabcore (maturin)
+tools/preview/           Dev-only page: `make view` renders out/ with alphaTab (notation + tab, playback, exports)
 infra/terraform/
 docs/adr/               Architecture decision records
 docs/tech-debt/README.md  Deliberate trade-offs: concept, pros, cons, when to revisit
@@ -66,9 +67,11 @@ pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 
 ## Conventions
 - `make check` runs every CI check (lint, types, tests, Rust); `make help` lists all shortcuts.
+- Supported dev/CI platforms: Linux and Apple Silicon macOS (`[tool.uv] environments`); Intel Macs are excluded because Demucs pins numpy<2 there.
+- Optional Demucs separation: `make setup-separation`, then `--separation`; its tests run with `make test-separation`, not in CI.
 - Python: uv, ruff, mypy --strict, pytest. Rust: cargo fmt, clippy `-D warnings`, cargo test. TypeScript: strict mode, eslint.
 - Every deliberate trade-off or piece of technical debt gets an entry in `docs/tech-debt/README.md` (concept, pros, cons, when to revisit) in the same commit.
-- Pipeline tests are golden-file tests on short fixture clips. Track note-level F1 with `mir_eval` and fail CI on regressions.
+- Pipeline tests are golden-file tests on short fixture clips. Track note-level F1 with `mir_eval` and fail CI on regressions: `make test-accuracy` scores GuitarSet excerpts and synthetic piano clips against `tests/accuracy_baseline.json` (`UPDATE_BASELINE=1` to accept new numbers in the same commit as the change).
 - No new dependency without a one-line justification in the PR or commit.
 - Make small, focused commits. Record architecture changes as an ADR in `docs/adr/` and update this file.
 - Before writing code for a new phase, propose a plan and wait for approval.

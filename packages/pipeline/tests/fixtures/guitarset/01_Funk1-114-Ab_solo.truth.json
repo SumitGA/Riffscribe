@@ -1,0 +1,734 @@
+{
+ "track": "01_Funk1-114-Ab_solo",
+ "source": "GuitarSet 1.1.0, audio_mono-mic, https://zenodo.org/records/3371780",
+ "license": "CC BY 4.0",
+ "start_s": 0.0,
+ "duration_s": 20.0,
+ "tempo_bpm": 114.0,
+ "notes": [
+  {
+   "onset_s": 0.0077,
+   "offset_s": 0.5185,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 0.5391,
+   "offset_s": 0.7132,
+   "pitch": 71,
+   "string": 1,
+   "fret": 7
+  },
+  {
+   "onset_s": 1.3037,
+   "offset_s": 1.7449,
+   "pitch": 45,
+   "string": 5,
+   "fret": 0
+  },
+  {
+   "onset_s": 1.3172,
+   "offset_s": 1.4855,
+   "pitch": 50,
+   "string": 4,
+   "fret": 0
+  },
+  {
+   "onset_s": 1.3538,
+   "offset_s": 1.5512,
+   "pitch": 74,
+   "string": 1,
+   "fret": 10
+  },
+  {
+   "onset_s": 1.8001,
+   "offset_s": 1.9627,
+   "pitch": 71,
+   "string": 1,
+   "fret": 7
+  },
+  {
+   "onset_s": 2.072,
+   "offset_s": 2.2404,
+   "pitch": 73,
+   "string": 1,
+   "fret": 9
+  },
+  {
+   "onset_s": 2.1985,
+   "offset_s": 2.3378,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 2.3392,
+   "offset_s": 2.5133,
+   "pitch": 71,
+   "string": 1,
+   "fret": 7
+  },
+  {
+   "onset_s": 2.4624,
+   "offset_s": 2.561,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 2.598,
+   "offset_s": 2.6909,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 2.7184,
+   "offset_s": 2.8461,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 2.8467,
+   "offset_s": 3.1138,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 3.1364,
+   "offset_s": 3.2815,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 3.2822,
+   "offset_s": 3.4099,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 3.8239,
+   "offset_s": 3.9225,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 3.9464,
+   "offset_s": 4.0857,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 4.2171,
+   "offset_s": 4.728,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 4.7467,
+   "offset_s": 4.9441,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 4.905,
+   "offset_s": 5.0443,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 5.0275,
+   "offset_s": 5.1784,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 5.5881,
+   "offset_s": 5.71,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 5.8001,
+   "offset_s": 5.9046,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 5.9321,
+   "offset_s": 6.025,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 6.0684,
+   "offset_s": 6.2948,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 6.2102,
+   "offset_s": 6.3553,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 6.337,
+   "offset_s": 6.5518,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 6.4664,
+   "offset_s": 6.6057,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 6.7066,
+   "offset_s": 6.9678,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 6.9694,
+   "offset_s": 7.1145,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 7.0828,
+   "offset_s": 7.2918,
+   "pitch": 56,
+   "string": 4,
+   "fret": 6
+  },
+  {
+   "onset_s": 7.3575,
+   "offset_s": 7.4852,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 7.5214,
+   "offset_s": 7.6027,
+   "pitch": 62,
+   "string": 3,
+   "fret": 7
+  },
+  {
+   "onset_s": 7.6534,
+   "offset_s": 7.7637,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 7.7876,
+   "offset_s": 7.8805,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 7.9094,
+   "offset_s": 8.0139,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 8.0414,
+   "offset_s": 8.1691,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 8.1698,
+   "offset_s": 8.2859,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 8.2894,
+   "offset_s": 8.4055,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 8.4171,
+   "offset_s": 8.5041,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 8.5077,
+   "offset_s": 8.618,
+   "pitch": 62,
+   "string": 3,
+   "fret": 7
+  },
+  {
+   "onset_s": 8.6694,
+   "offset_s": 8.7681,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 8.792,
+   "offset_s": 9.4422,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 9.4438,
+   "offset_s": 9.5831,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 9.723,
+   "offset_s": 9.8333,
+   "pitch": 54,
+   "string": 4,
+   "fret": 4
+  },
+  {
+   "onset_s": 9.8564,
+   "offset_s": 9.9783,
+   "pitch": 54,
+   "string": 4,
+   "fret": 4
+  },
+  {
+   "onset_s": 9.9956,
+   "offset_s": 10.1175,
+   "pitch": 54,
+   "string": 4,
+   "fret": 4
+  },
+  {
+   "onset_s": 10.1414,
+   "offset_s": 10.2575,
+   "pitch": 54,
+   "string": 4,
+   "fret": 4
+  },
+  {
+   "onset_s": 10.2785,
+   "offset_s": 10.4004,
+   "pitch": 54,
+   "string": 4,
+   "fret": 4
+  },
+  {
+   "onset_s": 10.401,
+   "offset_s": 10.5288,
+   "pitch": 54,
+   "string": 4,
+   "fret": 4
+  },
+  {
+   "onset_s": 10.5309,
+   "offset_s": 10.647,
+   "pitch": 54,
+   "string": 4,
+   "fret": 4
+  },
+  {
+   "onset_s": 10.6665,
+   "offset_s": 10.8,
+   "pitch": 56,
+   "string": 4,
+   "fret": 6
+  },
+  {
+   "onset_s": 10.932,
+   "offset_s": 11.2107,
+   "pitch": 56,
+   "string": 4,
+   "fret": 6
+  },
+  {
+   "onset_s": 11.3257,
+   "offset_s": 11.6102,
+   "pitch": 56,
+   "string": 4,
+   "fret": 6
+  },
+  {
+   "onset_s": 12.0066,
+   "offset_s": 12.1169,
+   "pitch": 62,
+   "string": 3,
+   "fret": 7
+  },
+  {
+   "onset_s": 12.1466,
+   "offset_s": 12.2685,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 12.2938,
+   "offset_s": 12.3751,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 12.4128,
+   "offset_s": 12.5231,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 12.6667,
+   "offset_s": 12.8641,
+   "pitch": 62,
+   "string": 3,
+   "fret": 7
+  },
+  {
+   "onset_s": 12.9119,
+   "offset_s": 13.0164,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 13.0446,
+   "offset_s": 13.2768,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 13.3213,
+   "offset_s": 13.4258,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 13.4511,
+   "offset_s": 13.5962,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 13.7222,
+   "offset_s": 13.8209,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 13.8448,
+   "offset_s": 13.9551,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 14.1091,
+   "offset_s": 14.2252,
+   "pitch": 62,
+   "string": 3,
+   "fret": 7
+  },
+  {
+   "onset_s": 14.2513,
+   "offset_s": 14.35,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 14.6305,
+   "offset_s": 14.7466,
+   "pitch": 56,
+   "string": 4,
+   "fret": 6
+  },
+  {
+   "onset_s": 14.7683,
+   "offset_s": 14.9425,
+   "pitch": 56,
+   "string": 4,
+   "fret": 6
+  },
+  {
+   "onset_s": 15.0475,
+   "offset_s": 15.1578,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 15.3366,
+   "offset_s": 15.4294,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 15.4344,
+   "offset_s": 15.5505,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 15.5526,
+   "offset_s": 15.6687,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 15.6912,
+   "offset_s": 15.8014,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 15.8231,
+   "offset_s": 15.9799,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 15.9856,
+   "offset_s": 16.1191,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 16.5896,
+   "offset_s": 16.7173,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 16.8266,
+   "offset_s": 16.9717,
+   "pitch": 71,
+   "string": 1,
+   "fret": 7
+  },
+  {
+   "onset_s": 17.1426,
+   "offset_s": 17.3806,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 17.4069,
+   "offset_s": 17.5114,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 17.5149,
+   "offset_s": 17.7355,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 17.6922,
+   "offset_s": 17.82,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 17.932,
+   "offset_s": 18.0423,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 18.0451,
+   "offset_s": 18.1554,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 18.179,
+   "offset_s": 18.3473,
+   "pitch": 50,
+   "string": 4,
+   "fret": 0
+  },
+  {
+   "onset_s": 18.1975,
+   "offset_s": 18.2903,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 18.3128,
+   "offset_s": 18.5101,
+   "pitch": 62,
+   "string": 3,
+   "fret": 7
+  },
+  {
+   "onset_s": 18.594,
+   "offset_s": 18.7101,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 18.7115,
+   "offset_s": 18.903,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 18.8385,
+   "offset_s": 19.0242,
+   "pitch": 56,
+   "string": 4,
+   "fret": 6
+  },
+  {
+   "onset_s": 18.9916,
+   "offset_s": 19.1019,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 19.1309,
+   "offset_s": 19.2702,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 19.239,
+   "offset_s": 19.3609,
+   "pitch": 56,
+   "string": 4,
+   "fret": 6
+  },
+  {
+   "onset_s": 19.371,
+   "offset_s": 19.4755,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 19.4972,
+   "offset_s": 19.6714,
+   "pitch": 60,
+   "string": 3,
+   "fret": 5
+  },
+  {
+   "onset_s": 19.8966,
+   "offset_s": 19.9605,
+   "pitch": 56,
+   "string": 4,
+   "fret": 6
+  }
+ ],
+ "beats_s": [
+  0.0,
+  0.5263,
+  1.0526,
+  1.5789,
+  2.1053,
+  2.6316,
+  3.1579,
+  3.6842,
+  4.2105,
+  4.7368,
+  5.2632,
+  5.7895,
+  6.3158,
+  6.8421,
+  7.3684,
+  7.8947,
+  8.4211,
+  8.9474,
+  9.4737,
+  10.0,
+  10.5263,
+  11.0526,
+  11.5789,
+  12.1053,
+  12.6316,
+  13.1579,
+  13.6842,
+  14.2105,
+  14.7368,
+  15.2632,
+  15.7895,
+  16.3158,
+  16.8421,
+  17.3684,
+  17.8947,
+  18.4211,
+  18.9474,
+  19.4737
+ ],
+ "downbeats_s": [
+  0.0,
+  2.1053,
+  4.2105,
+  6.3158,
+  8.4211,
+  10.5263,
+  12.6316,
+  14.7368,
+  16.8421,
+  18.9474
+ ]
+}

@@ -1,0 +1,95 @@
+{
+ "clips": {
+  "00_BN1-129-Eb_comp": {
+   "beat_f": 0.0,
+   "note_f1": 0.7667,
+   "note_f1_with_offsets": 0.4,
+   "note_precision": 0.7731,
+   "note_recall": 0.7603,
+   "tab_string_accuracy": 0.2935,
+   "tempo_correct": 1.0
+  },
+  "01_Funk1-114-Ab_solo": {
+   "beat_f": 0.2985,
+   "note_f1": 0.8333,
+   "note_f1_with_offsets": 0.6569,
+   "note_precision": 0.787,
+   "note_recall": 0.8854,
+   "tab_string_accuracy": 0.1882,
+   "tempo_correct": 0.0
+  },
+  "02_Jazz1-130-D_comp": {
+   "beat_f": 0.3692,
+   "note_f1": 0.6688,
+   "note_f1_with_offsets": 0.2524,
+   "note_precision": 0.791,
+   "note_recall": 0.5792,
+   "tab_string_accuracy": 1.0,
+   "tempo_correct": 1.0
+  },
+  "03_Rock1-130-A_solo": {
+   "beat_f": 0.3385,
+   "note_f1": 0.9138,
+   "note_f1_with_offsets": 0.8448,
+   "note_precision": 0.8983,
+   "note_recall": 0.9298,
+   "tab_string_accuracy": 0.1321,
+   "tempo_correct": 1.0
+  },
+  "04_SS1-100-C#_comp": {
+   "beat_f": 0.3279,
+   "note_f1": 0.7912,
+   "note_f1_with_offsets": 0.3004,
+   "note_precision": 0.7013,
+   "note_recall": 0.9076,
+   "tab_string_accuracy": 0.4352,
+   "tempo_correct": 0.0
+  },
+  "05_BN1-129-Eb_solo": {
+   "beat_f": 0.1562,
+   "note_f1": 0.9362,
+   "note_f1_with_offsets": 0.766,
+   "note_precision": 0.88,
+   "note_recall": 1.0,
+   "tab_string_accuracy": 0.0227,
+   "tempo_correct": 1.0
+  },
+  "arpeggios_72bpm": {
+   "beat_f": 0.65,
+   "note_f1": 0.9412,
+   "note_f1_with_offsets": 0.9265,
+   "note_precision": 0.8889,
+   "note_recall": 1.0,
+   "tempo_correct": 0.0
+  },
+  "melody_chords_100bpm": {
+   "beat_f": 0.9796,
+   "note_f1": 0.7179,
+   "note_f1_with_offsets": 0.3974,
+   "note_precision": 0.56,
+   "note_recall": 1.0,
+   "tempo_correct": 1.0
+  }
+ },
+ "mean": {
+  "guitar": {
+   "beat_f": 0.2484,
+   "note_f1": 0.8183,
+   "note_f1_with_offsets": 0.5367,
+   "note_precision": 0.8051,
+   "note_recall": 0.8437,
+   "tab_string_accuracy": 0.3453,
+   "tempo_correct": 0.6667
+  },
+  "piano": {
+   "beat_f": 0.8148,
+   "note_f1": 0.8296,
+   "note_f1_with_offsets": 0.662,
+   "note_precision": 0.7245,
+   "note_recall": 1.0,
+   "tempo_correct": 0.5
+  }
+ },
+ "pipeline_version": "0.1.0+9372c642",
+ "tolerance": 0.02
+}

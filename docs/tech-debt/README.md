@@ -18,6 +18,12 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-8](#td-8-small-partly-synthetic-test-fixtures) | Small, partly synthetic test fixtures | Testing | Before claiming accuracy numbers publicly |
 | [TD-9](#td-9-ffmpeg-as-an-external-program) | ffmpeg as an external program | Pipeline | Building the production worker image |
 | [TD-10](#td-10-our-own-loudness-meter-instead-of-pyloudnorm) | Our own loudness meter instead of pyloudnorm | Pipeline | If a standards-compliance issue is reported |
+| [TD-11](#td-11-vendored-basic-pitch-model-and-ported-code) | Vendored Basic Pitch model and ported code | Pipeline / legal | Before launch (legal review); when upstream releases |
+| [TD-12](#td-12-our-own-beat-tracker-port) | Our own beat tracker port | Pipeline | Tempo errors show up in the accuracy suite |
+| [TD-13](#td-13-simple-rhythm-and-key-heuristics) | Simple rhythm and key heuristics | Pipeline | Users correct bar lines, triplets or keys often |
+| [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
+| [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
+| [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
 
 ---
 
@@ -41,6 +47,27 @@ transcription on CPU. Demucs is an optional extra we can switch on.
   shows up as wrong notes.
 - When we add full-band support (out of scope for v1), separation becomes mandatory and so does
   a GPU or much slower CPU jobs.
+
+**Measured (commit 9, Apple Silicon CPU, `htdemucs_6s`).** Install: ~630 MB (torch). Model load
+~16 s; separating 30 s of audio takes 12 s, so ~2 minutes for a 5-minute clip; peak memory
+1.9 GB (the whole default pipeline peaks at 372 MB). On our synthetic solo guitar clip only 12 %
+of the energy landed in the "guitar" stem and 75 % in "other": transcribing that stem would
+have lost most of the notes. For v1's solo recordings, passthrough is the more accurate choice,
+not just the cheaper one.
+
+**Learned from a real recording with a background voice.** A voice under the guitar made the
+transcription sloppy exactly where it spoke (Basic Pitch turns any pitched sound into notes).
+Demucs's vocals stem located it in 4 places, only ~5 s (3 %) of a 3.5-minute song. Separating
+the whole song fixed those bars but *added* notes in 63 of 135 other bars (separation artifacts)
+and took 84 s / 3 GB, so separation should run only on stretches with a voice. Detecting those
+cheaply is unsolved: Silero VAD (MIT, 2 MB) finds clear speech and never fires on GuitarSet, but
+scored 0.000 on this quiet voice while plain guitar sometimes scored 0.75. Next candidates: voice
+cues in Basic Pitch's pitch contours (glides, vibrato), or separation as a user choice.
+
+**How to use it anyway.** `make setup-separation` (or `uv sync --group separation`) installs
+Demucs; `--separation` turns it on per run; `make test-separation` runs its test. Without the
+install, the stage fails with a message saying how to add it. Demucs pulls in `lameenc`
+(LGPL-3.0, an MP3 encoder we never call), another reason to keep it out of the default install.
 
 **Revisit when** many users upload noisy or mixed recordings, or the accuracy tests plateau.
 
@@ -195,6 +222,11 @@ clips for piano. We avoid MAESTRO because its licence is non-commercial.
 - Scores on clean or synthetic clips overstate real-world accuracy (phone mic, room echo).
 - Few clips means a single clip can swing the average.
 
+**What we have (commit 10).** 6 GuitarSet excerpts (20 s each, mic audio, 6 players, 5
+styles, comp and solo; 4.1 MB, fetched by HTTP range requests from the Zenodo zips) and 2
+synthesized piano clips. Baselines in `tests/accuracy_baseline.json`; CI fails if a metric drops
+more than 0.02. Mean guitar note F1 is 0.76; piano (synthetic) 0.83, which flatters it.
+
 **Revisit before** publishing accuracy claims. Grow a held-out set of real phone recordings that
 is never used for tuning.
 
@@ -255,3 +287,243 @@ normalize went from 614 MB to 178 MB peak memory, and 105 MB of that is Python a
 
 **Revisit when** someone reports loudness differences against a reference meter, or we need
 multichannel.
+
+---
+
+## TD-11: Vendored Basic Pitch model and ported code
+
+**Concept.** *Vendoring* means copying a third-party file into our repo instead of installing it
+as a package. A *port* is a rewrite of someone else's code into our codebase, keeping its
+behaviour. A *parity test* proves that the port still does what the original did, by comparing
+outputs on the same inputs. *Training-data provenance* is about which data a model learned from:
+a model's licence and the licences of its training data are separate questions.
+
+**What we did.** The `basic-pitch` package (Spotify, Apache-2.0) can't be installed on Python
+3.12: its last release pins a TensorFlow version that has no 3.12 builds. The model itself is a
+230 KB ONNX file. We:
+- copied `nmp.onnx`, its `LICENSE` and `NOTICE` into `pipeline/models/basic_pitch/`, unmodified;
+- ported about 200 lines of pre/post-processing into `pipeline/basic_pitch.py`, dropping
+  pitch bends (out of scope for v1) and the TensorFlow, librosa, pretty_midi and mir_eval
+  dependencies;
+- recorded the real package's outputs once, in a throwaway environment, and committed them as
+  fixtures. Tests check model activations, note decoding and the full path against them.
+
+**Pros**
+- Stays on Python 3.12 with one small runtime dependency (`onnxruntime`) instead of TensorFlow
+  (500 MB+).
+- We control memory: batching 4 windows instead of 16 saved about 140 MB with no speed loss.
+- The decoding loop is our code now, so we could move it to Rust (ADR-0003): on 5 minutes of
+  guitar it went from 2.4 s and 145 MB to 32 ms and under 1 MB, with identical notes. Randomized
+  tests check the Rust version against the Python port kept in `tests/basic_pitch_oracle.py`.
+
+**Cons**
+- We maintain the port. Upstream fixes must be copied by hand; the parity fixtures make that
+  safe (re-record, then compare). Upstream has been quiet since August 2024.
+- Apache-2.0 obligations: keep `LICENSE` and `NOTICE` with the model and in any distribution,
+  and mark our modified code as changed (done in the module docstring).
+- **Training-data caveat.** The weights are Apache-2.0, but Basic Pitch was trained partly on
+  datasets licensed for research only (e.g. MedleyDB, iKala). Whether that affects commercial use
+  of the weights is a legal question, not a technical one. Same grey area as Demucs (ADR-0004).
+
+**Revisit when**
+- **Before launch:** get a legal opinion on the training-data question. A fallback is a model
+  trained on commercially licensed data (ours or a vendor's).
+- **When upstream releases** a version with Python 3.12 support or a better model: re-record the
+  fixtures and diff.
+
+---
+
+## TD-12: Our own beat tracker port
+
+**Concept.** *Tempo* is how many beats per minute (bpm) the music has; *beat tracking* finds
+the moment of every beat. The classic method (Ellis, 2007) works on an *onset envelope*: a
+signal that spikes whenever a new note starts. It finds the tempo by checking which repeat
+distance makes the envelope line up with itself (*autocorrelation*), then picks beat times
+with *dynamic programming*: the best chain of beats that lands on strong onsets while keeping
+a steady spacing.
+
+**What we did.** librosa implements this, but costs 281 MB to install, 30 s of compilation on
+every fresh worker and up to 670 MB of memory (ADR-0005). We ported the same algorithm into
+`pipeline/beats.py` and feed it from Basic Pitch's own onset detector, so the audio isn't
+analysed twice. librosa's outputs are recorded once and the tests require identical results.
+
+**Pros**
+- 0.6 s and no memory spike for 5 minutes; no warm-up; nothing extra to install.
+- Same results as the well-known library, provably (identical beat frames in tests).
+
+**Cons**
+- About 150 lines of ported code to maintain.
+- Inherits librosa's limits: one tempo for the whole piece (no gradual speed-ups or rubato
+  beyond what the beat chain absorbs), and *octave errors*: very fast music can be reported at
+  half speed (175 bpm reads as 87.6) because of a built-in preference for tempos near 120.
+- The envelope quality depends on Basic Pitch. A first version that summed raw activations got
+  every test tempo wrong; a guard test now checks known tempos end to end.
+
+**Measured (commit 10, `make test-accuracy`).** On 6 GuitarSet excerpts: mean beat F-measure
+0.25, tempo right on 4 of 6. No timing bug: where the tracker locks on, beats land within ~0-30
+ms of the annotations. The errors are the two classic failure modes:
+- *Right tempo, wrong phase*: on bossa nova and jazz comping the beats sit ~0.3-0.4 of a beat
+  off, because syncopated chords put the strongest attacks between beats.
+- *Wrong metrical level*: funk at 114 bpm read as 152, a 100 bpm song as 140, piano arpeggios at
+  72 as 144 (it follows the eighth notes).
+
+**Revisit when**: now that the suite measures it, the beat tracker is the weakest stage. Options,
+in order of effort: use bass-register onsets as downbeat/phase evidence; constrain tempo with
+note-onset statistics; or a learned beat tracker with commercial-safe code *and* weights (check
+both: madmom's models, for example, are non-commercial).
+
+---
+
+## TD-13: Simple rhythm and key heuristics
+
+**Concept.** Turning beat times into sheet music needs more decisions:
+- *Quantization*: snapping each note to the nearest grid position (here sixteenth notes, or
+  eighth-note *triplets*, three per beat).
+- *Meter*: how many beats per bar (4/4 = four).
+- *Downbeat*: which beat starts a bar. Music often starts with a *pickup* (anacrusis): a few
+  notes before the first full bar.
+- *Key*: the scale the piece is in, which sets the key signature (sharps or flats).
+
+**What we did (`pipeline/rhythm.py`).**
+- 4/4 only.
+- Each beat picks sixteenths or triplets: triplets only with at least two notes in the beat
+  that fit triplets at least twice as well.
+- The downbeat is the beat position (out of four) where the loudest on-beat notes land.
+- Key: Krumhansl-Schmuckler, comparing how long each pitch class sounds with standard
+  major/minor profiles.
+
+**Pros**: simple, fast, explainable, and right on clear, steady playing (tests cover jitter,
+tempo drift, triplets, pickups and keys).
+
+**Cons**
+- Waltzes (3/4), 6/8 and odd meters are notated in 4/4.
+- Syncopated music, where the loudest notes are off the downbeat, can get its bar lines shifted.
+- Swing, quintuplets and other tuplets are forced onto the sixteenth or triplet grid.
+- Key detection can be fooled by harmonics that the transcription reports as extra notes, and
+  can't tell relative keys apart well (C major vs A minor) on short clips.
+
+**Learned from a real recording (fingerstyle guitar, 157 bpm).** The first version wrote 27 % of
+onsets on odd sixteenths and the score was full of sixteenth rests and ties. Two causes, two fixes:
+- *Human timing drift.* A sixteenth at 157 bpm is only 96 ms, so 20-40 ms of drift pushes
+  eighths onto sixteenths. Each beat now uses the simplest grid that fits (quarters, then
+  eighths) within 45 ms before trying sixteenths or triplets.
+- *Strummed and rolled chords.* Strings hit a few ms apart (329 gaps under 35 ms in that
+  recording, almost none between 50 and 96 ms) were split across sixteenths. Onsets chained by
+  gaps of at most 35 ms, spanning at most 100 ms, are now one chord at the first string.
+Together: sixteenth rests -38 %, sixteenths -14 %, dotted eighths -19 % on that recording; no
+change in the accuracy suite. Tried and rejected: merging back-to-back notes of the same pitch
+(GuitarSet showed they are mostly real repeated plucks; note F1 fell from 0.76 to as low as 0.67).
+
+**Revisit when** users often correct bar lines, triplets or keys in the editor (Phase 4); those
+corrections are the best training data for something smarter.
+
+---
+
+## TD-14: Our own MusicXML writer
+
+**Concept.** *MusicXML* is the standard file format for sheet music; every notation program
+(MuseScore, Sibelius, Finale, alphaTab) reads it. Writing it means making engraving decisions:
+- *Ties* join two written notes into one longer sound, needed when a note crosses a bar line
+  or a beat in a way no single note value can show.
+- *Tuplets* (here triplets) squeeze three notes into the time of two, shown with a bracket.
+- *Voices* let one staff show independent lines (a held bass note under a moving melody).
+- *Beaming* groups eighth and sixteenth notes with horizontal bars.
+- *Spelling* picks the name of a black key: F# or Gb, which should follow the key signature.
+
+**What we did.** music21 cost 184 MB, wrote random ids (different bytes every run, which
+breaks caching and golden tests), didn't write pickup bars and ignored the key when spelling
+(ADR-0006). `pipeline/musicxml.py` writes the format directly: ties, triplets, rests, pickups,
+key-aware spelling, guitar and piano staves. Randomized tests check that every bar adds up;
+golden files pin the exact output.
+
+**Pros**
+- Byte-identical output, so caching and golden tests work; no dependency; milliseconds.
+- Every decision is ours and visible in one file.
+
+**Cons**
+- **One voice per staff.** Notes starting together form a chord; a note held while others move
+  is cut where the next chord starts (it still sounds right in our MIDI, but the score shows it
+  shorter). Fine for melody-plus-chords, weak for fingerstyle guitar and real piano writing.
+- **Piano hands split at middle C**, not by musical sense (a left-hand run above C4 jumps
+  staves).
+- **No beaming hints.** alphaTab and MuseScore beam by time signature, which is right for
+  4/4; other programs may show flags.
+- **No accidental marks written**; renderers derive them from pitch and key signature.
+
+**Revisit when** the preview (step 8) or users show cut-off notes or awkward hand splits, or
+when Phase 4 editing needs multiple voices.
+
+---
+
+## TD-15: Tab fingering by cost rules
+
+**Concept.** On a guitar the same note can usually be played in several places (E4 is the open
+high string, or fret 5 on the B string, fret 9 on G, fret 14 on D...). *Tab* writes down which
+string and fret to use. A good choice keeps chords playable (one note per string, fingers not
+stretched past ~4 frets) and keeps the hand from jumping around. The *Viterbi algorithm* finds
+the best sequence of choices for the whole piece at once, instead of greedily note by note:
+each chord gets candidate fingerings with a comfort cost, moving the hand between chords has a
+cost, and Viterbi finds the cheapest path through all of them.
+
+**What we did.** `rust/tab.rs`: costs for hand height, finger span (heavy penalty beyond 4
+frets), a bonus for open strings and a cost per fret of hand movement; at most 64 candidate
+fingerings per chord (a *beam*) so 5 minutes take ~0.2 s. Notes that can't be played (below
+the lowest string, or more notes than strings) are left out of the tab but stay in the
+notation, and the stage reports how many. Tunings: standard and drop D; capo 0-12.
+
+**Pros**
+- Produces the shapes a guitarist expects in common cases (open E chord as 0-2-2-1-0-0, a
+  C major scale in open position, high melodies in one hand position); tests pin these.
+- Fast, deterministic, and every rule is a named weight that can be tuned.
+
+**Cons**
+- The weights are hand-picked, not learned from real tabs.
+- It doesn't know techniques or style: slides, hammer-ons and bends are out of scope for v1,
+  and some players prefer higher positions for tone.
+- Hand movement ignores time: a jump across the neck costs the same with a whole bar to move
+  as with a sixteenth note.
+- Only six-string guitar, two tunings.
+
+**Measured (commit 10).** On notes we transcribe correctly, our string matches the GuitarSet
+player's string 38 % of the time on average: 100 % on a jazz comping excerpt, 66 % on
+singer-songwriter strumming, but 7-18 % on bossa nova and rock/funk solos, where players use
+higher positions than our low-position preference. The tab is still playable; it just isn't
+the player's fingering.
+
+**Revisit when** users often move notes to other strings in the editor (Phase 4): those edits
+are exactly the data to fit the weights to, or to train a model.
+
+**Related decision.** The pipeline writes tab as MusicXML (a notation staff plus a TAB staff).
+alphaTex and Guitar Pro 7 files are produced from it by alphaTab's built-in exporters in the
+app, so we don't maintain writers for them and don't need PyGuitarPro (LGPL-3).
+
+---
+
+## TD-16: Decoding thresholds tuned on GuitarSet
+
+**Concept.** The model outputs, for every 12 ms, how likely each pitch is sounding and starting.
+*Decoding* turns that into notes with thresholds (how strong a start must be, how strong a held
+note must stay, how short a note may be). *Tuning* searches for the thresholds that score best on
+recordings with known answers. To avoid fooling ourselves, the search uses one set of clips (the
+*tuning set*) and the result is judged on different clips (the *held-out test set*).
+
+**What we did.** `tests/tuning/tune_decoding.py` searched ~800 combinations on 24 GuitarSet
+excerpts (cached, not committed) and judged the winner on the 6 committed test clips: note F1
+0.761 -> 0.818, wrong notes 27 % -> 19.5 %, found notes 81 % -> 84 %.
+
+A first winner used *fixed* thresholds. On a real phone recording it deleted 61 % of the notes,
+because that recording's activations were weaker (99th percentile 0.62 vs 0.69-0.81 on GuitarSet).
+So activations are now scaled to a reference level per recording before decoding (`level_gain`),
+making thresholds relative. That scored best on GuitarSet too, and on the phone recording removed
+7 % of notes, mostly extra notes stacked on real ones.
+
+**Pros**: measurable, repeatable (`make` the tuning set, run the script), and it improves every
+bar at once instead of patching symptoms.
+
+**Cons**
+- 24 tuning clips from one dataset (6 players, one guitar setup). Other guitars, rooms and
+  phones may want different values; level normalization covers loudness, not tone.
+- Piano still uses Basic Pitch's defaults: there is no commercially usable real piano set yet.
+- Tab string accuracy moved from 0.38 to 0.35 (a different set of notes is now found and scored).
+
+**Revisit when** user recordings with corrections exist (Phase 4): they are the right tuning set.

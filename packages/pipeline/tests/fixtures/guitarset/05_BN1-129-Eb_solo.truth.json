@@ -1,0 +1,376 @@
+{
+ "track": "05_BN1-129-Eb_solo",
+ "source": "GuitarSet 1.1.0, audio_mono-mic, https://zenodo.org/records/3371780",
+ "license": "CC BY 4.0",
+ "start_s": 0.0,
+ "duration_s": 20.0,
+ "tempo_bpm": 129.0,
+ "notes": [
+  {
+   "onset_s": 0.0092,
+   "offset_s": 0.5665,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 0.7043,
+   "offset_s": 1.575,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 1.5862,
+   "offset_s": 1.7313,
+   "pitch": 60,
+   "string": 4,
+   "fret": 10
+  },
+  {
+   "onset_s": 1.8915,
+   "offset_s": 2.2746,
+   "pitch": 65,
+   "string": 3,
+   "fret": 10
+  },
+  {
+   "onset_s": 2.2396,
+   "offset_s": 2.4486,
+   "pitch": 62,
+   "string": 4,
+   "fret": 12
+  },
+  {
+   "onset_s": 2.5039,
+   "offset_s": 3.2934,
+   "pitch": 65,
+   "string": 3,
+   "fret": 10
+  },
+  {
+   "onset_s": 3.2636,
+   "offset_s": 3.4087,
+   "pitch": 62,
+   "string": 4,
+   "fret": 12
+  },
+  {
+   "onset_s": 3.7505,
+   "offset_s": 4.1743,
+   "pitch": 67,
+   "string": 2,
+   "fret": 8
+  },
+  {
+   "onset_s": 4.3636,
+   "offset_s": 5.0254,
+   "pitch": 67,
+   "string": 2,
+   "fret": 8
+  },
+  {
+   "onset_s": 5.1758,
+   "offset_s": 5.3209,
+   "pitch": 65,
+   "string": 3,
+   "fret": 10
+  },
+  {
+   "onset_s": 5.3479,
+   "offset_s": 5.5453,
+   "pitch": 67,
+   "string": 2,
+   "fret": 8
+  },
+  {
+   "onset_s": 5.5921,
+   "offset_s": 5.8069,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 5.8123,
+   "offset_s": 6.0155,
+   "pitch": 67,
+   "string": 2,
+   "fret": 8
+  },
+  {
+   "onset_s": 6.0599,
+   "offset_s": 7.0758,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 8.1256,
+   "offset_s": 8.3578,
+   "pitch": 70,
+   "string": 2,
+   "fret": 11
+  },
+  {
+   "onset_s": 8.4085,
+   "offset_s": 8.6291,
+   "pitch": 72,
+   "string": 1,
+   "fret": 8
+  },
+  {
+   "onset_s": 8.7079,
+   "offset_s": 8.9111,
+   "pitch": 75,
+   "string": 1,
+   "fret": 11
+  },
+  {
+   "onset_s": 9.01,
+   "offset_s": 9.6369,
+   "pitch": 74,
+   "string": 1,
+   "fret": 10
+  },
+  {
+   "onset_s": 9.698,
+   "offset_s": 9.936,
+   "pitch": 72,
+   "string": 1,
+   "fret": 8
+  },
+  {
+   "onset_s": 9.9697,
+   "offset_s": 10.3587,
+   "pitch": 70,
+   "string": 2,
+   "fret": 11
+  },
+  {
+   "onset_s": 10.3954,
+   "offset_s": 10.6798,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 10.7144,
+   "offset_s": 11.5794,
+   "pitch": 67,
+   "string": 2,
+   "fret": 8
+  },
+  {
+   "onset_s": 11.7902,
+   "offset_s": 11.9934,
+   "pitch": 67,
+   "string": 2,
+   "fret": 8
+  },
+  {
+   "onset_s": 11.9323,
+   "offset_s": 12.1122,
+   "pitch": 65,
+   "string": 3,
+   "fret": 10
+  },
+  {
+   "onset_s": 12.1134,
+   "offset_s": 12.3166,
+   "pitch": 67,
+   "string": 2,
+   "fret": 8
+  },
+  {
+   "onset_s": 12.3511,
+   "offset_s": 12.6181,
+   "pitch": 70,
+   "string": 2,
+   "fret": 11
+  },
+  {
+   "onset_s": 13.7038,
+   "offset_s": 13.9476,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 13.9504,
+   "offset_s": 14.2116,
+   "pitch": 64,
+   "string": 3,
+   "fret": 9
+  },
+  {
+   "onset_s": 14.1694,
+   "offset_s": 14.3668,
+   "pitch": 61,
+   "string": 4,
+   "fret": 11
+  },
+  {
+   "onset_s": 14.4034,
+   "offset_s": 14.5775,
+   "pitch": 60,
+   "string": 4,
+   "fret": 10
+  },
+  {
+   "onset_s": 14.6161,
+   "offset_s": 14.8889,
+   "pitch": 58,
+   "string": 4,
+   "fret": 8
+  },
+  {
+   "onset_s": 15.312,
+   "offset_s": 15.5849,
+   "pitch": 58,
+   "string": 4,
+   "fret": 8
+  },
+  {
+   "onset_s": 15.5926,
+   "offset_s": 15.7377,
+   "pitch": 55,
+   "string": 5,
+   "fret": 10
+  },
+  {
+   "onset_s": 16.0683,
+   "offset_s": 16.4573,
+   "pitch": 53,
+   "string": 5,
+   "fret": 8
+  },
+  {
+   "onset_s": 16.9722,
+   "offset_s": 17.1637,
+   "pitch": 53,
+   "string": 5,
+   "fret": 8
+  },
+  {
+   "onset_s": 17.2023,
+   "offset_s": 17.3881,
+   "pitch": 56,
+   "string": 5,
+   "fret": 11
+  },
+  {
+   "onset_s": 17.4279,
+   "offset_s": 17.6368,
+   "pitch": 59,
+   "string": 4,
+   "fret": 9
+  },
+  {
+   "onset_s": 17.6562,
+   "offset_s": 17.842,
+   "pitch": 62,
+   "string": 3,
+   "fret": 7
+  },
+  {
+   "onset_s": 17.8748,
+   "offset_s": 18.0722,
+   "pitch": 65,
+   "string": 3,
+   "fret": 10
+  },
+  {
+   "onset_s": 18.1243,
+   "offset_s": 18.3101,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 18.3109,
+   "offset_s": 18.5547,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 18.5943,
+   "offset_s": 18.9542,
+   "pitch": 67,
+   "string": 2,
+   "fret": 8
+  },
+  {
+   "onset_s": 19.0272,
+   "offset_s": 19.1781,
+   "pitch": 70,
+   "string": 2,
+   "fret": 11
+  },
+  {
+   "onset_s": 19.3237,
+   "offset_s": 20.0,
+   "pitch": 74,
+   "string": 1,
+   "fret": 10
+  }
+ ],
+ "beats_s": [
+  0.0,
+  0.4651,
+  0.9302,
+  1.3953,
+  1.8605,
+  2.3256,
+  2.7907,
+  3.2558,
+  3.7209,
+  4.186,
+  4.6512,
+  5.1163,
+  5.5814,
+  6.0465,
+  6.5116,
+  6.9767,
+  7.4419,
+  7.907,
+  8.3721,
+  8.8372,
+  9.3023,
+  9.7674,
+  10.2326,
+  10.6977,
+  11.1628,
+  11.6279,
+  12.093,
+  12.5581,
+  13.0233,
+  13.4884,
+  13.9535,
+  14.4186,
+  14.8837,
+  15.3488,
+  15.814,
+  16.2791,
+  16.7442,
+  17.2093,
+  17.6744,
+  18.1395,
+  18.6047,
+  19.0698,
+  19.5349
+ ],
+ "downbeats_s": [
+  0.0,
+  1.8605,
+  3.7209,
+  5.5814,
+  7.4419,
+  9.3023,
+  11.1628,
+  13.0233,
+  14.8837,
+  16.7442,
+  18.6047
+ ]
+}

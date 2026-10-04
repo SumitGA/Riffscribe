@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TabScribe Preview</title>
+  <link rel="icon" href="data:,">
+  <!-- alphaTab: the same renderer the mobile app will use (MPL-2.0), pinned. -->
+  <script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.8.4/dist/alphaTab.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f5f4; --panel: #ffffff; --text: #1c1917; --muted: #57534e; --border: #e7e5e4;
+      --accent: #0f766e; --accent-text: #ffffff; --warn: #b45309; --paper: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #1c1917; --panel: #292524; --text: #f5f5f4; --muted: #a8a29e; --border: #44403c;
+        --accent: #2dd4bf; --accent-text: #042f2e; --warn: #fbbf24;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #1c1917; --panel: #292524; --text: #f5f5f4; --muted: #a8a29e; --border: #44403c;
+      --accent: #2dd4bf; --accent-text: #042f2e; --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    header { padding: 16px; display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline;
+      border-bottom: 1px solid var(--border); background: var(--panel); }
+    h1 { font-size: 18px; margin: 0; }
+    #source { color: var(--muted); font-size: 13px; }
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; margin: 0; list-style: none; }
+    .stats li { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 10px; }
+    .stats span { color: var(--muted); font-size: 12px; display: block; }
+    .stats .warn strong { color: var(--warn); }
+    .bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 0 16px 12px; }
+    button, select, .download { font: inherit; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--panel); color: var(--text); padding: 6px 12px; cursor: pointer; text-decoration: none; }
+    button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+    button:disabled { opacity: 0.5; cursor: default; }
+    label { color: var(--muted); font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+    audio { height: 32px; max-width: 100%; }
+    #status { color: var(--muted); font-size: 13px; min-height: 1.4em; padding: 0 16px 8px; }
+    #status.error { color: var(--warn); }
+    #viewport { margin: 0 16px 24px; background: var(--paper); border: 1px solid var(--border);
+      border-radius: 8px; overflow: auto; max-height: calc(100vh - 230px); }
+    #score { min-height: 200px; }
+    .at-cursor-bar { background: rgba(15, 118, 110, 0.12); }
+    .at-cursor-beat { background: #0f766e; width: 3px; }
+    .at-highlight * { fill: #0f766e; stroke: #0f766e; }
+    @media (max-width: 600px) { #viewport { margin: 0 0 16px; border-radius: 0; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TabScribe preview</h1>
+    <div id="source">Loading…</div>
+  </header>
+  <ul class="stats" id="stats"></ul>
+  <div class="bar">
+    <button id="play" class="primary" disabled>Play</button>
+    <button id="stop" disabled>Stop</button>
+    <label>Speed
+      <select id="speed">
+        <option value="0.5">50%</option><option value="0.75">75%</option>
+        <option value="1" selected>100%</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="metronome"> Metronome</label>
+    <label>Original recording <audio id="original" controls preload="none"></audio></label>
+  </div>
+  <div class="bar" id="downloads"></div>
+  <div id="status"></div>
+  <div id="viewport"><div id="score"></div></div>
+
+  <script>
+    const CDN = "https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.8.4/dist/";
+    const SHARPS = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+    const FLATS = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"];
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(text, isError = false) {
+      $("status").textContent = text;
+      $("status").classList.toggle("error", isError);
+    }
+
+    async function fetchOk(path) {
+      const response = await fetch(path);
+      return response.ok ? response : null;
+    }
+
+    function addStat(label, value, warn = false) {
+      const item = document.createElement("li");
+      if (warn) item.className = "warn";
+      const caption = document.createElement("span");
+      caption.textContent = label;
+      const strong = document.createElement("strong");
+      strong.textContent = value;
+      item.append(caption, strong);
+      $("stats").append(item);
+    }
+
+    function addDownload(label, onClickOrHref, filename) {
+      const link = document.createElement("a");
+      link.className = "download";
+      link.textContent = label;
+      if (typeof onClickOrHref === "string") {
+        link.href = onClickOrHref;
+        link.download = filename;
+      } else {
+        link.href = "#";
+        link.addEventListener("click", (event) => { event.preventDefault(); onClickOrHref(); });
+      }
+      $("downloads").append(link);
+    }
+
+    function saveBlob(data, type, filename) {
+      const url = URL.createObjectURL(new Blob([data], { type }));
+      const link = Object.assign(document.createElement("a"), { href: url, download: filename });
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function showStats(score, tab) {
+      if (score) {
+        const names = score.key.fifths < 0 ? FLATS : SHARPS;
+        addStat("Tempo", `${Math.round(score.tempo_bpm)} bpm`);
+        addStat("Key", `${names[score.key.tonic]} ${score.key.mode}`);
+        addStat("Time", `${score.beats_per_bar}/${score.beat_unit}`);
+        addStat("Pickup", score.pickup_beats ? `${score.pickup_beats} beat(s)` : "none");
+        addStat("Notes", String(score.notes.length));
+      }
+      if (tab) {
+        addStat("Tuning", tab.tuning.map((p) => SHARPS[p % 12]).join(" "));
+        addStat("Capo", tab.capo ? `fret ${tab.capo}` : "none");
+        if (score) {
+          const unplayable = score.notes.length - tab.notes.length;
+          addStat("Not on the fretboard", String(unplayable), unplayable > 0);
+        }
+      }
+    }
+
+    async function main() {
+      const [scoreResponse, tabResponse] = await Promise.all([
+        fetchOk("out/quantize/quantized.json"),
+        fetchOk("out/tab/tab.json"),
+      ]);
+      const score = scoreResponse ? await scoreResponse.json() : null;
+      const tab = tabResponse ? await tabResponse.json() : null;
+      showStats(score, tab);
+
+      const sourcePath = tab ? "out/tab/tab.musicxml" : "out/notation/score.musicxml";
+      const xmlResponse = await fetchOk(sourcePath);
+      if (!xmlResponse) {
+        setStatus(`Missing ${sourcePath}. Run "make run FILE=…" first.`, true);
+        return;
+      }
+      $("source").textContent = sourcePath.replace("out/", "");
+      $("original").src = "out/normalize/audio.flac";
+
+      const api = new alphaTab.AlphaTabApi($("score"), {
+        core: { fontDirectory: CDN + "font/" },
+        display: { layoutMode: alphaTab.LayoutMode.Page, scale: 0.9 },
+        player: {
+          playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
+          soundFont: CDN + "soundfont/sonivox.sf2",
+          scrollElement: $("viewport"),
+        },
+      });
+      api.error.on((error) => setStatus(`alphaTab error: ${error.message ?? error}`, true));
+      api.renderStarted.on(() => setStatus("Rendering…"));
+      api.renderFinished.on(() => setStatus(""));
+      api.soundFontLoad.on((e) => setStatus(`Loading sounds ${Math.round((100 * e.loaded) / e.total)}%`));
+      api.playerReady.on(() => {
+        $("play").disabled = false;
+        $("stop").disabled = false;
+        setStatus("");
+      });
+      api.playerStateChanged.on((e) => {
+        $("play").textContent = e.state === alphaTab.synth.PlayerState.Playing ? "Pause" : "Play";
+      });
+
+      $("play").addEventListener("click", () => api.playPause());
+      $("stop").addEventListener("click", () => api.stop());
+      $("speed").addEventListener("change", (e) => { api.playbackSpeed = Number(e.target.value); });
+      $("metronome").addEventListener("change", (e) => { api.metronomeVolume = e.target.checked ? 1 : 0; });
+
+      addDownload("MusicXML", sourcePath, sourcePath.split("/").pop());
+      addDownload("MIDI", "out/quantize/quantized.mid", "quantized.mid");
+      addDownload("Guitar Pro (.gp)", () =>
+        saveBlob(new alphaTab.exporter.Gp7Exporter().export(api.score, api.settings),
+          "application/octet-stream", "transcription.gp"));
+      addDownload("alphaTex", () =>
+        saveBlob(new alphaTab.exporter.AlphaTexExporter().exportToString(api.score, api.settings),
+          "text/plain", "transcription.alphatex"));
+
+      api.load(new Uint8Array(await xmlResponse.arrayBuffer()));
+    }
+
+    main().catch((error) => setStatus(`Could not load the preview: ${error.message}`, true));
+  </script>
+</body>
+</html>
