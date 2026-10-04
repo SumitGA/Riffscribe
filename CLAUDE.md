@@ -71,7 +71,7 @@ pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 - Optional Demucs separation: `make setup-separation`, then `--separation`; its tests run with `make test-separation`, not in CI.
 - Python: uv, ruff, mypy --strict, pytest. Rust: cargo fmt, clippy `-D warnings`, cargo test. TypeScript: strict mode, eslint.
 - Every deliberate trade-off or piece of technical debt gets an entry in `docs/tech-debt/README.md` (concept, pros, cons, when to revisit) in the same commit.
-- Pipeline tests are golden-file tests on short fixture clips. Track note-level F1 with `mir_eval` and fail CI on regressions.
+- Pipeline tests are golden-file tests on short fixture clips. Track note-level F1 with `mir_eval` and fail CI on regressions: `make test-accuracy` scores GuitarSet excerpts and synthetic piano clips against `tests/accuracy_baseline.json` (`UPDATE_BASELINE=1` to accept new numbers in the same commit as the change).
 - No new dependency without a one-line justification in the PR or commit.
 - Make small, focused commits. Record architecture changes as an ADR in `docs/adr/` and update this file.
 - Before writing code for a new phase, propose a plan and wait for approval.

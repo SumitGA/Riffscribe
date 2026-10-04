@@ -42,8 +42,8 @@ typecheck: ## mypy --strict
 test: ## Fast tests (skips the accuracy suite)
 	uv run pytest
 
-test-accuracy: ## Slow accuracy tests with real models
-	uv run pytest -m accuracy
+test-accuracy: ## Accuracy suite (mir_eval vs annotated clips); prints a table
+	uv run pytest -m accuracy -s -q
 
 test-separation: ## Demucs tests (needs make setup-separation)
 	uv run --group separation pytest -m separation

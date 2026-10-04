@@ -1,0 +1,372 @@
+{
+ "track": "arpeggios_72bpm",
+ "source": "synthesized by make_fixtures.py",
+ "license": "same as this repository",
+ "tempo_bpm": 72,
+ "notes": [
+  {
+   "onset_s": 0.5,
+   "offset_s": 0.875,
+   "pitch": 45
+  },
+  {
+   "onset_s": 0.9167,
+   "offset_s": 1.2917,
+   "pitch": 52
+  },
+  {
+   "onset_s": 1.3333,
+   "offset_s": 1.7083,
+   "pitch": 57
+  },
+  {
+   "onset_s": 1.75,
+   "offset_s": 2.125,
+   "pitch": 60
+  },
+  {
+   "onset_s": 2.1667,
+   "offset_s": 2.5417,
+   "pitch": 57
+  },
+  {
+   "onset_s": 2.5833,
+   "offset_s": 2.9583,
+   "pitch": 64
+  },
+  {
+   "onset_s": 3.0,
+   "offset_s": 3.375,
+   "pitch": 69
+  },
+  {
+   "onset_s": 3.4167,
+   "offset_s": 3.7917,
+   "pitch": 72
+  },
+  {
+   "onset_s": 3.8333,
+   "offset_s": 4.2083,
+   "pitch": 41
+  },
+  {
+   "onset_s": 4.25,
+   "offset_s": 4.625,
+   "pitch": 48
+  },
+  {
+   "onset_s": 4.6667,
+   "offset_s": 5.0417,
+   "pitch": 53
+  },
+  {
+   "onset_s": 5.0833,
+   "offset_s": 5.4583,
+   "pitch": 57
+  },
+  {
+   "onset_s": 5.5,
+   "offset_s": 5.875,
+   "pitch": 53
+  },
+  {
+   "onset_s": 5.9167,
+   "offset_s": 6.2917,
+   "pitch": 60
+  },
+  {
+   "onset_s": 6.3333,
+   "offset_s": 6.7083,
+   "pitch": 65
+  },
+  {
+   "onset_s": 6.75,
+   "offset_s": 7.125,
+   "pitch": 69
+  },
+  {
+   "onset_s": 7.1667,
+   "offset_s": 7.5417,
+   "pitch": 43
+  },
+  {
+   "onset_s": 7.5833,
+   "offset_s": 7.9583,
+   "pitch": 50
+  },
+  {
+   "onset_s": 8.0,
+   "offset_s": 8.375,
+   "pitch": 55
+  },
+  {
+   "onset_s": 8.4167,
+   "offset_s": 8.7917,
+   "pitch": 59
+  },
+  {
+   "onset_s": 8.8333,
+   "offset_s": 9.2083,
+   "pitch": 55
+  },
+  {
+   "onset_s": 9.25,
+   "offset_s": 9.625,
+   "pitch": 62
+  },
+  {
+   "onset_s": 9.6667,
+   "offset_s": 10.0417,
+   "pitch": 67
+  },
+  {
+   "onset_s": 10.0833,
+   "offset_s": 10.4583,
+   "pitch": 71
+  },
+  {
+   "onset_s": 10.5,
+   "offset_s": 10.875,
+   "pitch": 40
+  },
+  {
+   "onset_s": 10.9167,
+   "offset_s": 11.2917,
+   "pitch": 47
+  },
+  {
+   "onset_s": 11.3333,
+   "offset_s": 11.7083,
+   "pitch": 52
+  },
+  {
+   "onset_s": 11.75,
+   "offset_s": 12.125,
+   "pitch": 56
+  },
+  {
+   "onset_s": 12.1667,
+   "offset_s": 12.5417,
+   "pitch": 52
+  },
+  {
+   "onset_s": 12.5833,
+   "offset_s": 12.9583,
+   "pitch": 59
+  },
+  {
+   "onset_s": 13.0,
+   "offset_s": 13.375,
+   "pitch": 64
+  },
+  {
+   "onset_s": 13.4167,
+   "offset_s": 13.7917,
+   "pitch": 68
+  },
+  {
+   "onset_s": 13.8333,
+   "offset_s": 14.2083,
+   "pitch": 45
+  },
+  {
+   "onset_s": 14.25,
+   "offset_s": 14.625,
+   "pitch": 52
+  },
+  {
+   "onset_s": 14.6667,
+   "offset_s": 15.0417,
+   "pitch": 57
+  },
+  {
+   "onset_s": 15.0833,
+   "offset_s": 15.4583,
+   "pitch": 60
+  },
+  {
+   "onset_s": 15.5,
+   "offset_s": 15.875,
+   "pitch": 57
+  },
+  {
+   "onset_s": 15.9167,
+   "offset_s": 16.2917,
+   "pitch": 64
+  },
+  {
+   "onset_s": 16.3333,
+   "offset_s": 16.7083,
+   "pitch": 69
+  },
+  {
+   "onset_s": 16.75,
+   "offset_s": 17.125,
+   "pitch": 72
+  },
+  {
+   "onset_s": 17.1667,
+   "offset_s": 17.5417,
+   "pitch": 41
+  },
+  {
+   "onset_s": 17.5833,
+   "offset_s": 17.9583,
+   "pitch": 48
+  },
+  {
+   "onset_s": 18.0,
+   "offset_s": 18.375,
+   "pitch": 53
+  },
+  {
+   "onset_s": 18.4167,
+   "offset_s": 18.7917,
+   "pitch": 57
+  },
+  {
+   "onset_s": 18.8333,
+   "offset_s": 19.2083,
+   "pitch": 53
+  },
+  {
+   "onset_s": 19.25,
+   "offset_s": 19.625,
+   "pitch": 60
+  },
+  {
+   "onset_s": 19.6667,
+   "offset_s": 20.0417,
+   "pitch": 65
+  },
+  {
+   "onset_s": 20.0833,
+   "offset_s": 20.4583,
+   "pitch": 69
+  },
+  {
+   "onset_s": 20.5,
+   "offset_s": 20.875,
+   "pitch": 43
+  },
+  {
+   "onset_s": 20.9167,
+   "offset_s": 21.2917,
+   "pitch": 50
+  },
+  {
+   "onset_s": 21.3333,
+   "offset_s": 21.7083,
+   "pitch": 55
+  },
+  {
+   "onset_s": 21.75,
+   "offset_s": 22.125,
+   "pitch": 59
+  },
+  {
+   "onset_s": 22.1667,
+   "offset_s": 22.5417,
+   "pitch": 55
+  },
+  {
+   "onset_s": 22.5833,
+   "offset_s": 22.9583,
+   "pitch": 62
+  },
+  {
+   "onset_s": 23.0,
+   "offset_s": 23.375,
+   "pitch": 67
+  },
+  {
+   "onset_s": 23.4167,
+   "offset_s": 23.7917,
+   "pitch": 71
+  },
+  {
+   "onset_s": 23.8333,
+   "offset_s": 24.2083,
+   "pitch": 40
+  },
+  {
+   "onset_s": 24.25,
+   "offset_s": 24.625,
+   "pitch": 47
+  },
+  {
+   "onset_s": 24.6667,
+   "offset_s": 25.0417,
+   "pitch": 52
+  },
+  {
+   "onset_s": 25.0833,
+   "offset_s": 25.4583,
+   "pitch": 56
+  },
+  {
+   "onset_s": 25.5,
+   "offset_s": 25.875,
+   "pitch": 52
+  },
+  {
+   "onset_s": 25.9167,
+   "offset_s": 26.2917,
+   "pitch": 59
+  },
+  {
+   "onset_s": 26.3333,
+   "offset_s": 26.7083,
+   "pitch": 64
+  },
+  {
+   "onset_s": 26.75,
+   "offset_s": 27.125,
+   "pitch": 68
+  }
+ ],
+ "beats_s": [
+  0.5,
+  1.3333,
+  2.1667,
+  3.0,
+  3.8333,
+  4.6667,
+  5.5,
+  6.3333,
+  7.1667,
+  8.0,
+  8.8333,
+  9.6667,
+  10.5,
+  11.3333,
+  12.1667,
+  13.0,
+  13.8333,
+  14.6667,
+  15.5,
+  16.3333,
+  17.1667,
+  18.0,
+  18.8333,
+  19.6667,
+  20.5,
+  21.3333,
+  22.1667,
+  23.0,
+  23.8333,
+  24.6667,
+  25.5,
+  26.3333
+ ],
+ "downbeats_s": [
+  0.5,
+  3.8333,
+  7.1667,
+  10.5,
+  13.8333,
+  17.1667,
+  20.5,
+  23.8333
+ ]
+}

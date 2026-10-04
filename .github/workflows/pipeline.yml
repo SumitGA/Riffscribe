@@ -19,6 +19,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run pytest
+      - run: uv run pytest -m accuracy -s -q  # mir_eval scores vs tests/accuracy_baseline.json
 
   rust:
     runs-on: ubuntu-latest

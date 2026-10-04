@@ -212,6 +212,11 @@ clips for piano. We avoid MAESTRO because its licence is non-commercial.
 - Scores on clean or synthetic clips overstate real-world accuracy (phone mic, room echo).
 - Few clips means a single clip can swing the average.
 
+**What we have (commit 10).** 6 GuitarSet excerpts (20 s each, mic audio, 6 players, 5
+styles, comp and solo; 4.1 MB, fetched by HTTP range requests from the Zenodo zips) and 2
+synthesized piano clips. Baselines in `tests/accuracy_baseline.json`; CI fails if a metric drops
+more than 0.02. Mean guitar note F1 is 0.76; piano (synthetic) 0.83, which flatters it.
+
 **Revisit before** publishing accuracy claims. Grow a held-out set of real phone recordings that
 is never used for tuning.
 
@@ -344,8 +349,18 @@ analysed twice. librosa's outputs are recorded once and the tests require identi
 - The envelope quality depends on Basic Pitch. A first version that summed raw activations got
   every test tempo wrong; a guard test now checks known tempos end to end.
 
-**Revisit when** the accuracy suite (commit 10, GuitarSet beat annotations scored with
-`mir_eval.beat`) shows tempo or beat errors, or users often change the tempo by hand.
+**Measured (commit 10, `make test-accuracy`).** On 6 GuitarSet excerpts: mean beat F-measure
+0.25, tempo right on 4 of 6. No timing bug: where the tracker locks on, beats land within ~0-30
+ms of the annotations. The errors are the two classic failure modes:
+- *Right tempo, wrong phase*: on bossa nova and jazz comping the beats sit ~0.3-0.4 of a beat
+  off, because syncopated chords put the strongest attacks between beats.
+- *Wrong metrical level*: funk at 114 bpm read as 152, a 100 bpm song as 140, piano arpeggios at
+  72 as 144 (it follows the eighth notes).
+
+**Revisit when**: now that the suite measures it, the beat tracker is the weakest stage. Options,
+in order of effort: use bass-register onsets as downbeat/phase evidence; constrain tempo with
+note-onset statistics; or a learned beat tracker with commercial-safe code *and* weights (check
+both: madmom's models, for example, are non-commercial).
 
 ---
 
@@ -446,6 +461,12 @@ notation, and the stage reports how many. Tunings: standard and drop D; capo 0-1
 - Hand movement ignores time: a jump across the neck costs the same with a whole bar to move
   as with a sixteenth note.
 - Only six-string guitar, two tunings.
+
+**Measured (commit 10).** On notes we transcribe correctly, our string matches the GuitarSet
+player's string 38 % of the time on average: 100 % on a jazz comping excerpt, 66 % on
+singer-songwriter strumming, but 7-18 % on bossa nova and rock/funk solos, where players use
+higher positions than our low-position preference. The tab is still playable; it just isn't
+the player's fingering.
 
 **Revisit when** users often move notes to other strings in the editor (Phase 4): those edits
 are exactly the data to fit the weights to, or to train a model.

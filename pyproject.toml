@@ -23,6 +23,7 @@ dev = [
     "pytest>=8",
     "ruff>=0.6",
     "pyloudnorm>=0.1.1",  # reference implementation that tests check our loudness against (MIT)
+    "mir-eval>=0.8",
 ]
 
 # `uv sync --group separation` adds Demucs; not part of the default install or CI.
@@ -48,7 +49,7 @@ mypy_path = "packages/pipeline/src:packages/pipeline/tests"
 
 [[tool.mypy.overrides]]
 module = [
-    "demucs", "demucs.*", "mido", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile", "torch",
+    "demucs", "demucs.*", "mido", "mir_eval", "mir_eval.*", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile", "torch",
 ]
 ignore_missing_imports = true
 

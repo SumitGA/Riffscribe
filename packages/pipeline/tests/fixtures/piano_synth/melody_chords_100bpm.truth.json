@@ -1,0 +1,332 @@
+{
+ "track": "melody_chords_100bpm",
+ "source": "synthesized by make_fixtures.py",
+ "license": "same as this repository",
+ "tempo_bpm": 100,
+ "notes": [
+  {
+   "onset_s": 0.5,
+   "offset_s": 2.66,
+   "pitch": 48
+  },
+  {
+   "onset_s": 0.5,
+   "offset_s": 2.66,
+   "pitch": 52
+  },
+  {
+   "onset_s": 0.5,
+   "offset_s": 2.66,
+   "pitch": 55
+  },
+  {
+   "onset_s": 0.5,
+   "offset_s": 1.04,
+   "pitch": 60
+  },
+  {
+   "onset_s": 1.1,
+   "offset_s": 1.64,
+   "pitch": 62
+  },
+  {
+   "onset_s": 1.7,
+   "offset_s": 2.24,
+   "pitch": 64
+  },
+  {
+   "onset_s": 2.3,
+   "offset_s": 2.84,
+   "pitch": 65
+  },
+  {
+   "onset_s": 2.9,
+   "offset_s": 5.06,
+   "pitch": 53
+  },
+  {
+   "onset_s": 2.9,
+   "offset_s": 5.06,
+   "pitch": 57
+  },
+  {
+   "onset_s": 2.9,
+   "offset_s": 5.06,
+   "pitch": 60
+  },
+  {
+   "onset_s": 2.9,
+   "offset_s": 3.44,
+   "pitch": 67
+  },
+  {
+   "onset_s": 3.5,
+   "offset_s": 4.04,
+   "pitch": 69
+  },
+  {
+   "onset_s": 4.1,
+   "offset_s": 4.64,
+   "pitch": 67
+  },
+  {
+   "onset_s": 4.7,
+   "offset_s": 5.24,
+   "pitch": 65
+  },
+  {
+   "onset_s": 5.3,
+   "offset_s": 7.46,
+   "pitch": 55
+  },
+  {
+   "onset_s": 5.3,
+   "offset_s": 7.46,
+   "pitch": 59
+  },
+  {
+   "onset_s": 5.3,
+   "offset_s": 7.46,
+   "pitch": 62
+  },
+  {
+   "onset_s": 5.3,
+   "offset_s": 5.84,
+   "pitch": 64
+  },
+  {
+   "onset_s": 5.9,
+   "offset_s": 6.44,
+   "pitch": 62
+  },
+  {
+   "onset_s": 6.5,
+   "offset_s": 7.04,
+   "pitch": 60
+  },
+  {
+   "onset_s": 7.1,
+   "offset_s": 7.64,
+   "pitch": 62
+  },
+  {
+   "onset_s": 7.7,
+   "offset_s": 9.86,
+   "pitch": 48
+  },
+  {
+   "onset_s": 7.7,
+   "offset_s": 9.86,
+   "pitch": 52
+  },
+  {
+   "onset_s": 7.7,
+   "offset_s": 9.86,
+   "pitch": 55
+  },
+  {
+   "onset_s": 7.7,
+   "offset_s": 8.24,
+   "pitch": 64
+  },
+  {
+   "onset_s": 8.3,
+   "offset_s": 8.84,
+   "pitch": 67
+  },
+  {
+   "onset_s": 8.9,
+   "offset_s": 9.44,
+   "pitch": 72
+  },
+  {
+   "onset_s": 9.5,
+   "offset_s": 10.04,
+   "pitch": 67
+  },
+  {
+   "onset_s": 10.1,
+   "offset_s": 12.26,
+   "pitch": 48
+  },
+  {
+   "onset_s": 10.1,
+   "offset_s": 12.26,
+   "pitch": 52
+  },
+  {
+   "onset_s": 10.1,
+   "offset_s": 12.26,
+   "pitch": 55
+  },
+  {
+   "onset_s": 10.1,
+   "offset_s": 10.64,
+   "pitch": 60
+  },
+  {
+   "onset_s": 10.7,
+   "offset_s": 11.24,
+   "pitch": 62
+  },
+  {
+   "onset_s": 11.3,
+   "offset_s": 11.84,
+   "pitch": 64
+  },
+  {
+   "onset_s": 11.9,
+   "offset_s": 12.44,
+   "pitch": 65
+  },
+  {
+   "onset_s": 12.5,
+   "offset_s": 14.66,
+   "pitch": 53
+  },
+  {
+   "onset_s": 12.5,
+   "offset_s": 14.66,
+   "pitch": 57
+  },
+  {
+   "onset_s": 12.5,
+   "offset_s": 14.66,
+   "pitch": 60
+  },
+  {
+   "onset_s": 12.5,
+   "offset_s": 13.04,
+   "pitch": 67
+  },
+  {
+   "onset_s": 13.1,
+   "offset_s": 13.64,
+   "pitch": 69
+  },
+  {
+   "onset_s": 13.7,
+   "offset_s": 14.24,
+   "pitch": 67
+  },
+  {
+   "onset_s": 14.3,
+   "offset_s": 14.84,
+   "pitch": 65
+  },
+  {
+   "onset_s": 14.9,
+   "offset_s": 17.06,
+   "pitch": 55
+  },
+  {
+   "onset_s": 14.9,
+   "offset_s": 17.06,
+   "pitch": 59
+  },
+  {
+   "onset_s": 14.9,
+   "offset_s": 17.06,
+   "pitch": 62
+  },
+  {
+   "onset_s": 14.9,
+   "offset_s": 15.44,
+   "pitch": 64
+  },
+  {
+   "onset_s": 15.5,
+   "offset_s": 16.04,
+   "pitch": 62
+  },
+  {
+   "onset_s": 16.1,
+   "offset_s": 16.64,
+   "pitch": 60
+  },
+  {
+   "onset_s": 16.7,
+   "offset_s": 17.24,
+   "pitch": 62
+  },
+  {
+   "onset_s": 17.3,
+   "offset_s": 19.46,
+   "pitch": 48
+  },
+  {
+   "onset_s": 17.3,
+   "offset_s": 19.46,
+   "pitch": 52
+  },
+  {
+   "onset_s": 17.3,
+   "offset_s": 19.46,
+   "pitch": 55
+  },
+  {
+   "onset_s": 17.3,
+   "offset_s": 17.84,
+   "pitch": 64
+  },
+  {
+   "onset_s": 17.9,
+   "offset_s": 18.44,
+   "pitch": 67
+  },
+  {
+   "onset_s": 18.5,
+   "offset_s": 19.04,
+   "pitch": 72
+  },
+  {
+   "onset_s": 19.1,
+   "offset_s": 19.64,
+   "pitch": 67
+  }
+ ],
+ "beats_s": [
+  0.5,
+  1.1,
+  1.7,
+  2.3,
+  2.9,
+  3.5,
+  4.1,
+  4.7,
+  5.3,
+  5.9,
+  6.5,
+  7.1,
+  7.7,
+  8.3,
+  8.9,
+  9.5,
+  10.1,
+  10.7,
+  11.3,
+  11.9,
+  12.5,
+  13.1,
+  13.7,
+  14.3,
+  14.9,
+  15.5,
+  16.1,
+  16.7,
+  17.3,
+  17.9,
+  18.5,
+  19.1
+ ],
+ "downbeats_s": [
+  0.5,
+  2.9,
+  5.3,
+  7.7,
+  10.1,
+  12.5,
+  14.9,
+  17.3
+ ]
+}
