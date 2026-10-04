@@ -19,6 +19,8 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-9](#td-9-ffmpeg-as-an-external-program) | ffmpeg as an external program | Pipeline | Building the production worker image |
 | [TD-10](#td-10-our-own-loudness-meter-instead-of-pyloudnorm) | Our own loudness meter instead of pyloudnorm | Pipeline | If a standards-compliance issue is reported |
 | [TD-11](#td-11-vendored-basic-pitch-model-and-ported-code) | Vendored Basic Pitch model and ported code | Pipeline / legal | Before launch (legal review); when upstream releases |
+| [TD-12](#td-12-our-own-beat-tracker-port) | Our own beat tracker port | Pipeline | Tempo errors show up in the accuracy suite |
+| [TD-13](#td-13-simple-rhythm-and-key-heuristics) | Simple rhythm and key heuristics | Pipeline | Users correct bar lines, triplets or keys often |
 
 ---
 
@@ -299,3 +301,67 @@ a model's licence and the licences of its training data are separate questions.
   trained on commercially licensed data (ours or a vendor's).
 - **When upstream releases** a version with Python 3.12 support or a better model: re-record the
   fixtures and diff.
+
+---
+
+## TD-12: Our own beat tracker port
+
+**Concept.** *Tempo* is how many beats per minute (bpm) the music has; *beat tracking* finds
+the moment of every beat. The classic method (Ellis, 2007) works on an *onset envelope*: a
+signal that spikes whenever a new note starts. It finds the tempo by checking which repeat
+distance makes the envelope line up with itself (*autocorrelation*), then picks beat times
+with *dynamic programming*: the best chain of beats that lands on strong onsets while keeping
+a steady spacing.
+
+**What we did.** librosa implements this, but costs 281 MB to install, 30 s of compilation on
+every fresh worker and up to 670 MB of memory (ADR-0005). We ported the same algorithm into
+`pipeline/beats.py` and feed it from Basic Pitch's own onset detector, so the audio isn't
+analysed twice. librosa's outputs are recorded once and the tests require identical results.
+
+**Pros**
+- 0.6 s and no memory spike for 5 minutes; no warm-up; nothing extra to install.
+- Same results as the well-known library, provably (identical beat frames in tests).
+
+**Cons**
+- About 150 lines of ported code to maintain.
+- Inherits librosa's limits: one tempo for the whole piece (no gradual speed-ups or rubato
+  beyond what the beat chain absorbs), and *octave errors*: very fast music can be reported at
+  half speed (175 bpm reads as 87.6) because of a built-in preference for tempos near 120.
+- The envelope quality depends on Basic Pitch. A first version that summed raw activations got
+  every test tempo wrong; a guard test now checks known tempos end to end.
+
+**Revisit when** the accuracy suite (commit 10, GuitarSet beat annotations scored with
+`mir_eval.beat`) shows tempo or beat errors, or users often change the tempo by hand.
+
+---
+
+## TD-13: Simple rhythm and key heuristics
+
+**Concept.** Turning beat times into sheet music needs more decisions:
+- *Quantization*: snapping each note to the nearest grid position (here sixteenth notes, or
+  eighth-note *triplets*, three per beat).
+- *Meter*: how many beats per bar (4/4 = four).
+- *Downbeat*: which beat starts a bar. Music often starts with a *pickup* (anacrusis): a few
+  notes before the first full bar.
+- *Key*: the scale the piece is in, which sets the key signature (sharps or flats).
+
+**What we did (`pipeline/rhythm.py`).**
+- 4/4 only.
+- Each beat picks sixteenths or triplets: triplets only with at least two notes in the beat
+  that fit triplets at least twice as well.
+- The downbeat is the beat position (out of four) where the loudest on-beat notes land.
+- Key: Krumhansl-Schmuckler, comparing how long each pitch class sounds with standard
+  major/minor profiles.
+
+**Pros**: simple, fast, explainable, and right on clear, steady playing (tests cover jitter,
+tempo drift, triplets, pickups and keys).
+
+**Cons**
+- Waltzes (3/4), 6/8 and odd meters are notated in 4/4.
+- Syncopated music, where the loudest notes are off the downbeat, can get its bar lines shifted.
+- Swing, quintuplets and other tuplets are forced onto the sixteenth or triplet grid.
+- Key detection can be fooled by harmonics that the transcription reports as extra notes, and
+  can't tell relative keys apart well (C major vs A minor) on short clips.
+
+**Revisit when** users often correct bar lines, triplets or keys in the editor (Phase 4); those
+corrections are the best training data for something smarter.

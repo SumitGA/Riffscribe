@@ -97,6 +97,26 @@ def frame_times(n_frames: int) -> npt.NDArray[np.float64]:
     )
 
 
+ENVELOPE_FPS = SAMPLE_RATE / FFT_HOP  # exact rate of onset_envelope() (~86.13 frames/s)
+
+
+def onset_envelope(onsets: Activations, min_pitch: int, max_pitch: int) -> npt.NDArray[np.float32]:
+    """Onset strength for beat tracking: per-pitch rises in onset activation, summed.
+
+    Like spectral flux, only increases count. Summing raw activations instead lets low-level
+    activity across 88 pitches bury the attacks (tempo came out ~120 bpm whatever the music).
+    Activation frames are not evenly spaced in time (see `frame_times`), which would skew the
+    tempo by ~0.5 %, so the result is resampled onto an even ENVELOPE_FPS grid from 0 s.
+    """
+    if onsets.shape[0] == 0:
+        return np.zeros(0, dtype=np.float32)
+    in_range = onsets[:, min_pitch - MIDI_OFFSET : max_pitch - MIDI_OFFSET + 1].astype(np.float64)
+    rises = np.maximum(0.0, np.diff(in_range, axis=0, prepend=0.0)).sum(axis=1)
+    times = frame_times(rises.size)
+    even = np.arange(int(times[-1] * ENVELOPE_FPS) + 1) / ENVELOPE_FPS
+    return np.asarray(np.interp(even, times, rises), dtype=np.float32)
+
+
 def decode_notes(
     frames: Activations, onsets: Activations, params: DecodeParams = UPSTREAM_DEFAULTS
 ) -> list[RawNote]:

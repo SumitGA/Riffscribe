@@ -5,8 +5,15 @@ import soundfile
 from pydantic import Field
 from scipy.signal import resample_poly
 
+from pipeline.basic_pitch import (
+    ENVELOPE_FPS,
+    BasicPitch,
+    DecodeParams,
+    RawNote,
+    decode_notes,
+    onset_envelope,
+)
 from pipeline.basic_pitch import SAMPLE_RATE as MODEL_RATE
-from pipeline.basic_pitch import BasicPitch, DecodeParams, RawNote, decode_notes
 from pipeline.config import Instrument
 from pipeline.midi import write_notes
 from pipeline.stage import Stage, StageContext, StageInputs
@@ -39,12 +46,14 @@ class NoteEvents(StageOutput):
     stage = StageName.TRANSCRIBE
     notes: ArtifactRef  # notes.json (NoteList)
     midi: ArtifactRef  # raw.mid, unquantized, fixed 120 bpm grid
+    onset_envelope: ArtifactRef  # onset_envelope.npy, float32, for beat tracking
+    envelope_fps: float
     note_count: int
 
 
 class TranscribeStage(Stage[NoteEvents]):
     name = StageName.TRANSCRIBE
-    version = "2"  # 2: note decoding moved to Rust
+    version = "3"  # 2: note decoding moved to Rust; 3: onset envelope output
     requires = (NormalizedAudio,)
     output_type = NoteEvents
 
@@ -61,9 +70,9 @@ class TranscribeStage(Stage[NoteEvents]):
         if self._model is None:
             self._model = BasicPitch()
         low, high = PITCH_RANGE[ctx.cfg.instrument]
-        raw = decode_notes(
-            *self._model.activations(audio), DecodeParams(min_pitch=low, max_pitch=high)
-        )
+        frames, onsets = self._model.activations(audio)
+        raw = decode_notes(frames, onsets, DecodeParams(min_pitch=low, max_pitch=high))
+        np.save(ctx.path("onset_envelope.npy"), onset_envelope(onsets, low, high))
         notes = [_to_note(n) for n in raw]
 
         ctx.path("notes.json").write_text(NoteList(notes=notes).model_dump_json(indent=1))
@@ -73,7 +82,11 @@ class TranscribeStage(Stage[NoteEvents]):
             program=GM_PROGRAM[ctx.cfg.instrument],
         )
         return NoteEvents(
-            notes=ctx.ref("notes.json"), midi=ctx.ref("raw.mid"), note_count=len(notes)
+            notes=ctx.ref("notes.json"),
+            midi=ctx.ref("raw.mid"),
+            onset_envelope=ctx.ref("onset_envelope.npy"),
+            envelope_fps=ENVELOPE_FPS,
+            note_count=len(notes),
         )
 
 
