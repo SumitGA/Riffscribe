@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+dist/
+*.egg-info/
+
+# Rust / maturin
+target/
+*.so
+*.pyd
+
+# Pipeline run output
+out/
+work/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

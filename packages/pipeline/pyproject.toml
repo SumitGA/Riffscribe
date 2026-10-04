@@ -1,0 +1,25 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "tabscribe-pipeline"
+version = "0.1.0"
+description = "Audio -> MIDI -> MusicXML -> guitar tab transcription pipeline"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.8,<3",  # typed stage inputs/outputs and manifests
+    "typer>=0.12",       # CLI (`python -m pipeline`)
+]
+
+[project.scripts]
+tabscribe-pipeline = "pipeline.cli:app"
+
+[tool.maturin]
+python-source = "src"
+module-name = "pipeline._tabcore"
+features = ["pyo3/extension-module"]
+
+[tool.uv]
+# Rebuild the Rust extension when Rust sources change.
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "rust/**/*.rs" }]

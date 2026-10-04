@@ -1,0 +1,44 @@
+# Monorepo root: a virtual uv workspace (no package of its own).
+# Shared tool config (ruff, mypy, pytest) lives here so every Python package follows the same rules.
+
+[tool.uv.workspace]
+members = ["packages/pipeline"]
+
+[tool.uv.sources]
+tabscribe-pipeline = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "tabscribe-pipeline",
+    "maturin>=1.7,<2",
+    "mypy>=1.11",
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "N", "PTH"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pipeline"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+files = ["packages/pipeline/src", "packages/pipeline/tests"]
+explicit_package_bases = true
+mypy_path = "packages/pipeline/src"
+
+[tool.pytest.ini_options]
+testpaths = ["packages/pipeline/tests"]
+addopts = "--import-mode=importlib -m 'not accuracy'"
+markers = [
+    "unit: fast tests, no ML models",
+    "golden: compares deterministic stage output with committed snapshots",
+    "accuracy: runs real models and checks mir_eval metrics against baselines",
+]
