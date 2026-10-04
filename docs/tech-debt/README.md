@@ -18,6 +18,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-8](#td-8-small-partly-synthetic-test-fixtures) | Small, partly synthetic test fixtures | Testing | Before claiming accuracy numbers publicly |
 | [TD-9](#td-9-ffmpeg-as-an-external-program) | ffmpeg as an external program | Pipeline | Building the production worker image |
 | [TD-10](#td-10-our-own-loudness-meter-instead-of-pyloudnorm) | Our own loudness meter instead of pyloudnorm | Pipeline | If a standards-compliance issue is reported |
+| [TD-11](#td-11-vendored-basic-pitch-model-and-ported-code) | Vendored Basic Pitch model and ported code | Pipeline / legal | Before launch (legal review); when upstream releases |
 
 ---
 
@@ -255,3 +256,45 @@ normalize went from 614 MB to 178 MB peak memory, and 105 MB of that is Python a
 
 **Revisit when** someone reports loudness differences against a reference meter, or we need
 multichannel.
+
+---
+
+## TD-11: Vendored Basic Pitch model and ported code
+
+**Concept.** *Vendoring* means copying a third-party file into our repo instead of installing it
+as a package. A *port* is a rewrite of someone else's code into our codebase, keeping its
+behaviour. A *parity test* proves that the port still does what the original did, by comparing
+outputs on the same inputs. *Training-data provenance* is about which data a model learned from:
+a model's licence and the licences of its training data are separate questions.
+
+**What we did.** The `basic-pitch` package (Spotify, Apache-2.0) can't be installed on Python
+3.12: its last release pins a TensorFlow version that has no 3.12 builds. The model itself is a
+230 KB ONNX file. We:
+- copied `nmp.onnx`, its `LICENSE` and `NOTICE` into `pipeline/models/basic_pitch/`, unmodified;
+- ported about 200 lines of pre/post-processing into `pipeline/basic_pitch.py`, dropping
+  pitch bends (out of scope for v1) and the TensorFlow, librosa, pretty_midi and mir_eval
+  dependencies;
+- recorded the real package's outputs once, in a throwaway environment, and committed them as
+  fixtures. Tests check model activations, note decoding and the full path against them.
+
+**Pros**
+- Stays on Python 3.12 with one small runtime dependency (`onnxruntime`) instead of TensorFlow
+  (500 MB+).
+- We control memory: batching 4 windows instead of 16 saved about 140 MB with no speed loss.
+- The decoding loop is our code now, so we can make it faster (see the Rust commit after this
+  one).
+
+**Cons**
+- We maintain the port. Upstream fixes must be copied by hand; the parity fixtures make that
+  safe (re-record, then compare). Upstream has been quiet since August 2024.
+- Apache-2.0 obligations: keep `LICENSE` and `NOTICE` with the model and in any distribution,
+  and mark our modified code as changed (done in the module docstring).
+- **Training-data caveat.** The weights are Apache-2.0, but Basic Pitch was trained partly on
+  datasets licensed for research only (e.g. MedleyDB, iKala). Whether that affects commercial use
+  of the weights is a legal question, not a technical one. Same grey area as Demucs (ADR-0004).
+
+**Revisit when**
+- **Before launch:** get a legal opinion on the training-data question. A fallback is a model
+  trained on commercially licensed data (ours or a vendor's).
+- **When upstream releases** a version with Python 3.12 support or a better model: re-record the
+  fixtures and diff.

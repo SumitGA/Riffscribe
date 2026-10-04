@@ -36,7 +36,12 @@ explicit_package_bases = true
 mypy_path = "packages/pipeline/src"
 
 [[tool.mypy.overrides]]
-module = ["pyloudnorm", "scipy", "scipy.*", "soundfile"]
+module = ["mido", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile"]
+ignore_missing_imports = true
+
+# Only imported by tests/fixtures/basic_pitch/make_reference.py, which runs in a throwaway env.
+[[tool.mypy.overrides]]
+module = ["basic_pitch", "basic_pitch.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
