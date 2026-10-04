@@ -18,3 +18,6 @@ def decode_notes(
     melodia_trick: bool,
     energy_tolerance: int,
 ) -> list[tuple[int, int, int, float]]: ...
+def tab_positions(
+    chords: list[list[int]], open_strings: list[int], max_fret: int
+) -> list[list[tuple[int, int] | None]]: ...

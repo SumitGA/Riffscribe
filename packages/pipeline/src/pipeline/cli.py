@@ -5,7 +5,7 @@ from typing import Annotated
 import typer
 
 from pipeline import _tabcore
-from pipeline.config import Instrument, PipelineConfig
+from pipeline.config import Instrument, PipelineConfig, Tuning
 from pipeline.errors import PipelineError
 from pipeline.runner import run_pipeline
 from pipeline.stages import default_stages
@@ -35,9 +35,11 @@ def transcribe(
         StageName | None, typer.Option(help="Re-run this stage and all later ones.")
     ] = None,
     force: Annotated[bool, typer.Option(help="Ignore the cache and re-run everything.")] = False,
+    tuning: Annotated[Tuning, typer.Option(help="Guitar tuning for the tab.")] = Tuning.STANDARD,
+    capo: Annotated[int, typer.Option(min=0, max=12, help="Guitar capo fret.")] = 0,
 ) -> None:
     """Transcribe AUDIO, writing each stage's artifacts under --out."""
-    cfg = PipelineConfig(instrument=instrument)
+    cfg = PipelineConfig(instrument=instrument, tuning=tuning, capo=capo)
     force_from = StageName.SOURCE if force else from_stage
     try:
         result = run_pipeline(audio, out, cfg, default_stages(), force_from=force_from)

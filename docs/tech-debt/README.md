@@ -22,6 +22,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-12](#td-12-our-own-beat-tracker-port) | Our own beat tracker port | Pipeline | Tempo errors show up in the accuracy suite |
 | [TD-13](#td-13-simple-rhythm-and-key-heuristics) | Simple rhythm and key heuristics | Pipeline | Users correct bar lines, triplets or keys often |
 | [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
+| [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
 
 ---
 
@@ -402,3 +403,41 @@ golden files pin the exact output.
 
 **Revisit when** the preview (step 8) or users show cut-off notes or awkward hand splits, or
 when Phase 4 editing needs multiple voices.
+
+---
+
+## TD-15: Tab fingering by cost rules
+
+**Concept.** On a guitar the same note can usually be played in several places (E4 is the open
+high string, or fret 5 on the B string, fret 9 on G, fret 14 on D...). *Tab* writes down which
+string and fret to use. A good choice keeps chords playable (one note per string, fingers not
+stretched past ~4 frets) and keeps the hand from jumping around. The *Viterbi algorithm* finds
+the best sequence of choices for the whole piece at once, instead of greedily note by note:
+each chord gets candidate fingerings with a comfort cost, moving the hand between chords has a
+cost, and Viterbi finds the cheapest path through all of them.
+
+**What we did.** `rust/tab.rs`: costs for hand height, finger span (heavy penalty beyond 4
+frets), a bonus for open strings and a cost per fret of hand movement; at most 64 candidate
+fingerings per chord (a *beam*) so 5 minutes take ~0.2 s. Notes that can't be played (below
+the lowest string, or more notes than strings) are left out of the tab but stay in the
+notation, and the stage reports how many. Tunings: standard and drop D; capo 0-12.
+
+**Pros**
+- Produces the shapes a guitarist expects in common cases (open E chord as 0-2-2-1-0-0, a
+  C major scale in open position, high melodies in one hand position); tests pin these.
+- Fast, deterministic, and every rule is a named weight that can be tuned.
+
+**Cons**
+- The weights are hand-picked, not learned from real tabs.
+- It doesn't know techniques or style: slides, hammer-ons and bends are out of scope for v1,
+  and some players prefer higher positions for tone.
+- Hand movement ignores time: a jump across the neck costs the same with a whole bar to move
+  as with a sixteenth note.
+- Only six-string guitar, two tunings.
+
+**Revisit when** users often move notes to other strings in the editor (Phase 4): those edits
+are exactly the data to fit the weights to, or to train a model.
+
+**Related decision.** The pipeline writes tab as MusicXML (a notation staff plus a TAB staff).
+alphaTex and Guitar Pro 7 files are produced from it by alphaTab's built-in exporters in the
+app, so we don't maintain writers for them and don't need PyGuitarPro (LGPL-3).

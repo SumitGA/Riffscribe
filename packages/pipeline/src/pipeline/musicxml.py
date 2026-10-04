@@ -3,12 +3,14 @@
 Scope (v1, see docs/tech-debt TD-14): one voice per staff (notes sharing an onset form a chord,
 cut short where the next chord starts), 4/4 with an optional pickup bar, sixteenth and
 eighth-triplet grids, ties across bar lines and beats, guitar on a treble-8vb staff, piano on a
-grand staff split at middle C. No beaming hints; renderers beam automatically.
+grand staff split at middle C. With a TabLayout, guitar gets a second, 6-line TAB staff with
+string/fret numbers (the layout MuseScore and Guitar Pro use). No beaming hints; renderers beam
+automatically.
 """
 
 import math
 import xml.etree.ElementTree as ET
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import pairwise
@@ -44,6 +46,7 @@ class Event:
     start: Fraction
     end: Fraction
     pitches: tuple[int, ...]
+    technical: tuple[tuple[int, int], ...] = ()  # (string, fret) per pitch on a TAB staff
 
 
 @dataclass(frozen=True)
@@ -55,10 +58,26 @@ class Piece:
     pitches: tuple[int, ...]
     tie_start: bool
     tie_stop: bool
+    technical: tuple[tuple[int, int], ...] = ()
 
 
-def write_score(score: Score, instrument: Instrument, title: str = "Transcription") -> bytes:
-    staves = _staff_notes(score.notes, instrument)
+@dataclass(frozen=True)
+class TabLayout:
+    """Guitar tab: open-string pitches (lowest first, no capo), capo and note positions."""
+
+    tuning: tuple[int, ...]
+    capo: int
+    # (onset_beats, pitch) -> (string number, 1 = highest string; fret relative to the capo)
+    positions: Mapping[tuple[Fraction, int], tuple[int, int]]
+
+
+def write_score(
+    score: Score,
+    instrument: Instrument,
+    title: str = "Transcription",
+    tab: TabLayout | None = None,
+) -> bytes:
+    staves = _staff_notes(score.notes, instrument, tab)
     bars = _bar_lines(score, staves)
     root = ET.Element("score-partwise", version="4.0")
     ET.SubElement(ET.SubElement(root, "work"), "work-title").text = title
@@ -67,14 +86,20 @@ def write_score(score: Score, instrument: Instrument, title: str = "Transcriptio
     _part_list(root, instrument)
 
     part = ET.SubElement(root, "part", id="P1")
-    events = [_regrid(_events(notes, bars[-1])) for notes in staves]
+    positions: list[Mapping[tuple[Fraction, int], tuple[int, int]] | None] = [None] * len(staves)
+    if tab is not None:
+        positions[-1] = tab.positions  # the TAB staff is the last one
+    events = [
+        _regrid(_events(notes, bars[-1], staff_positions))
+        for notes, staff_positions in zip(staves, positions, strict=True)
+    ]
     for index, (bar_start, bar_end) in enumerate(pairwise(bars)):
         number = str(index if score.pickup_beats > 0 else index + 1)
         measure = ET.SubElement(part, "measure", number=number)
         if index == 0 and score.pickup_beats > 0:
             measure.set("implicit", "yes")
         if index == 0:
-            _attributes(measure, score, instrument, len(staves))
+            _attributes(measure, score, instrument, len(staves), tab)
             _tempo(measure, score.tempo_bpm)
         for staff, staff_events in enumerate(events, start=1):
             if staff > 1:
@@ -94,7 +119,12 @@ def write_score(score: Score, instrument: Instrument, title: str = "Transcriptio
     return header.encode() + ET.tostring(root, encoding="unicode").encode() + b"\n"
 
 
-def _staff_notes(notes: Sequence[ScoreNote], instrument: Instrument) -> list[list[ScoreNote]]:
+def _staff_notes(
+    notes: Sequence[ScoreNote], instrument: Instrument, tab: TabLayout | None
+) -> list[list[ScoreNote]]:
+    if tab is not None:
+        # Notation staff with every note; TAB staff with the notes that have a position.
+        return [list(notes), [n for n in notes if (n.onset_beats, n.pitch) in tab.positions]]
     if instrument is Instrument.PIANO:
         return [
             [n for n in notes if n.pitch >= PIANO_SPLIT],
@@ -112,7 +142,11 @@ def _bar_lines(score: Score, staves: Sequence[Sequence[ScoreNote]]) -> list[Frac
     return bars
 
 
-def _events(notes: Sequence[ScoreNote], score_end: Fraction) -> list[Event]:
+def _events(
+    notes: Sequence[ScoreNote],
+    score_end: Fraction,
+    positions: Mapping[tuple[Fraction, int], tuple[int, int]] | None = None,
+) -> list[Event]:
     """One voice: chords at each onset, each lasting until it ends or the next one starts."""
     by_onset: dict[Fraction, list[ScoreNote]] = {}
     for n in notes:
@@ -125,7 +159,9 @@ def _events(notes: Sequence[ScoreNote], score_end: Fraction) -> list[Event]:
         end = max(n.onset_beats + n.duration_beats for n in by_onset[onset])
         if i + 1 < len(onsets):
             end = min(end, onsets[i + 1])
-        events.append(Event(onset, end, tuple(sorted({n.pitch for n in by_onset[onset]}))))
+        pitches = tuple(sorted({n.pitch for n in by_onset[onset]}))
+        technical = tuple(positions[(onset, p)] for p in pitches) if positions else ()
+        events.append(Event(onset, end, pitches, technical))
         cursor = end
     if cursor < score_end:
         events.append(Event(cursor, score_end, ()))
@@ -150,7 +186,7 @@ def _regrid(events: Sequence[Event]) -> list[Event]:
         divisions = 3 if all((p * 3).denominator == 1 for p in beat_points) else 4
         for p in beat_points:
             snapped[p] = beat + Fraction(round((p - beat) * divisions), divisions)
-    regridded = (Event(snapped[e.start], snapped[e.end], e.pitches) for e in events)
+    regridded = (Event(snapped[e.start], snapped[e.end], e.pitches, e.technical) for e in events)
     return [e for e in regridded if e.start < e.end]
 
 
@@ -170,6 +206,7 @@ def _pieces(events: Iterable[Event], bar_start: Fraction, bar_end: Fraction) -> 
                     pitches=event.pitches,
                     tie_start=sounding and e < event.end,
                     tie_stop=sounding and s > event.start,
+                    technical=event.technical,
                 )
             )
     return pieces
@@ -283,10 +320,15 @@ def _write_pieces(
                 notations.append(("tuplet", {"type": "start", "bracket": "yes"}))
             if chord_index == 0 and last_in_group:
                 notations.append(("tuplet", {"type": "stop"}))
-            if notations:
+            if notations or piece.technical:
                 element = ET.SubElement(note, "notations")
                 for tag, attrs in notations:
                     ET.SubElement(element, tag, attrs)
+                if piece.technical:
+                    string, fret = piece.technical[chord_index]
+                    technical = ET.SubElement(element, "technical")
+                    ET.SubElement(technical, "string").text = str(string)
+                    ET.SubElement(technical, "fret").text = str(fret)
 
 
 def _pitch(note: ET.Element, midi: int, fifths: int) -> None:
@@ -298,7 +340,13 @@ def _pitch(note: ET.Element, midi: int, fifths: int) -> None:
     ET.SubElement(pitch, "octave").text = str(midi // 12 - 1)
 
 
-def _attributes(measure: ET.Element, score: Score, instrument: Instrument, staves: int) -> None:
+def _attributes(
+    measure: ET.Element,
+    score: Score,
+    instrument: Instrument,
+    staves: int,
+    tab: TabLayout | None,
+) -> None:
     attributes = ET.SubElement(measure, "attributes")
     ET.SubElement(attributes, "divisions").text = str(DIVISIONS)
     key = ET.SubElement(attributes, "key")
@@ -310,6 +358,8 @@ def _attributes(measure: ET.Element, score: Score, instrument: Instrument, stave
     if staves > 1:
         ET.SubElement(attributes, "staves").text = str(staves)
     clefs = [("G", "2", 0), ("F", "4", 0)] if instrument is Instrument.PIANO else [("G", "2", -1)]
+    if tab is not None:
+        clefs.append(("TAB", "5", 0))
     for number, (sign, line, octave_change) in enumerate(clefs, start=1):
         clef = ET.SubElement(attributes, "clef")
         if staves > 1:
@@ -319,6 +369,19 @@ def _attributes(measure: ET.Element, score: Score, instrument: Instrument, stave
         if octave_change:
             # Guitar sounds an octave below written; <pitch> values are the sounding pitches.
             ET.SubElement(clef, "clef-octave-change").text = str(octave_change)
+
+    if tab is not None:
+        details = ET.SubElement(attributes, "staff-details", number=str(staves))
+        ET.SubElement(details, "staff-lines").text = str(len(tab.tuning))
+        for line_number, pitch in enumerate(tab.tuning, start=1):  # line 1 = lowest string
+            tuning = ET.SubElement(details, "staff-tuning", line=str(line_number))
+            name = _SHARP_NAMES[pitch % 12]
+            ET.SubElement(tuning, "tuning-step").text = name[0]
+            if len(name) > 1:
+                ET.SubElement(tuning, "tuning-alter").text = "1"
+            ET.SubElement(tuning, "tuning-octave").text = str(pitch // 12 - 1)
+        if tab.capo:
+            ET.SubElement(details, "capo").text = str(tab.capo)
 
 
 def _tempo(measure: ET.Element, bpm: float) -> None:

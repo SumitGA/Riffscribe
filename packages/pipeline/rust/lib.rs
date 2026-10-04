@@ -4,6 +4,7 @@
 //! this file only holds the thin PyO3 binding layer.
 
 mod notes;
+mod tab;
 
 use numpy::{PyReadonlyArray2, PyUntypedArrayMethods};
 use pyo3::exceptions::PyValueError;
@@ -58,9 +59,30 @@ fn decode_notes(
         .collect())
 }
 
+/// Tab fingering for chords of MIDI pitches: per chord, per note, `(string_index, fret)` with
+/// string 0 = lowest, or `None` when the note can't be placed. See `rust/tab.rs`.
+#[pyfunction]
+fn tab_positions(
+    chords: Vec<Vec<i32>>,
+    open_strings: Vec<i32>,
+    max_fret: i32,
+) -> PyResult<Vec<Vec<tab::Position>>> {
+    if open_strings.is_empty() || open_strings.len() > 32 {
+        return Err(PyValueError::new_err(
+            "open_strings must have 1 to 32 strings",
+        ));
+    }
+    let board = tab::Fretboard {
+        open: open_strings,
+        max_fret,
+    };
+    Ok(tab::assign(&chords, &board, &tab::Weights::default()))
+}
+
 #[pymodule]
 fn _tabcore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(decode_notes, m)?)?;
+    m.add_function(wrap_pyfunction!(tab_positions, m)?)?;
     Ok(())
 }
