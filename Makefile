@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup run check lint fmt typecheck test test-accuracy rust clean
+.PHONY: help setup run view check lint fmt typecheck test test-accuracy rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -18,6 +18,9 @@ setup: ## Install dependencies and build the Rust extension
 run: ## Transcribe FILE=<audio> [INSTRUMENT=guitar|piano] [OUT=out] [ARGS="--force"]
 	@test -n "$(FILE)" || { echo 'usage: make run FILE=path/to/audio.m4a [INSTRUMENT=piano] [ARGS="--force"]'; exit 1; }
 	uv run python -m pipeline transcribe "$(FILE)" --out "$(OUT)" --instrument $(INSTRUMENT) $(ARGS)
+
+view: ## Preview OUT (default out/) as notation + tab with playback, in the browser
+	uv run python tools/preview/serve.py --out "$(OUT)"
 
 check: lint typecheck test rust ## Run everything CI runs
 

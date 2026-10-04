@@ -31,7 +31,7 @@ known-first-party = ["pipeline"]
 strict = true
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
-files = ["packages/pipeline/src", "packages/pipeline/tests"]
+files = ["packages/pipeline/src", "packages/pipeline/tests", "tools/preview"]
 explicit_package_bases = true
 mypy_path = "packages/pipeline/src:packages/pipeline/tests"
 

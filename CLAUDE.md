@@ -56,6 +56,7 @@ services/worker/        Queue consumer; thin wrapper around packages/pipeline
 packages/pipeline/      Transcription library — NO infra dependencies
   src/pipeline/           Python package (stages, runner, CLI)
   rust/                   Rust crate built into pipeline._tabcore (maturin)
+tools/preview/           Dev-only page: `make view` renders out/ with alphaTab (notation + tab, playback, exports)
 infra/terraform/
 docs/adr/               Architecture decision records
 docs/tech-debt/README.md  Deliberate trade-offs: concept, pros, cons, when to revisit
