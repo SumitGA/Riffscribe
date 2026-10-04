@@ -9,8 +9,9 @@ from fixtures.basic_pitch.generate_clips import RATE, piano_note, place
 from pipeline.config import Instrument, PipelineConfig
 from pipeline.rhythm import BeatMap, GridNote, TimedNote, estimate_key, quantize
 from pipeline.runner import run_pipeline
+from pipeline.score import Score
 from pipeline.stages import default_stages
-from pipeline.stages.quantize import QuantizedScore, Score
+from pipeline.stages.quantize import QuantizedScore
 
 pytestmark = pytest.mark.unit
 

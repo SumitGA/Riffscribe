@@ -21,6 +21,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-11](#td-11-vendored-basic-pitch-model-and-ported-code) | Vendored Basic Pitch model and ported code | Pipeline / legal | Before launch (legal review); when upstream releases |
 | [TD-12](#td-12-our-own-beat-tracker-port) | Our own beat tracker port | Pipeline | Tempo errors show up in the accuracy suite |
 | [TD-13](#td-13-simple-rhythm-and-key-heuristics) | Simple rhythm and key heuristics | Pipeline | Users correct bar lines, triplets or keys often |
+| [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
 
 ---
 
@@ -365,3 +366,39 @@ tempo drift, triplets, pickups and keys).
 
 **Revisit when** users often correct bar lines, triplets or keys in the editor (Phase 4); those
 corrections are the best training data for something smarter.
+
+---
+
+## TD-14: Our own MusicXML writer
+
+**Concept.** *MusicXML* is the standard file format for sheet music; every notation program
+(MuseScore, Sibelius, Finale, alphaTab) reads it. Writing it means making engraving decisions:
+- *Ties* join two written notes into one longer sound, needed when a note crosses a bar line
+  or a beat in a way no single note value can show.
+- *Tuplets* (here triplets) squeeze three notes into the time of two, shown with a bracket.
+- *Voices* let one staff show independent lines (a held bass note under a moving melody).
+- *Beaming* groups eighth and sixteenth notes with horizontal bars.
+- *Spelling* picks the name of a black key: F# or Gb, which should follow the key signature.
+
+**What we did.** music21 cost 184 MB, wrote random ids (different bytes every run, which
+breaks caching and golden tests), didn't write pickup bars and ignored the key when spelling
+(ADR-0006). `pipeline/musicxml.py` writes the format directly: ties, triplets, rests, pickups,
+key-aware spelling, guitar and piano staves. Randomized tests check that every bar adds up;
+golden files pin the exact output.
+
+**Pros**
+- Byte-identical output, so caching and golden tests work; no dependency; milliseconds.
+- Every decision is ours and visible in one file.
+
+**Cons**
+- **One voice per staff.** Notes starting together form a chord; a note held while others move
+  is cut where the next chord starts (it still sounds right in our MIDI, but the score shows it
+  shorter). Fine for melody-plus-chords, weak for fingerstyle guitar and real piano writing.
+- **Piano hands split at middle C**, not by musical sense (a left-hand run above C4 jumps
+  staves).
+- **No beaming hints.** alphaTab and MuseScore beam by time signature, which is right for
+  4/4; other programs may show flags.
+- **No accidental marks written**; renderers derive them from pitch and key signature.
+
+**Revisit when** the preview (step 8) or users show cut-off notes or awkward hand splits, or
+when Phase 4 editing needs multiple voices.

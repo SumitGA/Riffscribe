@@ -1,8 +1,5 @@
 """quantize: beat tracking + snapping notes to a rhythmic grid -> quantized.json and .mid."""
 
-from fractions import Fraction
-from typing import Literal
-
 import numpy as np
 
 from pipeline.beats import beat_track
@@ -15,38 +12,12 @@ from pipeline.rhythm import (
     quantize,
     tempo_from_beats,
 )
+from pipeline.score import KeySignature, Score, ScoreNote
 from pipeline.stage import Stage, StageContext, StageInputs
 from pipeline.stages.transcribe import GM_PROGRAM, NoteEvents, NoteList
-from pipeline.types import ArtifactRef, Frozen, StageName, StageOutput
+from pipeline.types import ArtifactRef, StageName, StageOutput
 
 FALLBACK_BPM = 120.0  # when too few beats are found (e.g. one long chord)
-
-
-class ScoreNote(Frozen):
-    pitch: int
-    velocity: int
-    onset_beats: Fraction  # from the start of the first (possibly partial) bar
-    duration_beats: Fraction
-    onset_s: float  # original timing, for playback sync and debugging
-    offset_s: float
-
-
-class KeySignature(Frozen):
-    tonic: int  # pitch class, 0 = C
-    mode: Literal["major", "minor"]
-    fifths: int  # sharps > 0, flats < 0
-
-
-class Score(Frozen):
-    """Contents of quantized.json."""
-
-    tempo_bpm: float
-    beats_per_bar: int
-    beat_unit: int
-    pickup_beats: int
-    key: KeySignature
-    beat_times_s: list[float]  # time in the normalized audio of beat 0, 1, 2, ...
-    notes: list[ScoreNote]
 
 
 class QuantizedScore(StageOutput):
