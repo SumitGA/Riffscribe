@@ -392,6 +392,18 @@ tempo drift, triplets, pickups and keys).
 - Key detection can be fooled by harmonics that the transcription reports as extra notes, and
   can't tell relative keys apart well (C major vs A minor) on short clips.
 
+**Learned from a real recording (fingerstyle guitar, 157 bpm).** The first version wrote 27 % of
+onsets on odd sixteenths and the score was full of sixteenth rests and ties. Two causes, two fixes:
+- *Human timing drift.* A sixteenth at 157 bpm is only 96 ms, so 20-40 ms of drift pushes
+  eighths onto sixteenths. Each beat now uses the simplest grid that fits (quarters, then
+  eighths) within 45 ms before trying sixteenths or triplets.
+- *Strummed and rolled chords.* Strings hit a few ms apart (329 gaps under 35 ms in that
+  recording, almost none between 50 and 96 ms) were split across sixteenths. Onsets chained by
+  gaps of at most 35 ms, spanning at most 100 ms, are now one chord at the first string.
+Together: sixteenth rests -38 %, sixteenths -14 %, dotted eighths -19 % on that recording; no
+change in the accuracy suite. Tried and rejected: merging back-to-back notes of the same pitch
+(GuitarSet showed they are mostly real repeated plucks; note F1 fell from 0.76 to as low as 0.67).
+
 **Revisit when** users often correct bar lines, triplets or keys in the editor (Phase 4); those
 corrections are the best training data for something smarter.
 

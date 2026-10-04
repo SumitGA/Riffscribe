@@ -30,7 +30,8 @@ class QuantizedScore(StageOutput):
 
 class QuantizeStage(Stage[QuantizedScore]):
     name = StageName.QUANTIZE
-    version = "1"
+    # 2: simplest grid that fits (quarters, eighths) before sixteenths; 3: strums as chords
+    version = "3"
     requires = (NoteEvents,)
     output_type = QuantizedScore
 

@@ -7,7 +7,7 @@ import soundfile
 from fixtures.basic_pitch.generate_clips import RATE, piano_note, place
 
 from pipeline.config import Instrument, PipelineConfig
-from pipeline.rhythm import BeatMap, GridNote, TimedNote, estimate_key, quantize
+from pipeline.rhythm import BeatMap, GridNote, TimedNote, estimate_key, quantize, roll_starts
 from pipeline.runner import run_pipeline
 from pipeline.score import Score
 from pipeline.stages import default_stages
@@ -61,6 +61,56 @@ def test_triplets_are_recognised_only_with_enough_evidence() -> None:
     assert onsets(rhythm.notes) == [0, Fraction(1, 3), Fraction(2, 3), 1, Fraction(9, 4)]
 
 
+def test_loose_eighths_at_a_fast_tempo_stay_eighths() -> None:
+    """Human timing (+-35 ms) at 157 bpm must not turn eighth notes into sixteenths."""
+    spb = 60 / 157
+    beats = [0.5 + i * spb for i in range(10)]
+    rng = np.random.default_rng(1)
+    notes = [
+        TimedNote(
+            0.5 + k * spb / 2 + float(rng.uniform(-0.035, 0.035)),
+            0.5 + (k + 1) * spb / 2,
+            60 + k % 5,
+            80,
+        )
+        for k in range(16)
+    ]
+    rhythm = quantize(notes, beats)
+
+    assert all((n.onset_beats * 2).denominator == 1 for n in rhythm.notes)
+    assert all(n.duration_beats >= Fraction(1, 2) for n in rhythm.notes)
+
+
+def test_real_sixteenth_runs_stay_sixteenths() -> None:
+    spb = 60 / 120
+    beats = [0.5 + i * spb for i in range(8)]
+    notes = [TimedNote(0.5 + k * spb / 4, 0.5 + (k + 1) * spb / 4, 60 + k, 80) for k in range(8)]
+
+    assert onsets(quantize(notes, beats).notes) == [Fraction(k, 4) for k in range(8)]
+
+
+def test_rolled_chord_becomes_one_chord() -> None:
+    """A strum hits strings ~15 ms apart; all of them belong on the first string's beat."""
+    spb = 60 / 157
+    beats = [0.5 + i * spb for i in range(8)]
+    strum = [
+        TimedNote(beats[1] + k * 0.015, beats[2], p, 80)
+        for k, p in enumerate([40, 47, 52, 56, 59, 64])
+    ]
+    rhythm = quantize([TimedNote(beats[0], beats[1], 64, 80), *strum], beats)
+
+    assert {n.onset_beats for n in rhythm.notes if n.pitch != 64 or n.onset_beats != 0} == {1}
+    assert [round(n.onset_s, 3) for n in rhythm.notes][1:4] == [
+        round(beats[1] + k * 0.015, 3) for k in range(3)
+    ]
+
+
+def test_roll_starts_chain_short_gaps_but_not_fast_runs() -> None:
+    assert roll_starts([1.0, 1.02, 1.04, 1.3]) == [1.0, 1.0, 1.0, 1.3]
+    assert roll_starts([1.0, 1.05, 1.10]) == [1.0, 1.05, 1.10]  # 50 ms apart: a run, not a roll
+    assert roll_starts([1.0, 1.03, 1.06, 1.09, 1.12]) == [1.0, 1.0, 1.0, 1.0, 1.12]  # span cap
+
+
 def test_tempo_drift_still_lands_on_beats() -> None:
     times = np.cumsum([0.5, *np.linspace(0.65, 0.48, 15)])  # speeding up
     beats = [float(t) for t in times]
@@ -88,7 +138,8 @@ def test_durations_are_at_least_one_step_and_do_not_overlap_repeats() -> None:
     ]
     by_pitch = {(n.pitch, n.onset_beats): n.duration_beats for n in quantize(notes, beats).notes}
 
-    assert by_pitch[(60, Fraction(0))] == Fraction(1, 4)
+    # Alone in its beat, so the beat's grid is quarter notes: no sixteenth plus rests.
+    assert by_pitch[(60, Fraction(0))] == 1
     assert by_pitch[(62, Fraction(1))] == 1
     assert by_pitch[(62, Fraction(2))] == 1
 

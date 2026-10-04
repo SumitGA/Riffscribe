@@ -12,6 +12,14 @@ import numpy.typing as npt
 
 BEATS_PER_BAR = 4  # v1 assumes 4/4
 STRAIGHT, TRIPLET = 4, 3  # grid divisions per beat: sixteenths or eighth-note triplets
+# Simpler grids are tried first (quarters, then eighths): human timing drifts by tens of ms,
+# and at fast tempos that is enough to push an eighth note onto a sixteenth position.
+SIMPLE_GRIDS = (1, 2)
+SNAP_TOLERANCE_S = 0.045  # how far a note may be from a simpler grid and still use it...
+MAX_TOLERANCE_BEATS = 0.125  # ...but never more than a 32nd note, so slow music keeps detail
+# Strummed or rolled chords: strings hit a few ms apart are one chord, written at the first.
+ROLL_GAP_S = 0.035  # consecutive onsets this close belong to the same roll...
+ROLL_MAX_SPAN_S = 0.1  # ...up to this long in total (a 32nd note is 48 ms even at 157 bpm)
 # A beat is notated as triplets only if that fits its onsets clearly better than sixteenths.
 TRIPLET_ERROR_RATIO = 0.5
 MIN_ONSETS_FOR_TRIPLET = 2
@@ -81,11 +89,11 @@ def quantize(notes: Sequence[TimedNote], beat_times: Sequence[float]) -> Rhythm:
     if not notes:
         return Rhythm(notes=[], pickup_beats=0, beat_times_s=[float(t) for t in beat_times])
     beat_map = BeatMap(beat_times)
-    onsets = [beat_map.beat_at(n.onset_s) for n in notes]
-    grids = _grid_per_beat(onsets)
+    onsets = [beat_map.beat_at(t) for t in roll_starts([n.onset_s for n in notes])]
+    grids = _grid_per_beat(onsets, beat_map)
 
     snapped = [_snap(b, grids) for b in onsets]
-    ends = [_snap(beat_map.beat_at(n.offset_s), grids) for n in notes]
+    ends = [_snap_end(beat_map.beat_at(n.offset_s), grids, beat_map) for n in notes]
     durations = _durations(notes, snapped, ends, grids)
     merged = _merge_duplicates(notes, snapped, durations)
 
@@ -113,6 +121,29 @@ def quantize(notes: Sequence[TimedNote], beat_times: Sequence[float]) -> Rhythm:
     )
 
 
+def roll_starts(onsets_s: Sequence[float]) -> list[float]:
+    """For each onset, the start of the strum/roll it belongs to (itself if it stands alone).
+
+    Onsets chained by gaps of at most ROLL_GAP_S, spanning at most ROLL_MAX_SPAN_S, are one
+    chord. Without this, the later strings of a strum snap to the next sixteenth.
+    """
+    order = sorted(range(len(onsets_s)), key=lambda i: onsets_s[i])
+    starts = list(onsets_s)
+    roll_start = previous = None
+    for i in order:
+        t = onsets_s[i]
+        if (
+            roll_start is None
+            or previous is None
+            or t - previous > ROLL_GAP_S
+            or t - roll_start > ROLL_MAX_SPAN_S
+        ):
+            roll_start = t
+        starts[i] = roll_start
+        previous = t
+    return starts
+
+
 def tempo_from_beats(beat_times: Sequence[float]) -> float:
     """Tempo for the score: from the median beat interval (robust to a few odd beats)."""
     return float(60.0 / np.median(np.diff(np.asarray(beat_times))))
@@ -122,13 +153,17 @@ def beat_frames_to_times(frames: npt.NDArray[np.int64], fps: float) -> list[floa
     return [float(f) / fps for f in frames]
 
 
-def _grid_per_beat(onsets: Sequence[float]) -> dict[int, int]:
-    """Divisions per beat, chosen per beat from the onsets that fall inside it."""
+def _grid_per_beat(onsets: Sequence[float], beat_map: BeatMap) -> dict[int, int]:
+    """Divisions per beat, chosen from the onsets inside it: the simplest grid that fits."""
     by_beat: dict[int, list[float]] = {}
     for b in onsets:
         by_beat.setdefault(math.floor(b), []).append(b - math.floor(b))
     grids = {}
     for beat, fracs in by_beat.items():
+        simple = _simplest_fitting(fracs, _tolerance(beat_map, beat))
+        if simple is not None:
+            grids[beat] = simple
+            continue
         straight, triplet = _grid_error(fracs, STRAIGHT), _grid_error(fracs, TRIPLET)
         use_triplet = (
             len(fracs) >= MIN_ONSETS_FOR_TRIPLET and triplet < TRIPLET_ERROR_RATIO * straight
@@ -138,13 +173,37 @@ def _grid_per_beat(onsets: Sequence[float]) -> dict[int, int]:
 
 
 def _grid_error(fracs: Sequence[float], divisions: int) -> float:
-    return sum(abs(f * divisions - round(f * divisions)) / divisions for f in fracs)
+    return sum(_distance(f, divisions) for f in fracs)
+
+
+def _distance(frac: float, divisions: int) -> float:
+    """Beats from a position within a beat to the nearest line of a grid."""
+    return abs(frac * divisions - round(frac * divisions)) / divisions
+
+
+def _simplest_fitting(fracs: Sequence[float], tolerance: float) -> int | None:
+    return next((d for d in SIMPLE_GRIDS if all(_distance(f, d) <= tolerance for f in fracs)), None)
+
+
+def _tolerance(beat_map: BeatMap, beat: int) -> float:
+    """SNAP_TOLERANCE_S in beats at this beat's local tempo, capped at MAX_TOLERANCE_BEATS."""
+    beat_s = beat_map.time_at(beat + 1) - beat_map.time_at(beat)
+    return min(MAX_TOLERANCE_BEATS, SNAP_TOLERANCE_S / beat_s) if beat_s > 0 else 0.0
 
 
 def _snap(beat: float, grids: dict[int, int]) -> Fraction:
     whole = math.floor(beat)
     divisions = grids.get(whole, STRAIGHT)
     return whole + Fraction(round((beat - whole) * divisions), divisions)
+
+
+def _snap_end(beat: float, grids: dict[int, int], beat_map: BeatMap) -> Fraction:
+    """Note ends use their beat's grid; in a beat with no onsets, the simplest one that fits."""
+    whole = math.floor(beat)
+    if whole not in grids:
+        simple = _simplest_fitting([beat - whole], _tolerance(beat_map, whole))
+        grids = {whole: simple or STRAIGHT}
+    return _snap(beat, grids)
 
 
 def _durations(
