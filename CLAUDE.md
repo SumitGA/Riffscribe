@@ -65,6 +65,7 @@ pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 - `packages/pipeline` must run standalone, for example `python -m pipeline transcribe in.wav --out out/`, so model work can be iterated without the app or infra.
 
 ## Conventions
+- `make check` runs every CI check (lint, types, tests, Rust); `make help` lists all shortcuts.
 - Python: uv, ruff, mypy --strict, pytest. Rust: cargo fmt, clippy `-D warnings`, cargo test. TypeScript: strict mode, eslint.
 - Every deliberate trade-off or piece of technical debt gets an entry in `docs/tech-debt/README.md` (concept, pros, cons, when to revisit) in the same commit.
 - Pipeline tests are golden-file tests on short fixture clips. Track note-level F1 with `mir_eval` and fail CI on regressions.
