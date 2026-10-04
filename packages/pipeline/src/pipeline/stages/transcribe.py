@@ -44,7 +44,7 @@ class NoteEvents(StageOutput):
 
 class TranscribeStage(Stage[NoteEvents]):
     name = StageName.TRANSCRIBE
-    version = "1"
+    version = "2"  # 2: note decoding moved to Rust
     requires = (NormalizedAudio,)
     output_type = NoteEvents
 

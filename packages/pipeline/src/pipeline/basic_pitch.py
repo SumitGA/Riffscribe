@@ -2,9 +2,9 @@
 
 Changes from upstream: ONNX Runtime only, windows run in batches, and pitch bends, contours,
 MIDI writing and the librosa / pretty_midi / mir_eval dependencies are removed. Note decoding
-follows upstream `output_to_notes_polyphonic` step by step; tests check parity against outputs
-recorded from the real package. Model, licence and NOTICE: `pipeline/models/basic_pitch/`.
-See docs/tech-debt TD-11.
+follows upstream `output_to_notes_polyphonic` and runs in Rust (`rust/notes.rs`); tests check
+parity against outputs recorded from the real package. Model, licence and NOTICE are in
+`pipeline/models/basic_pitch/`. See docs/tech-debt TD-11.
 """
 
 from dataclasses import dataclass
@@ -13,7 +13,8 @@ from importlib import resources
 import numpy as np
 import numpy.typing as npt
 import onnxruntime as ort
-from scipy.signal import argrelmax
+
+from pipeline import _tabcore
 
 SAMPLE_RATE = 22_050
 FFT_HOP = 256
@@ -99,98 +100,29 @@ def frame_times(n_frames: int) -> npt.NDArray[np.float64]:
 def decode_notes(
     frames: Activations, onsets: Activations, params: DecodeParams = UPSTREAM_DEFAULTS
 ) -> list[RawNote]:
-    """Turn activations into notes, sorted by start time then pitch (upstream algorithm)."""
-    frames = frames.copy()
-    onsets = onsets.copy()
-    n_frames = frames.shape[0]
-    tol, thresh = params.energy_tolerance, params.frame_threshold
-    if params.max_pitch is not None:
-        frames[:, params.max_pitch - MIDI_OFFSET + 1 :] = 0
-        onsets[:, params.max_pitch - MIDI_OFFSET + 1 :] = 0
-    if params.min_pitch is not None:
-        frames[:, : max(0, params.min_pitch - MIDI_OFFSET)] = 0
-        onsets[:, : max(0, params.min_pitch - MIDI_OFFSET)] = 0
-    if params.infer_onsets:
-        onsets = _inferred_onsets(onsets, frames)
+    """Turn activations into notes, sorted by start time then pitch.
 
-    peaks = np.zeros(onsets.shape)
-    peak_idx = argrelmax(onsets, axis=0)
-    peaks[peak_idx] = onsets[peak_idx]
-    onset_t, onset_f = np.where(peaks >= params.onset_threshold)
-
-    remaining = frames.astype(np.float64)
-    events: list[tuple[int, int, int, float]] = []
-    # Walk onsets backwards in time, as upstream does; the order decides which overlaps win.
-    for start, f in zip(onset_t[::-1].tolist(), onset_f[::-1].tolist(), strict=True):
-        if start >= n_frames - 1:
-            continue
-        i, k = start + 1, 0
-        while i < n_frames - 1 and k < tol:
-            k = k + 1 if remaining[i, f] < thresh else 0
-            i += 1
-        i -= k
-        if i - start <= params.min_note_frames:
-            continue
-        _clear(remaining, start, i, f)
-        events.append((start, i, f, float(np.mean(frames[start:i, f]))))
-
-    if params.melodia_trick:
-        events.extend(_melodia_notes(frames, remaining, params))
-
-    times = frame_times(n_frames)
+    Upstream's algorithm, run in Rust (`rust/notes.rs`); it was the slowest step in Python.
+    """
+    low = MIDI_OFFSET if params.min_pitch is None else params.min_pitch
+    high = MIDI_OFFSET + N_PITCHES - 1 if params.max_pitch is None else params.max_pitch
+    events = _tabcore.decode_notes(
+        np.ascontiguousarray(frames, dtype=np.float32),
+        np.ascontiguousarray(onsets, dtype=np.float32),
+        onset_threshold=params.onset_threshold,
+        frame_threshold=params.frame_threshold,
+        min_note_frames=params.min_note_frames,
+        min_pitch_bin=max(0, low - MIDI_OFFSET),
+        max_pitch_bin=max(-1, high - MIDI_OFFSET),
+        infer_onsets=params.infer_onsets,
+        melodia_trick=params.melodia_trick,
+        energy_tolerance=params.energy_tolerance,
+    )
+    times = frame_times(frames.shape[0])
     notes = [
-        RawNote(float(times[s]), float(times[e]), f + MIDI_OFFSET, amp) for s, e, f, amp in events
+        RawNote(float(times[s]), float(times[e]), b + MIDI_OFFSET, amp) for s, e, b, amp in events
     ]
     return sorted(notes, key=lambda n: (n.start_s, n.pitch))
-
-
-def _melodia_notes(
-    frames: Activations, remaining: npt.NDArray[np.float64], params: DecodeParams
-) -> list[tuple[int, int, int, float]]:
-    """Add notes from leftover energy that had no detected onset (upstream "melodia trick")."""
-    n_frames = frames.shape[0]
-    tol, thresh = params.energy_tolerance, params.frame_threshold
-    events = []
-    while np.max(remaining) > thresh:
-        mid, f = (int(x) for x in np.unravel_index(np.argmax(remaining), remaining.shape))
-        remaining[mid, f] = 0
-
-        i, k = mid + 1, 0
-        while i < n_frames - 1 and k < tol:
-            k = k + 1 if remaining[i, f] < thresh else 0
-            _clear(remaining, i, i + 1, f)
-            i += 1
-        end = i - 1 - k
-
-        i, k = mid - 1, 0
-        while i > 0 and k < tol:
-            k = k + 1 if remaining[i, f] < thresh else 0
-            _clear(remaining, i, i + 1, f)
-            i -= 1
-        start = i + 1 + k
-
-        if end - start <= params.min_note_frames:
-            continue
-        events.append((start, end, f, float(np.mean(frames[start:end, f]))))
-    return events
-
-
-def _clear(remaining: npt.NDArray[np.float64], start: int, end: int, f: int) -> None:
-    """Zero a note's energy in its own pitch bin and both neighbours."""
-    remaining[start:end, max(0, f - 1) : f + 2] = 0
-
-
-def _inferred_onsets(onsets: Activations, frames: Activations, n_diff: int = 2) -> Activations:
-    """Max of predicted onsets and sharp rises in frame activation (rescaled to onsets' max)."""
-    diffs = []
-    for n in range(1, n_diff + 1):
-        shifted = np.concatenate([np.zeros((n, frames.shape[1])), frames])
-        diffs.append(shifted[n:, :] - shifted[:-n, :])
-    frame_diff = np.min(diffs, axis=0)
-    frame_diff[frame_diff < 0] = 0
-    frame_diff[:n_diff, :] = 0
-    frame_diff = np.max(onsets) * frame_diff / np.max(frame_diff)
-    return np.asarray(np.max([onsets, frame_diff], axis=0), dtype=np.float32)
 
 
 def _window(padded: Audio, start: int) -> Audio:

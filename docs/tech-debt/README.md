@@ -281,8 +281,9 @@ a model's licence and the licences of its training data are separate questions.
 - Stays on Python 3.12 with one small runtime dependency (`onnxruntime`) instead of TensorFlow
   (500 MB+).
 - We control memory: batching 4 windows instead of 16 saved about 140 MB with no speed loss.
-- The decoding loop is our code now, so we can make it faster (see the Rust commit after this
-  one).
+- The decoding loop is our code now, so we could move it to Rust (ADR-0003): on 5 minutes of
+  guitar it went from 2.4 s and 145 MB to 32 ms and under 1 MB, with identical notes. Randomized
+  tests check the Rust version against the Python port kept in `tests/basic_pitch_oracle.py`.
 
 **Cons**
 - We maintain the port. Upstream fixes must be copied by hand; the parity fixtures make that

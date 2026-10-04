@@ -33,7 +33,7 @@ python_version = "3.12"
 plugins = ["pydantic.mypy"]
 files = ["packages/pipeline/src", "packages/pipeline/tests"]
 explicit_package_bases = true
-mypy_path = "packages/pipeline/src"
+mypy_path = "packages/pipeline/src:packages/pipeline/tests"
 
 [[tool.mypy.overrides]]
 module = ["mido", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile"]
@@ -46,6 +46,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["packages/pipeline/tests"]
+pythonpath = ["packages/pipeline/tests"]  # test helpers such as basic_pitch_oracle
 addopts = "--import-mode=importlib -m 'not accuracy'"
 markers = [
     "unit: fast tests, no ML models",

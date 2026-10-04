@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import basic_pitch_oracle as oracle
 import numpy as np
 import pytest
 import soundfile
@@ -76,3 +77,47 @@ def test_pitch_limits_are_inclusive() -> None:
     limited = decode_notes(frames, onsets, DecodeParams(min_pitch=low + 1, max_pitch=high))
     assert {n.pitch for n in limited} <= set(range(low + 1, high + 1))
     assert high in {n.pitch for n in limited}
+
+
+def synthetic_activations(seed: int, n_frames: int = 400) -> tuple[np.ndarray, np.ndarray]:
+    """Random notes (some without onsets, so the melodia pass has work) over background noise."""
+    rng = np.random.default_rng(seed)
+    frames = rng.uniform(0, 0.35, (n_frames, 88)).astype(np.float32)
+    onsets = rng.uniform(0, 0.3, (n_frames, 88)).astype(np.float32)
+    for _ in range(40):
+        start = int(rng.integers(0, n_frames - 5))
+        end = min(n_frames, start + int(rng.integers(3, 60)))
+        pitch = int(rng.integers(0, 88))
+        frames[start:end, pitch] = rng.uniform(0.35, 0.95, end - start)
+        if rng.random() < 0.7:
+            onsets[start, pitch] = rng.uniform(0.4, 1.0)
+    return frames, onsets
+
+
+PARAM_VARIANTS = {
+    "upstream": DecodeParams(),
+    "guitar-range": DecodeParams(min_pitch=38, max_pitch=88),
+    "no-inferred-onsets": DecodeParams(infer_onsets=False),
+    "no-melodia": DecodeParams(melodia_trick=False),
+    "strict": DecodeParams(onset_threshold=0.7, frame_threshold=0.5, min_note_frames=4),
+}
+
+
+@pytest.mark.parametrize("variant", PARAM_VARIANTS)
+@pytest.mark.parametrize("seed", range(8))
+def test_rust_decoder_matches_python_oracle(seed: int, variant: str) -> None:
+    frames, onsets = synthetic_activations(seed)
+    params = PARAM_VARIANTS[variant]
+
+    assert_same_notes(
+        decode_notes(frames, onsets, params),
+        oracle.decode_notes(frames, onsets, params),
+        time_tol=1e-9,
+    )
+
+
+@pytest.mark.parametrize("clip", CLIPS)
+def test_python_oracle_still_matches_upstream(clip: str) -> None:
+    notes = oracle.decode_notes(*reference_activations(clip))
+
+    assert_same_notes(notes, reference_notes(clip), time_tol=1e-6)
