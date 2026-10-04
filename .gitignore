@@ -21,3 +21,16 @@ work/
 .DS_Store
 .idea/
 .vscode/
+
+# Local test recordings and pipeline output: never commit these.
+# Only deliberate test fixtures under tests/fixtures/ are tracked.
+*.m4a
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.mid
+*.midi
+*.npz
+!**/tests/fixtures/**
