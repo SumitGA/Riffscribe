@@ -1,5 +1,7 @@
 """transcribe: Basic Pitch on the normalized audio -> note events (notes.json) and raw.mid."""
 
+from dataclasses import replace
+
 import numpy as np
 import soundfile
 from pydantic import Field
@@ -11,6 +13,7 @@ from pipeline.basic_pitch import (
     DecodeParams,
     RawNote,
     decode_notes,
+    level_gain,
     onset_envelope,
 )
 from pipeline.basic_pitch import SAMPLE_RATE as MODEL_RATE
@@ -27,6 +30,20 @@ PITCH_RANGE = {
     Instrument.PIANO: (21, 108),  # A0 to C8
 }
 GM_PROGRAM = {Instrument.GUITAR: 25, Instrument.PIANO: 0}  # steel guitar, grand piano
+# Note decoding per instrument. Guitar: activations are first scaled to a reference level
+# (`level_gain`, so thresholds are relative to the recording), then decoded with settings
+# grid-searched on 24 GuitarSet excerpts and checked on the 6 held-out test clips
+# (tests/tuning/tune_decoding.py): note F1 0.761 -> 0.818, precision 0.729 -> 0.805, recall
+# 0.811 -> 0.844. Fixed thresholds scored nearly as well on GuitarSet but dropped 61 % of the
+# notes on a quieter phone recording; relative ones removed ~7 % (mostly stacked extras).
+# Piano keeps Basic Pitch's defaults until there is real piano data to tune on (TD-16).
+DECODE = {
+    Instrument.GUITAR: DecodeParams(
+        onset_threshold=0.65, frame_threshold=0.45, min_note_frames=6, infer_onsets=False
+    ),
+    Instrument.PIANO: DecodeParams(),
+}
+LEVEL_NORMALIZE = {Instrument.GUITAR: True, Instrument.PIANO: False}
 
 
 class Note(Frozen):
@@ -54,8 +71,9 @@ class NoteEvents(StageOutput):
 
 class TranscribeStage(Stage[NoteEvents]):
     name = StageName.TRANSCRIBE
-    # 2: note decoding moved to Rust; 3: onset envelope output; 4: reads the separate stage
-    version = "4"
+    # 2: note decoding moved to Rust; 3: onset envelope output; 4: reads the separate stage;
+    # 5-6: tuned guitar decoding, relative to the recording's level
+    version = "6"
     requires = (NormalizedAudio, SeparatedAudio)
     output_type = NoteEvents
 
@@ -73,7 +91,12 @@ class TranscribeStage(Stage[NoteEvents]):
             self._model = BasicPitch()
         low, high = PITCH_RANGE[ctx.cfg.instrument]
         frames, onsets = self._model.activations(audio)
-        raw = decode_notes(frames, onsets, DecodeParams(min_pitch=low, max_pitch=high))
+        params = replace(DECODE[ctx.cfg.instrument], min_pitch=low, max_pitch=high)
+        gain = level_gain(frames, low, high) if LEVEL_NORMALIZE[ctx.cfg.instrument] else 1.0
+        raw = [  # velocities stay on the recording's own scale
+            replace(n, amplitude=n.amplitude / gain)
+            for n in decode_notes(frames * gain, onsets * gain, params)
+        ]
         np.save(ctx.path("onset_envelope.npy"), onset_envelope(onsets, low, high))
         notes = [_to_note(n) for n in raw]
 

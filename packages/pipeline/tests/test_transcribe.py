@@ -36,15 +36,25 @@ def onset_f1(actual: NoteList, expected: list[dict[str, float]], tol: float = 0.
     return 2 * hits / (len(actual.notes) + len(expected))
 
 
-def test_guitar_clip_through_full_pipeline_matches_upstream_notes(tmp_path: Path) -> None:
+def test_full_pipeline_with_default_decoding_matches_upstream_notes(tmp_path: Path) -> None:
+    """Piano uses Basic Pitch's default decoding, so its notes must match upstream's."""
+    piano = PipelineConfig(instrument=Instrument.PIANO)
+    result = run_pipeline(FIXTURES / "guitar_like.wav", tmp_path, piano, default_stages())
+    notes = NoteList.model_validate_json(
+        (tmp_path / result.output(NoteEvents).notes.path).read_text()
+    )
+    upstream = json.loads((FIXTURES / "guitar_like.notes.json").read_text())
+
+    # Normalize resamples to 44.1 kHz, changes gain and trims, so allow small differences.
+    assert onset_f1(notes, upstream) >= 0.9
+
+
+def test_guitar_transcription_uses_its_range_and_program(tmp_path: Path) -> None:
     result = run_pipeline(FIXTURES / "guitar_like.wav", tmp_path, GUITAR, default_stages())
     events = result.output(NoteEvents)
     notes = NoteList.model_validate_json((tmp_path / events.notes.path).read_text())
-    upstream = json.loads((FIXTURES / "guitar_like.notes.json").read_text())
 
     assert events.note_count == len(notes.notes) > 0
-    # Normalize resamples to 44.1 kHz, changes gain and trims, so allow small differences.
-    assert onset_f1(notes, upstream) >= 0.9
     low, high = PITCH_RANGE[Instrument.GUITAR]
     assert all(low <= n.pitch <= high for n in notes.notes)
 

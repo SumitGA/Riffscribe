@@ -121,3 +121,14 @@ def test_python_oracle_still_matches_upstream(clip: str) -> None:
     notes = oracle.decode_notes(*reference_activations(clip))
 
     assert_same_notes(notes, reference_notes(clip), time_tol=1e-6)
+
+
+def test_level_gain_brings_strong_activations_to_the_reference() -> None:
+    from pipeline.basic_pitch import LEVEL_REFERENCE, level_gain
+
+    frames, _ = reference_activations("guitar_like")
+    quiet = (frames * 0.6).astype(np.float32)
+    gain = level_gain(quiet, 21, 108)
+
+    assert np.percentile(quiet * gain, 99) == pytest.approx(LEVEL_REFERENCE)
+    assert level_gain(frames, 21, 108) == pytest.approx(gain * 0.6)

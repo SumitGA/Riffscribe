@@ -23,6 +23,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-13](#td-13-simple-rhythm-and-key-heuristics) | Simple rhythm and key heuristics | Pipeline | Users correct bar lines, triplets or keys often |
 | [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
 | [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
+| [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
 
 ---
 
@@ -53,6 +54,15 @@ transcription on CPU. Demucs is an optional extra we can switch on.
 of the energy landed in the "guitar" stem and 75 % in "other": transcribing that stem would
 have lost most of the notes. For v1's solo recordings, passthrough is the more accurate choice,
 not just the cheaper one.
+
+**Learned from a real recording with a background voice.** A voice under the guitar made the
+transcription sloppy exactly where it spoke (Basic Pitch turns any pitched sound into notes).
+Demucs's vocals stem located it in 4 places, only ~5 s (3 %) of a 3.5-minute song. Separating
+the whole song fixed those bars but *added* notes in 63 of 135 other bars (separation artifacts)
+and took 84 s / 3 GB, so separation should run only on stretches with a voice. Detecting those
+cheaply is unsolved: Silero VAD (MIT, 2 MB) finds clear speech and never fires on GuitarSet, but
+scored 0.000 on this quiet voice while plain guitar sometimes scored 0.75. Next candidates: voice
+cues in Basic Pitch's pitch contours (glides, vibrato), or separation as a user choice.
 
 **How to use it anyway.** `make setup-separation` (or `uv sync --group separation`) installs
 Demucs; `--separation` turns it on per run; `make test-separation` runs its test. Without the
@@ -486,3 +496,34 @@ are exactly the data to fit the weights to, or to train a model.
 **Related decision.** The pipeline writes tab as MusicXML (a notation staff plus a TAB staff).
 alphaTex and Guitar Pro 7 files are produced from it by alphaTab's built-in exporters in the
 app, so we don't maintain writers for them and don't need PyGuitarPro (LGPL-3).
+
+---
+
+## TD-16: Decoding thresholds tuned on GuitarSet
+
+**Concept.** The model outputs, for every 12 ms, how likely each pitch is sounding and starting.
+*Decoding* turns that into notes with thresholds (how strong a start must be, how strong a held
+note must stay, how short a note may be). *Tuning* searches for the thresholds that score best on
+recordings with known answers. To avoid fooling ourselves, the search uses one set of clips (the
+*tuning set*) and the result is judged on different clips (the *held-out test set*).
+
+**What we did.** `tests/tuning/tune_decoding.py` searched ~800 combinations on 24 GuitarSet
+excerpts (cached, not committed) and judged the winner on the 6 committed test clips: note F1
+0.761 -> 0.818, wrong notes 27 % -> 19.5 %, found notes 81 % -> 84 %.
+
+A first winner used *fixed* thresholds. On a real phone recording it deleted 61 % of the notes,
+because that recording's activations were weaker (99th percentile 0.62 vs 0.69-0.81 on GuitarSet).
+So activations are now scaled to a reference level per recording before decoding (`level_gain`),
+making thresholds relative. That scored best on GuitarSet too, and on the phone recording removed
+7 % of notes, mostly extra notes stacked on real ones.
+
+**Pros**: measurable, repeatable (`make` the tuning set, run the script), and it improves every
+bar at once instead of patching symptoms.
+
+**Cons**
+- 24 tuning clips from one dataset (6 players, one guitar setup). Other guitars, rooms and
+  phones may want different values; level normalization covers loudness, not tone.
+- Piano still uses Basic Pitch's defaults: there is no commercially usable real piano set yet.
+- Tab string accuracy moved from 0.38 to 0.35 (a different set of notes is now found and scored).
+
+**Revisit when** user recordings with corrections exist (Phase 4): they are the right tuning set.

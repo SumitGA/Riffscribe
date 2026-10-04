@@ -97,6 +97,22 @@ def frame_times(n_frames: int) -> npt.NDArray[np.float64]:
     )
 
 
+LEVEL_REFERENCE = 0.75  # typical 99th-percentile frame activation on GuitarSet mic recordings
+
+
+def level_gain(frames: Activations, min_pitch: int, max_pitch: int) -> float:
+    """Scale that brings a recording's strongest activations up (or down) to LEVEL_REFERENCE.
+
+    Activation strength varies between recordings (a phone recording of the same playing comes
+    out weaker than a studio mic), so fixed thresholds drop real notes on quiet recordings.
+    Multiplying activations by this gain makes decoding thresholds relative to the recording.
+    """
+    in_range = frames[:, min_pitch - MIDI_OFFSET : max_pitch - MIDI_OFFSET + 1]
+    if in_range.size == 0:
+        return 1.0
+    return LEVEL_REFERENCE / max(float(np.percentile(in_range, 99)), 1e-3)
+
+
 ENVELOPE_FPS = SAMPLE_RATE / FFT_HOP  # exact rate of onset_envelope() (~86.13 frames/s)
 
 

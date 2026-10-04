@@ -2,56 +2,56 @@
  "clips": {
   "00_BN1-129-Eb_comp": {
    "beat_f": 0.0,
-   "note_f1": 0.7181,
-   "note_f1_with_offsets": 0.471,
-   "note_precision": 0.6739,
-   "note_recall": 0.7686,
-   "tab_string_accuracy": 0.2473,
+   "note_f1": 0.7667,
+   "note_f1_with_offsets": 0.4,
+   "note_precision": 0.7731,
+   "note_recall": 0.7603,
+   "tab_string_accuracy": 0.2935,
    "tempo_correct": 1.0
   },
   "01_Funk1-114-Ab_solo": {
    "beat_f": 0.2985,
-   "note_f1": 0.7097,
-   "note_f1_with_offsets": 0.4086,
-   "note_precision": 0.7333,
-   "note_recall": 0.6875,
-   "tab_string_accuracy": 0.1818,
+   "note_f1": 0.8333,
+   "note_f1_with_offsets": 0.6569,
+   "note_precision": 0.787,
+   "note_recall": 0.8854,
+   "tab_string_accuracy": 0.1882,
    "tempo_correct": 0.0
   },
   "02_Jazz1-130-D_comp": {
    "beat_f": 0.3692,
-   "note_f1": 0.6685,
-   "note_f1_with_offsets": 0.2841,
-   "note_precision": 0.6818,
-   "note_recall": 0.6557,
+   "note_f1": 0.6688,
+   "note_f1_with_offsets": 0.2524,
+   "note_precision": 0.791,
+   "note_recall": 0.5792,
    "tab_string_accuracy": 1.0,
    "tempo_correct": 1.0
   },
   "03_Rock1-130-A_solo": {
    "beat_f": 0.3385,
-   "note_f1": 0.9298,
-   "note_f1_with_offsets": 0.8596,
-   "note_precision": 0.9298,
+   "note_f1": 0.9138,
+   "note_f1_with_offsets": 0.8448,
+   "note_precision": 0.8983,
    "note_recall": 0.9298,
    "tab_string_accuracy": 0.1321,
    "tempo_correct": 1.0
   },
   "04_SS1-100-C#_comp": {
    "beat_f": 0.3279,
-   "note_f1": 0.6273,
-   "note_f1_with_offsets": 0.1801,
-   "note_precision": 0.4975,
-   "note_recall": 0.8487,
-   "tab_string_accuracy": 0.6634,
+   "note_f1": 0.7912,
+   "note_f1_with_offsets": 0.3004,
+   "note_precision": 0.7013,
+   "note_recall": 0.9076,
+   "tab_string_accuracy": 0.4352,
    "tempo_correct": 0.0
   },
   "05_BN1-129-Eb_solo": {
    "beat_f": 0.1562,
-   "note_f1": 0.9149,
-   "note_f1_with_offsets": 0.8298,
-   "note_precision": 0.86,
-   "note_recall": 0.9773,
-   "tab_string_accuracy": 0.0698,
+   "note_f1": 0.9362,
+   "note_f1_with_offsets": 0.766,
+   "note_precision": 0.88,
+   "note_recall": 1.0,
+   "tab_string_accuracy": 0.0227,
    "tempo_correct": 1.0
   },
   "arpeggios_72bpm": {
@@ -74,11 +74,11 @@
  "mean": {
   "guitar": {
    "beat_f": 0.2484,
-   "note_f1": 0.7614,
-   "note_f1_with_offsets": 0.5055,
-   "note_precision": 0.7294,
-   "note_recall": 0.8113,
-   "tab_string_accuracy": 0.3824,
+   "note_f1": 0.8183,
+   "note_f1_with_offsets": 0.5367,
+   "note_precision": 0.8051,
+   "note_recall": 0.8437,
+   "tab_string_accuracy": 0.3453,
    "tempo_correct": 0.6667
   },
   "piano": {
@@ -90,6 +90,6 @@
    "tempo_correct": 0.5
   }
  },
- "pipeline_version": "0.1.0+1616e11c",
+ "pipeline_version": "0.1.0+9372c642",
  "tolerance": 0.02
 }
