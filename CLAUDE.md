@@ -8,11 +8,13 @@ Mobile app. A user uploads or records audio and gets back editable sheet music a
 ## Tech stack (defaults — ask before changing)
 - **Mobile:** Expo (React Native, TypeScript strict), expo-router, TanStack Query, alphaTab rendered in a WebView (renders both standard notation and tab).
 - **API:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 + Alembic, PostgreSQL 16.
-- **Queue:** `JobQueue` interface. Redis Streams implementation for local dev, SQS for prod.
-- **Object storage:** S3 (MinIO locally). Clients use presigned URLs only.
+- **Rust kernels:** CPU-bound algorithms we write ourselves (tab-fingering Viterbi first) are Rust, exposed to Python via PyO3 + maturin as `pipeline._tabcore`. Move code to Rust only when profiling shows our own Python is the bottleneck (ADR-0003).
+- **Queue:** `JobQueue` interface. Redis Streams for local dev and the MVP; SQS on the AWS scale-up path.
+- **Object storage:** Cloudflare R2 through the S3 API (boto3 + `S3_ENDPOINT_URL`); S3-compatible server locally. Clients use presigned URLs only. No provider-specific SDK calls (ADR-0002).
 - **Auth:** managed provider issuing JWTs (default: AWS Cognito). The API only validates JWTs and never stores passwords.
-- **ML pipeline:** Demucs (htdemucs) for source separation, Basic Pitch for audio→MIDI, librosa for beat and tempo, music21 for MusicXML, and a custom tab-fingering module (Viterbi over playable positions).
-- **Infra:** Docker plus docker-compose locally; Terraform for AWS. API on ECS Fargate; GPU workers on an EC2 GPU autoscaling group or EKS + KEDA, scaled on queue depth.
+- **ML pipeline (CPU-only by default):** Basic Pitch on ONNX Runtime for audio→MIDI, librosa for beat and tempo, music21 for MusicXML, and a Rust tab-fingering module (Viterbi over playable positions). Demucs (htdemucs) source separation is an optional extra, off by default (`separate` is a passthrough).
+- **Infra (MVP):** self-hosted OpenStack VMs, docker-compose (or k3s), CPU workers only, Postgres on a VM with nightly backups to R2, Terraform via the OpenStack provider (ADR-0004).
+- **Infra (scale-up path):** AWS. API on ECS Fargate; GPU workers on an EC2 GPU autoscaling group or EKS + KEDA, scaled on queue depth.
 - **Licences:** check every model and library licence before adding it. The app is commercial, so no non-commercial weights (for example, madmom's pretrained models are non-commercial).
 
 ## Architecture
@@ -21,13 +23,13 @@ Mobile app. A user uploads or records audio and gets back editable sheet music a
 Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
   │            │
   │            └──► Queue ──► cpu-worker (normalize, quantize, notation, tab)
-  │                      └──► gpu-worker (separation, transcription)
-  └──presigned PUT/GET──► S3 (audio + artifacts)
+  │                      └──► ml-worker (separation, transcription; CPU in the MVP, GPU later)
+  └──presigned PUT/GET──► R2 / S3 API (audio + artifacts)
 ```
 
 ### Job flow
 1. `POST /jobs` creates a job (`pending_upload`) and returns a presigned PUT URL.
-2. The client uploads audio directly to S3. Audio never passes through the API.
+2. The client uploads audio directly to object storage. Audio never passes through the API.
 3. `POST /jobs/{id}/submit` validates the upload (size, duration, format, quota) and enqueues the job.
 4. Workers run the stages in order: `normalize → separate → transcribe → quantize → notation → tab`. Each stage reads and writes artifacts under `s3://…/users/{user_id}/jobs/{job_id}/{stage}/`.
 5. Workers record job and stage status in Postgres. The client polls `GET /jobs/{id}` and also receives an Expo push notification on completion.
@@ -36,13 +38,13 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 ## Scalability rules (non-negotiable)
 - **Stateless API.** No local disk state and no in-memory sessions. Any instance can serve any request. API p95 latency target is under 200 ms.
 - **All heavy work is async.** The API must never run ML inline.
-- **Separate CPU and GPU queues and workers.** They autoscale independently on queue depth. GPU workers scale to zero when idle.
+- **Separate CPU and ML queues.** Keep them separate even while one CPU worker pool serves both (MVP), so GPU workers can be added by config. On the scale-up path they autoscale independently on queue depth and GPU workers scale to zero when idle.
 - **Idempotent stages.** Every stage can be re-run safely. Use retries with exponential backoff and a dead-letter queue. Set a max of 3 attempts per stage.
 - **Deduplication cache.** Key results on `sha256(normalized_audio) + pipeline_version` and reuse them instead of recomputing.
 - **Versioned pipeline.** Every result stores the `pipeline_version` that produced it, so model upgrades never silently change old results.
 - **Quotas and rate limits.** Enforce per-user limits in Redis. Priority queue for the paid tier.
-- **Tenant isolation.** Scope every DB query by `user_id`. Prefix every S3 key with the user ID. Presigned URLs expire in 15 minutes or less.
-- **Lean database.** Postgres holds metadata only; blobs go to S3. Index `jobs(user_id, created_at)` and `jobs(status)`.
+- **Tenant isolation.** Scope every DB query by `user_id`. Prefix every object key with the user ID. Presigned URLs expire in 15 minutes or less.
+- **Lean database.** Postgres holds metadata only; blobs go to object storage. Index `jobs(user_id, created_at)` and `jobs(status)`.
 - **Observability.** Use structured JSON logs and OpenTelemetry traces, both carrying `job_id`. Track these metrics: queue depth, per-stage duration, failure rate and GPU utilisation.
 - **12-factor config.** All configuration comes from environment variables. No secrets in the repo.
 
@@ -51,15 +53,20 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 apps/mobile/            Expo app
 services/api/           FastAPI app
 services/worker/        Queue consumer; thin wrapper around packages/pipeline
-packages/pipeline/      Pure Python transcription library — NO infra dependencies
+packages/pipeline/      Transcription library — NO infra dependencies
+  src/pipeline/           Python package (stages, runner, CLI)
+  rust/                   Rust crate built into pipeline._tabcore (maturin)
 infra/terraform/
 docs/adr/               Architecture decision records
+docs/tech-debt/README.md  Deliberate trade-offs: concept, pros, cons, when to revisit
 docker-compose.yml
+pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 ```
 - `packages/pipeline` must run standalone, for example `python -m pipeline transcribe in.wav --out out/`, so model work can be iterated without the app or infra.
 
 ## Conventions
-- Python: ruff, mypy --strict, pytest. TypeScript: strict mode, eslint.
+- Python: uv, ruff, mypy --strict, pytest. Rust: cargo fmt, clippy `-D warnings`, cargo test. TypeScript: strict mode, eslint.
+- Every deliberate trade-off or piece of technical debt gets an entry in `docs/tech-debt/README.md` (concept, pros, cons, when to revisit) in the same commit.
 - Pipeline tests are golden-file tests on short fixture clips. Track note-level F1 with `mir_eval` and fail CI on regressions.
 - No new dependency without a one-line justification in the PR or commit.
 - Make small, focused commits. Record architecture changes as an ADR in `docs/adr/` and update this file.

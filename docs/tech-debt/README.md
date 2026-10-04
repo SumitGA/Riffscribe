@@ -1,0 +1,197 @@
+# Technical debt and trade-offs
+
+Every shortcut or trade-off we take on purpose is listed here. Each entry explains the
+**concept** behind it, the **pros and cons**, and **when to revisit**. Taking on debt is fine
+when it is deliberate, written down and has an exit plan; the danger is debt nobody remembers.
+
+Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language companion.
+
+| ID | Trade-off | Area | Revisit when |
+|---|---|---|---|
+| [TD-1](#td-1-cpu-only-pipeline-no-source-separation) | CPU-only pipeline, no source separation | Pipeline | Users upload noisy or mixed audio; accuracy plateaus |
+| [TD-2](#td-2-self-hosted-vms-instead-of-managed-cloud) | Self-hosted VMs instead of managed cloud | Infra | Paying users, or an outage costs real money |
+| [TD-3](#td-3-redis-streams-as-the-production-queue) | Redis Streams as the production queue | Infra | Job volume grows or a lost job becomes costly |
+| [TD-4](#td-4-self-managed-postgres) | Self-managed Postgres | Infra | Any real user data exists |
+| [TD-5](#td-5-two-languages-python--rust) | Two languages (Python + Rust) | Code | Adding contributors or more Rust modules |
+| [TD-6](#td-6-cache-key-hashes-the-whole-config) | Cache key hashes the whole config | Pipeline | Config grows or re-runs get expensive |
+| [TD-7](#td-7-stage-versions-are-bumped-by-hand) | Stage versions are bumped by hand | Pipeline | A stale-result bug slips past golden tests |
+| [TD-8](#td-8-small-partly-synthetic-test-fixtures) | Small, partly synthetic test fixtures | Testing | Before claiming accuracy numbers publicly |
+
+---
+
+## TD-1: CPU-only pipeline, no source separation
+
+**Concept.** *Source separation* splits a recording into instruments ("stems"): vocals, drums,
+bass, guitar, piano. Demucs is a neural network that does this well, but it is large and slow
+without a GPU. A *GPU* runs thousands of small calculations in parallel, which is what neural
+networks need; a CPU runs a few fast ones at a time.
+
+**What we did.** `separate` passes the audio through unchanged. Basic Pitch (a small model) does
+transcription on CPU. Demucs is an optional extra we can switch on.
+
+**Pros**
+- No GPU bill; runs on any VM, including your OpenStack servers.
+- v1 only accepts *solo* guitar or piano, so there is little to separate anyway.
+- Smaller install (no CUDA, ~2 GB less) and faster cold starts.
+
+**Cons**
+- Background noise, a metronome or a second instrument goes straight into transcription and
+  shows up as wrong notes.
+- When we add full-band support (out of scope for v1), separation becomes mandatory and so does
+  a GPU or much slower CPU jobs.
+
+**Revisit when** many users upload noisy or mixed recordings, or the accuracy tests plateau.
+
+---
+
+## TD-2: Self-hosted VMs instead of managed cloud
+
+**Concept.** *Managed* services (AWS ECS, SQS, RDS…) mean the provider runs, patches, backs up
+and fails over the software for you; you pay for that. *Self-hosted* means you run the same kind
+of software on your own machines. A *single point of failure* is any one component whose failure
+takes the whole app down, for example one VM that runs both the database and the API.
+
+**What we did.** The MVP backend runs with docker-compose on OpenStack VMs (ADR-0004). The code
+stays cloud-neutral (S3 API, `JobQueue` interface, env-var config), so moving later is mostly
+configuration.
+
+**Pros**
+- Close to zero cost while there are no users.
+- Full control; no vendor lock-in.
+- Same docker-compose file in dev and prod, so fewer surprises.
+
+**Cons**
+- You are the operations team: OS patches, disk full, certificates, monitoring, 3 a.m. restarts.
+- No automatic scaling: a traffic spike queues jobs instead of adding workers.
+- Single points of failure until we run at least two VMs for the API and workers.
+
+**Revisit when** there are paying users, or when ops work starts eating feature time.
+
+---
+
+## TD-3: Redis Streams as the production queue
+
+**Concept.** A *job queue* holds work items until a worker takes them. Important properties:
+*durability* (jobs survive a crash), *at-least-once delivery* (a job may run twice, which is why
+stages are idempotent) and a *dead-letter queue* (DLQ: where jobs go after failing 3 times so
+they stop retrying). SQS gives these out of the box. Redis Streams gives the building blocks
+(consumer groups, pending-entry lists), and we write the retry and DLQ logic ourselves.
+
+**Pros**
+- One Redis already serves quotas and rate limits, so there's one less system to run.
+- Very fast, simple locally, free.
+- Behind the `JobQueue` interface, so SQS can replace it without touching workers.
+
+**Cons**
+- Redis keeps data in memory. Without persistence (AOF with `fsync everysec`) a crash can lose
+  the last second of jobs. With it, a full disk or memory still breaks the queue.
+- Retry, back-off and DLQ handling are our code, so they're our bugs.
+- Queue-depth autoscaling has to be built by hand.
+
+**Revisit when** daily job volume grows, or a lost job means a refund.
+
+---
+
+## TD-4: Self-managed Postgres
+
+**Concept.** A *backup* you have never restored is a hope, not a backup. *RPO* (recovery point
+objective) is how much data you can afford to lose; *RTO* (recovery time objective) is how long
+you can afford to be down. Managed databases give point-in-time recovery (RPO of minutes) and
+automatic failover.
+
+**What we will do (Phase 2).** Postgres in a container on a VM, nightly `pg_dump` uploaded to R2,
+and a scripted restore we actually test.
+
+**Pros**: free, simple, and Postgres only holds metadata (audio lives in R2), so it stays small.
+
+**Cons**
+- Nightly dumps mean an RPO of up to 24 hours: a disk failure could lose a day of jobs and edits.
+- No failover; a VM outage is app downtime.
+
+**Revisit when** real user edits exist. The cheap next step is WAL archiving (continuous
+backup) with `pgBackRest` or `wal-g`, before paying for a managed database.
+
+---
+
+## TD-5: Two languages (Python + Rust)
+
+**Concept.** Python is quick to write and has the music/ML libraries; it is slow for tight loops
+written in Python itself. Rust compiles to fast native code with predictable memory use. *FFI*
+(foreign function interface) is how one language calls another; *PyO3* lets Python call Rust as
+if it were a normal module, and *maturin* builds both into one installable package.
+
+Most of our heavy work already runs in native code that Python only calls (PyTorch, ONNX Runtime,
+ffmpeg, numpy), so rewriting those parts in Rust gains almost nothing. Our own algorithms, like
+the tab fingering search, are where Rust wins by 100× or more (ADR-0003).
+
+**Pros**
+- Big speed and memory wins exactly where our own code is hot.
+- Rust's type system catches many bugs at compile time.
+- Python stays where the ecosystem is (Basic Pitch, librosa, music21, mir_eval).
+
+**Cons**
+- Two toolchains, two linters and two test runners; slower CI and onboarding.
+- The Python/Rust boundary must be kept small. Passing many tiny objects across it is slow, so
+  we pass arrays.
+- Debugging across the boundary is harder (a Rust panic surfaces as a Python exception).
+
+**Rule:** move code to Rust only when profiling shows *our* Python code is the bottleneck.
+
+---
+
+## TD-6: Cache key hashes the whole config
+
+**Concept.** A *cache key* is a fingerprint of everything that affects a result; if the
+fingerprint matches, we reuse the stored result instead of recomputing. If the key misses
+something that matters, you get a *stale cache* (wrong old result). If it includes things that
+don't matter, you get *over-invalidation* (needless recomputation).
+
+**What we did.** Each stage's key includes the *entire* `PipelineConfig` (ADR-0001).
+
+**Pros**: it can never produce a stale result because of a forgotten config field. That's the
+worse bug, because it's silent.
+
+**Cons**: changing a field that only affects a late stage (e.g. guitar tuning, used only by
+`tab`) also re-runs early stages like `transcribe`, which is the expensive one.
+
+**Revisit when** users can re-run with different settings (Phase 4 editor) and the extra
+transcription cost shows up. The fix: each stage declares the config fields it reads, and a test
+checks that the declaration is complete.
+
+---
+
+## TD-7: Stage versions are bumped by hand
+
+**Concept.** Each stage has a `version`. `pipeline_version` is derived from all of them, and old
+results stay tied to the version that produced them, so model upgrades never silently change old
+scores.
+
+**Cons**: if someone changes a stage's behaviour and forgets to bump its version, cached results
+from the old behaviour are reused under the same version.
+
+**Mitigation**: golden-file tests fail when deterministic output changes, which prompts the bump.
+Accuracy baselines record the `pipeline_version` too.
+
+**Revisit when** a stale-result bug ever reaches users. Option: CI fails if a stage's source
+files change without its version changing.
+
+---
+
+## TD-8: Small, partly synthetic test fixtures
+
+**Concept.** *Fixtures* are fixed test inputs with known correct answers (*ground truth*).
+*Overfitting to the test set* means tuning the system until it scores well on those few clips
+without getting better in general. *Synthetic* audio (rendered from MIDI with a sample library)
+is perfectly labelled but cleaner than real recordings.
+
+**What we will do.** GuitarSet (CC BY 4.0) excerpts for guitar; synthesized plus self-recorded
+clips for piano. We avoid MAESTRO because its licence is non-commercial.
+
+**Pros**: commercial-safe, small enough for CI, perfect labels.
+
+**Cons**
+- Scores on clean or synthetic clips overstate real-world accuracy (phone mic, room echo).
+- Few clips means a single clip can swing the average.
+
+**Revisit before** publishing accuracy claims. Grow a held-out set of real phone recordings that
+is never used for tuning.
