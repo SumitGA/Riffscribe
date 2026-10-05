@@ -9,9 +9,9 @@ Mobile app. A user uploads or records audio and gets back editable sheet music a
 - **Mobile:** Expo (React Native, TypeScript strict), expo-router, TanStack Query, alphaTab rendered in a WebView (renders both standard notation and tab).
 - **API:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 + Alembic, PostgreSQL 16.
 - **Rust kernels:** CPU-bound algorithms we write ourselves (tab-fingering Viterbi first) are Rust, exposed to Python via PyO3 + maturin as `pipeline._tabcore`. Move code to Rust only when profiling shows our own Python is the bottleneck (ADR-0003).
-- **Queue:** `JobQueue` interface. Redis Streams for local dev and the MVP; SQS on the AWS scale-up path.
-- **Object storage:** Cloudflare R2 through the S3 API (boto3 + `S3_ENDPOINT_URL`); S3-compatible server locally. Clients use presigned URLs only. No provider-specific SDK calls (ADR-0002).
-- **Auth:** managed provider issuing JWTs (default: AWS Cognito). The API only validates JWTs and never stores passwords.
+- **Queue:** `JobQueue` interface. Redis Streams for local dev and the MVP (Valkey image locally, ADR-0007); SQS on the AWS scale-up path.
+- **Object storage:** Cloudflare R2 through the S3 API (boto3 + `S3_ENDPOINT_URL`); SeaweedFS locally (ADR-0007). Clients use presigned URLs only. No provider-specific SDK calls (ADR-0002).
+- **Auth:** managed provider issuing JWTs (default: AWS Cognito). The API only validates JWTs and never stores passwords. Locally, `make token` issues dev tokens signed with a throwaway secret (TD-17).
 - **ML pipeline (CPU-only by default):** Basic Pitch for audio→MIDI: the model file is vendored in `pipeline/models/basic_pitch/` and run with ONNX Runtime; its pre/post-processing is ported in `pipeline/basic_pitch.py` (the `basic-pitch` package can't install on Python 3.12, see TD-11), our port of librosa's beat tracker for beat and tempo, fed by Basic Pitch onset activations (`pipeline/beats.py`; librosa itself is not a dependency, ADR-0005), our own MusicXML writer (`pipeline/musicxml.py`, ADR-0006; music21 is not a dependency), and a Rust tab-fingering module (Viterbi over playable positions). Demucs (htdemucs) source separation is an optional extra, off by default (`separate` is a passthrough).
 - **Infra (MVP):** self-hosted OpenStack VMs, docker-compose (or k3s), CPU workers only, Postgres on a VM with nightly backups to R2, Terraform via the OpenStack provider (ADR-0004).
 - **Infra (scale-up path):** AWS. API on ECS Fargate; GPU workers on an EC2 GPU autoscaling group or EKS + KEDA, scaled on queue depth.
@@ -30,9 +30,9 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 ### Job flow
 1. `POST /jobs` creates a job (`pending_upload`) and returns a presigned PUT URL.
 2. The client uploads audio directly to object storage. Audio never passes through the API.
-3. `POST /jobs/{id}/submit` validates the upload (size, duration, format, quota) and enqueues the job.
+3. `POST /jobs/{id}/submit` checks the upload's size and type (one HEAD request) and the user's quota, then enqueues the job. Duration and format need the audio decoded, so the normalize stage checks them and fails the job without retrying.
 4. Workers run the stages in order: `normalize → separate → transcribe → quantize → notation → tab`. Each stage reads and writes artifacts under `s3://…/users/{user_id}/jobs/{job_id}/{stage}/`.
-5. Workers record job and stage status in Postgres. The client polls `GET /jobs/{id}` and also receives an Expo push notification on completion.
+5. Workers record job and stage status in Postgres. The client polls `GET /jobs/{id}` and also receives an Expo push notification on completion (log-only `Notifier` until Phase 3). After `normalize`, an identical earlier job of the same user is reused instead of recomputed (dedup cache, TD-19).
 6. Outputs: MusicXML (notation; for guitar also `tab.musicxml` with a TAB staff) and MIDI. alphaTex and Guitar Pro 7 are derived from the MusicXML by alphaTab's exporters (`AlphaTexExporter`, `Gp7Exporter`), so the pipeline doesn't write them. User edits are saved as new `score_versions`; originals are never overwritten.
 
 ## Scalability rules (non-negotiable)
@@ -45,7 +45,7 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 - **Quotas and rate limits.** Enforce per-user limits in Redis. Priority queue for the paid tier.
 - **Tenant isolation.** Scope every DB query by `user_id`. Prefix every object key with the user ID. Presigned URLs expire in 15 minutes or less.
 - **Lean database.** Postgres holds metadata only; blobs go to object storage. Index `jobs(user_id, created_at)` and `jobs(status)`.
-- **Observability.** Use structured JSON logs and OpenTelemetry traces, both carrying `job_id`. Track these metrics: queue depth, per-stage duration, failure rate and GPU utilisation.
+- **Observability.** Use structured JSON logs and OpenTelemetry traces, both carrying `job_id`. Track these metrics: queue depth, per-stage duration, failure rate and GPU utilisation. Metrics are Prometheus: API `/metrics` (queue depth, request latency) and worker `:9100` (TD-20).
 - **12-factor config.** All configuration comes from environment variables. No secrets in the repo.
 
 ## Repo layout (monorepo)
@@ -53,6 +53,7 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 apps/mobile/            Expo app
 services/api/           FastAPI app
 services/worker/        Queue consumer; thin wrapper around packages/pipeline
+packages/platform/      Infra code shared by api and worker (settings, DB, storage, queue); imports as `tabscribe_platform`
 packages/pipeline/      Transcription library — NO infra dependencies
   src/pipeline/           Python package (stages, runner, CLI)
   rust/                   Rust crate built into pipeline._tabcore (maturin)
@@ -66,7 +67,8 @@ pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 - `packages/pipeline` must run standalone, for example `python -m pipeline transcribe in.wav --out out/`, so model work can be iterated without the app or infra.
 
 ## Conventions
-- `make check` runs every CI check (lint, types, tests, Rust); `make help` lists all shortcuts.
+- `make check` runs every CI check (lint, types, tests, Rust); `make help` lists all shortcuts. `make up` / `make down` start and stop the local Docker services.
+- Backend locally: `make up && make migrate`, then `make api` and `make worker` (on the host, reloading), or `make stack` (both in Docker, the images we ship). `make e2e` runs the end-to-end check against either; `make token USER=alice` prints a dev JWT.
 - Supported dev/CI platforms: Linux and Apple Silicon macOS (`[tool.uv] environments`); Intel Macs are excluded because Demucs pins numpy<2 there.
 - Optional Demucs separation: `make setup-separation`, then `--separation`; its tests run with `make test-separation`, not in CI.
 - Python: uv, ruff, mypy --strict, pytest. Rust: cargo fmt, clippy `-D warnings`, cargo test. TypeScript: strict mode, eslint.
@@ -78,7 +80,7 @@ pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 
 ## Build phases
 1. **Pipeline CLI**: audio → MIDI → MusicXML → tab, plus fixtures and accuracy tests. No app, no infra.
-2. **Backend**: API, workers, queue and local docker-compose, tested end to end via curl.
+2. **Backend**: API, workers, queue and local docker-compose, tested end to end (`make e2e`).
 3. **Mobile app**: auth, record/upload, job status, alphaTab rendering, export.
 4. **Editor**: note and fret corrections, with score versions.
 5. **Production**: Terraform, autoscaling, monitoring, billing (RevenueCat for in-app subscriptions).

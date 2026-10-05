@@ -1,0 +1,22 @@
+# Only the workspace's sources go into the build context.
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.mypy_cache
+**/.ruff_cache
+**/.pytest_cache
+**/target
+**/*.so
+**/node_modules
+.git
+.github
+out
+work
+docs
+infra
+tools
+apps
+**/tests
+*.m4a
+*.mp3
+*.wav

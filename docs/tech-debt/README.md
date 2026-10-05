@@ -24,6 +24,10 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
 | [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
 | [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
+| [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | Phase 3 adds sign-in (Cognito) |
+| [TD-18](#td-18-simple-quotas-and-rate-limits) | Simple quotas and rate limits | Backend / billing | Billing (Phase 5), or users complain about lost quota |
+| [TD-19](#td-19-dedup-cache-per-user-reused-after-normalize) | Dedup cache per user, reused after normalize | Backend / cost | Profiling shows many identical uploads across users |
+| [TD-20](#td-20-observability-prometheus-metrics-and-a-minimal-trace) | Observability: Prometheus metrics and a minimal trace | Ops | First production deploy; GPU workers |
 
 ---
 
@@ -116,6 +120,18 @@ they stop retrying). SQS gives these out of the box. Redis Streams gives the bui
   the last second of jobs. With it, a full disk or memory still breaks the queue.
 - Retry, back-off and DLQ handling are our code, so they're our bugs.
 - Queue-depth autoscaling has to be built by hand.
+
+**How it's built** (`tabscribe_platform/jobqueue.py`)
+- One stream per queue and priority (`cpu`/`ml` × `high`/`normal`), one consumer group.
+  Workers read `high` first.
+- Streams have no delayed delivery, so retries wait in a sorted set scored by due time. A Lua
+  script moves due messages into their streams, so two workers never both move one. That script
+  touches keys it isn't passed, which **rules out Redis Cluster** (fine on one node).
+- A message whose worker neither acks nor sends a heartbeat within the visibility timeout
+  (`QUEUE_VISIBILITY_TIMEOUT_S`) is reclaimed with `XAUTOCLAIM` and counts as a failed
+  attempt. After the last attempt it is handed to a worker once more, which fails the job and
+  dead-letters it, so a message that crashes workers neither loops nor leaves its job `running`.
+- Acked entries are deleted (`XDEL`), so stream length is the backlog.
 
 **Revisit when** daily job volume grows, or a lost job means a refund.
 
@@ -258,8 +274,16 @@ obligations on the code that links them.
 - A file the user can't decode and an ffmpeg bug both look like "could not decode". We treat both
   as bad input (no retry).
 
-**Revisit when** building the Phase 2 worker image: pin an LGPL ffmpeg build and record its
-configure flags.
+**Production build (done in Phase 2).** The worker image compiles ffmpeg from a source tarball
+pinned by version and sha256 (`Dockerfile`, stage `ffmpeg`). It is configured without
+`--enable-gpl`/`--enable-nonfree`, with no external libraries and only the demuxers and decoders
+for the upload types the API accepts (m4a/AAC, mp3, wav, flac, ogg/Vorbis/Opus, ALAC). The build
+fails if its configuration ever contains `--enable-gpl` or `--enable-nonfree`; the image keeps
+the configure line (`/usr/share/doc/ffmpeg/BUILDCONF`) and the LGPL text next to the binary.
+`make e2e` decodes m4a and mp3 uploads with it.
+
+**Revisit when** the API accepts a new upload type (add its demuxer and decoder), or before
+launch for the legal review (LGPL notice in the app's licences screen, offer of source).
 
 ---
 
@@ -527,3 +551,118 @@ bar at once instead of patching symptoms.
 - Tab string accuracy moved from 0.38 to 0.35 (a different set of notes is now found and scored).
 
 **Revisit when** user recordings with corrections exist (Phase 4): they are the right tuning set.
+
+---
+
+## TD-17: Local dev token issuer instead of a real auth provider
+
+**Concept.** The API trusts *JWTs* (signed JSON tokens saying who the user is) issued by a
+managed provider; it never sees passwords. In production the provider (Cognito by default) signs
+tokens with a private RSA key and publishes the public half as a *JWKS*; the API checks the
+signature against it (RS256). Locally, `make token USER=alice` signs tokens with a shared
+throwaway secret (HS256) and the API is configured with the same secret (`JWT_DEV_SECRET`).
+
+**Pros**
+- No provider account, network access or sign-up flow needed to work on or test the backend.
+- The checks after the signature (issuer, expiry, audience, subject rules) are the same code in
+  both modes, and the RS256/JWKS path has its own unit tests with a generated key.
+- Each mode accepts only its own algorithm and exactly one mode can be configured, so an HS256
+  token is rejected by a production API.
+
+**Cons**
+- The production key path (JWKS fetch, caching, key rotation) isn't exercised end to end until a
+  real provider is wired up.
+- Anyone with the dev secret can mint tokens for any user. Fine locally; a deployment that set
+  `JWT_DEV_SECRET` by mistake would have no real auth.
+
+**Revisit when** Phase 3 adds sign-in to the mobile app: create the Cognito user pool (Terraform),
+set `JWT_JWKS_URL`, `JWT_ISSUER` and `JWT_AUDIENCE`, and add a startup check that refuses
+`JWT_DEV_SECRET` outside local environments.
+
+---
+
+## TD-18: Simple quotas and rate limits
+
+**Concept.** A *quota* caps how much a user may use per period (here: jobs per calendar month);
+a *rate limit* caps how fast they may make requests (here: new jobs per minute). Both are
+counters in Redis, so every API instance sees the same numbers (`services/api/src/api/limits.py`).
+
+**Pros**
+- Two Redis commands per check; no tables, no background jobs.
+- Counters expire on their own, and the month is the calendar month in UTC, which is easy to
+  explain to users.
+
+**Cons**
+- One tier only: `FREE_JOBS_PER_MONTH` for everyone. Paid plans (more jobs, longer clips,
+  `Priority.HIGH`) need a plan stored per user.
+- A job counts when it is submitted, even if the pipeline then fails on it (for example, the
+  normalize stage finds it's longer than 5 minutes). Refunding those is left out.
+- The rate limit is a fixed window, so a burst at a minute boundary can reach twice the limit.
+- Redis is the only record of usage. If its data is lost, this month's counts reset to zero.
+  Postgres has the jobs, so they could be rebuilt from it.
+
+**Revisit when** billing arrives (Phase 5, RevenueCat): store the plan on the user, refund quota
+for jobs that fail for our reasons, and keep usage in Postgres if it has to be auditable.
+
+---
+
+## TD-19: Dedup cache per user, reused after normalize
+
+**Concept.** A *dedup cache* recognises work already done and reuses its result. The key is a
+hash of the normalized audio samples, the pipeline version and the job's options, so a re-encoded
+copy of a recording still matches, while a model upgrade or a different capo doesn't
+(`services/worker/src/worker/dedup.py`). When `normalize` finishes, the worker looks the key up;
+on a hit it copies the earlier job's files inside object storage and marks the later stages
+`cached`.
+
+**Pros**
+- A repeat upload costs one decode instead of a full transcription, and finishes in seconds.
+- The copy happens inside the bucket (S3 CopyObject); no audio passes through the worker.
+- If the earlier job's files are gone (deleted, or removed by a lifecycle rule), the worker just
+  runs the stages, so the cache can never fail a job.
+
+**Cons**
+- **Per user only.** The key includes the user ID, because CLAUDE.md requires every query to be
+  scoped by user and every object to live under its owner's prefix. Two users uploading the same
+  file both pay for a full run. Sharing across users would be a deliberate exception to tenant
+  isolation, and it would let a user infer someone else uploaded the same audio (from how fast
+  the job finishes).
+- Normalize always runs first, since the key needs the decoded audio; hashing the raw upload
+  would skip it but would miss re-encoded copies.
+- Each hit stores a second copy of the result files rather than pointing at the first job's.
+  Pointing would save storage but tie one job's files to another job's lifetime.
+
+**Revisit when** storage costs grow, or metrics show many identical uploads across users.
+
+---
+
+## TD-20: Observability: Prometheus metrics and a minimal trace
+
+**Concept.** *Logs* say what happened, *traces* show one request's path through the services
+with timings, and *metrics* are numbers over time for dashboards, alerts and autoscaling. Every
+log line is JSON with `job_id`, `stage`, `attempt`, `trace_id` and `span_id`. A job is one
+OpenTelemetry trace: the API's submit request, then one span per stage, passed along in the
+queue message. Metrics are Prometheus counters, histograms and gauges: queue depth (API
+`/metrics`), stage durations and outcomes (worker, port 9100) and API latency.
+
+**Pros**
+- Prometheus is pull-based and needs nothing else running: point a Prometheus at the
+  endpoints. Traces go to any OTLP collector only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+- The pipeline's own logs get the job's fields without depending on any of this (context
+  variables are read by the log formatter).
+- Queue depth is read from Redis at scrape time, so it is right on every instance.
+
+**Cons**
+- Two systems: OpenTelemetry for traces, `prometheus_client` for metrics. OpenTelemetry metrics
+  would unify them but need a collector even for the MVP.
+- Spans cover requests and stages only. Postgres, Redis and S3 calls aren't traced yet (their
+  instrumentation packages would add that).
+- The API serves `/metrics` on its public port. It holds no user data, but the ingress must not
+  route it (or it moves to a separate port).
+- Logs go to stderr; shipping and keeping them (Loki, CloudWatch) is the deployment's job.
+- No GPU utilisation metric: MVP workers are CPU-only. GPU workers should run NVIDIA's DCGM
+  exporter next to them.
+- Every API instance reports the same queue depth, so dashboards must use `max`, not `sum`.
+
+**Revisit when** the first production deploy (dashboards, alerts, ingress rules) and when GPU
+workers arrive (DCGM, queue-depth autoscaling with KEDA).

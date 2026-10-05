@@ -1,0 +1,25 @@
+[build-system]
+requires = ["uv_build>=0.9,<0.10"]
+build-backend = "uv_build"
+
+[project]
+name = "tabscribe-platform"
+version = "0.1.0"
+description = "Infra code shared by the API and the worker: settings, database, storage, queue"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.8,<3",           # typed models shared with the pipeline (MIT)
+    "pydantic-settings>=2.4,<3",  # 12-factor config: every setting from an env var (MIT)
+    "sqlalchemy>=2.0,<3",         # ORM and connection pool for Postgres (MIT)
+    "alembic>=1.13",              # schema migrations (MIT)
+    "psycopg[binary]>=3.2",       # Postgres driver; libpq bundled (LGPL-3.0, used unmodified)
+    "boto3>=1.35",                # S3 API client for R2 / SeaweedFS, presigned URLs (Apache-2.0)
+    "redis>=5.2",                 # Redis Streams job queue; also speaks to Valkey (MIT)
+    "opentelemetry-api>=1.27",  # tracing API: spans carrying job_id (Apache-2.0)
+    "opentelemetry-sdk>=1.27",  # tracer provider, batching, sampling (Apache-2.0)
+    "opentelemetry-exporter-otlp-proto-http>=1.27",  # sends spans to any OTLP collector (Apache-2.0)
+    "prometheus-client>=0.21",  # /metrics: queue depth, stage durations, failures (Apache-2.0)
+]
+
+[tool.uv.build-backend]
+module-name = "tabscribe_platform"

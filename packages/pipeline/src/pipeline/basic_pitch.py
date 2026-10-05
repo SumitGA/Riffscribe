@@ -62,6 +62,9 @@ class RawNote:
 
 UPSTREAM_DEFAULTS = DecodeParams()
 
+# Belt and braces: telemetry is already off via ORT_DISABLE_TELEMETRY (pipeline/__init__.py).
+ort.disable_telemetry_events()
+
 
 class BasicPitch:
     """The Basic Pitch ONNX model on CPU."""

@@ -6,7 +6,16 @@ class PipelineError(Exception):
 
 
 class InvalidInputError(Exception):
-    """The user's input can never succeed (not audio, too long, silent). Do not retry."""
+    """The user's input can never succeed (not audio, too long, silent). Do not retry.
+
+    `user_message` is short and safe to show the user; `detail` (e.g. ffmpeg's stderr, which
+    names server paths) is only for logs and the CLI, which print both.
+    """
+
+    def __init__(self, user_message: str, *, detail: str | None = None) -> None:
+        super().__init__(f"{user_message}: {detail}" if detail else user_message)
+        self.user_message = user_message
+        self.detail = detail
 
 
 class StageFailedError(PipelineError):

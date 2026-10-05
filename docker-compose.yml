@@ -1,0 +1,132 @@
+# Local development stack. Credentials here are throwaway dev values, not secrets: nothing in
+# this file is used outside a developer's machine or CI. Production config comes from env vars.
+#
+#   make up     start the backing services (for tests, `make api` and `make worker`)
+#   make stack  also build and run the API and a worker in containers (profile "app")
+#   make down   stop everything (data volumes are kept; `docker compose down -v` wipes them)
+
+name: tabscribe
+
+# What the API and worker read (see tabscribe_platform.settings). Dev values only; the JWT ones
+# match LOCAL_JWT_* in the Makefile, so `make token` works against the containers too.
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg://tabscribe:tabscribe@postgres:5432/tabscribe
+  REDIS_URL: redis://redis:6379/0
+  S3_BUCKET: tabscribe
+  S3_ENDPOINT_URL: http://seaweedfs:8333
+  S3_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: dev-access-key
+  AWS_SECRET_ACCESS_KEY: dev-secret-key
+  LOG_FORMAT: json
+
+x-app-depends: &app-depends
+  postgres: {condition: service_healthy}
+  redis: {condition: service_healthy}
+  seaweedfs: {condition: service_healthy}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tabscribe
+      POSTGRES_PASSWORD: tabscribe
+      POSTGRES_DB: tabscribe
+    # 5433 on the host: a developer's own Postgres often already has 5432.
+    ports: ["${POSTGRES_HOST_PORT:-5433}:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tabscribe -d tabscribe"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Valkey: the BSD-licensed fork of Redis 7.2, same protocol and Streams API (ADR-0007).
+  redis:
+    image: valkey/valkey:8-alpine
+    ports: ["${REDIS_HOST_PORT:-6379}:6379"]
+    volumes: [redis-data:/data]
+    command: ["valkey-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # S3-compatible object storage standing in for Cloudflare R2 (ADR-0002, ADR-0007).
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    command: >
+      server -dir=/data -ip.bind=0.0.0.0 -volume.max=0
+      -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports: ["${S3_HOST_PORT:-8333}:8333"]
+    volumes:
+      - seaweedfs-data:/data
+      - ./infra/local/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  # One-shot: create the bucket. Safe to re-run (an existing bucket is left alone).
+  # `make up` runs it with `docker compose run`; it sits in a profile because
+  # `docker compose up --wait` fails when any container exits, even successfully.
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:4.48
+    profiles: ["init"]
+    depends_on:
+      seaweedfs: {condition: service_healthy}
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        echo 's3.bucket.list' | weed shell -master=seaweedfs:9333 | grep -qw tabscribe
+        || echo 's3.bucket.create -name tabscribe' | weed shell -master=seaweedfs:9333
+    restart: "no"
+
+  # One-shot: apply database migrations (`make stack` runs it before the API starts).
+  migrate:
+    build: {context: ., target: api}
+    image: tabscribe-api:dev
+    profiles: ["init"]
+    environment: *app-env
+    depends_on: *app-depends
+    command: ["python", "-m", "tabscribe_platform.migrate"]
+    restart: "no"
+
+  api:
+    build: {context: ., target: api}
+    image: tabscribe-api:dev
+    profiles: ["app"]
+    environment:
+      <<: *app-env
+      # Presigned URLs are for the host, which reaches SeaweedFS on localhost.
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:${S3_HOST_PORT:-8333}
+      JWT_ISSUER: http://localhost/dev-issuer
+      JWT_DEV_SECRET: tabscribe-local-dev-only-not-a-real-secret
+    depends_on: *app-depends
+    ports: ["${API_HOST_PORT:-8000}:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  worker:
+    build: {context: ., target: worker}
+    image: tabscribe-worker:dev
+    profiles: ["app"]
+    environment: *app-env
+    depends_on: *app-depends
+    ports: ["${WORKER_METRICS_HOST_PORT:-9100}:9100"]
+    # SIGTERM lets the current stage finish; a 5-minute clip's transcription fits in this.
+    stop_grace_period: 5m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:9100/metrics', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:
+  redis-data:
+  seaweedfs-data:

@@ -10,20 +10,28 @@ environments = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/pipeline"]
+members = ["packages/pipeline", "packages/platform", "services/api", "services/worker"]
 
 [tool.uv.sources]
 tabscribe-pipeline = { workspace = true }
+tabscribe-platform = { workspace = true }
+tabscribe-api = { workspace = true }
+tabscribe-worker = { workspace = true }
 
 [dependency-groups]
 dev = [
     "tabscribe-pipeline",
+    "tabscribe-platform",
+    "tabscribe-api",
+    "tabscribe-worker",
+    "httpx2>=2.13",  # FastAPI/Starlette TestClient runs on it; replaces httpx there (BSD-3)
     "maturin>=1.7,<2",
     "mypy>=1.11",
     "pytest>=8",
     "ruff>=0.6",
     "pyloudnorm>=0.1.1",  # reference implementation that tests check our loudness against (MIT)
     "mir-eval>=0.8",
+    "boto3-stubs[s3]>=1.35",  # types for the boto3 S3 client, so mypy --strict checks it (MIT)
 ]
 
 # `uv sync --group separation` adds Demucs; not part of the default install or CI.
@@ -37,19 +45,25 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "N", "PTH"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pipeline"]
+known-first-party = ["pipeline", "tabscribe_platform", "api", "worker"]
 
 [tool.mypy]
 strict = true
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
-files = ["packages/pipeline/src", "packages/pipeline/tests", "tools/preview"]
+files = [
+    "packages/pipeline/src", "packages/pipeline/tests", "tools/preview", "tools/e2e.py",
+    "packages/platform/src", "packages/platform/tests",
+    "services/api/src", "services/api/tests",
+    "services/worker/src", "services/worker/tests",
+    "testsupport",
+]
 explicit_package_bases = true
-mypy_path = "packages/pipeline/src:packages/pipeline/tests"
+mypy_path = "packages/pipeline/src:packages/pipeline/tests:packages/platform/src:services/api/src:services/worker/src"
 
 [[tool.mypy.overrides]]
 module = [
-    "demucs", "demucs.*", "mido", "mir_eval", "mir_eval.*", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile", "torch",
+    "alembic.*", "demucs", "demucs.*", "mido", "mir_eval", "mir_eval.*", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile", "torch",
 ]
 ignore_missing_imports = true
 
@@ -59,11 +73,17 @@ module = ["basic_pitch", "basic_pitch.*", "librosa", "librosa.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["packages/pipeline/tests"]
-pythonpath = ["packages/pipeline/tests"]  # test helpers such as basic_pitch_oracle
+testpaths = [
+    "packages/pipeline/tests", "packages/platform/tests", "services/api/tests", "services/worker/tests",
+]
+pythonpath = [
+    ".",  # testsupport/: fixtures shared across packages
+    "packages/pipeline/tests",  # test helpers such as basic_pitch_oracle
+]
 addopts = "--import-mode=importlib -m 'not accuracy and not separation'"
 markers = [
     "unit: fast tests, no ML models",
+    "integration: needs the local services from `make up` (Postgres, Redis, S3)",
     "golden: compares deterministic stage output with committed snapshots",
     "accuracy: runs real models and checks mir_eval metrics against baselines",
     "separation: needs the optional Demucs install (`uv sync --group separation`)",
