@@ -84,32 +84,37 @@ def submit_job(
     """What the API does: a queued job with its upload in storage and `normalize` enqueued."""
 
     def submit(
-        clip: Path | bytes = GUITAR_CLIP, instrument: str = "guitar", **job: Any
+        clip: Path | bytes = GUITAR_CLIP,
+        instrument: str = "guitar",
+        *,
+        user_id: str = s3_user,
+        config: dict[str, Any] | None = None,
+        **job: Any,
     ) -> uuid.UUID:
         job_id = uuid.uuid4()
-        key = job_key(s3_user, str(job_id), "source", "upload.flac")
+        key = job_key(user_id, str(job_id), "source", "upload.flac")
         if isinstance(clip, bytes):
             path = tmp_path / f"{job_id}.flac"
             path.write_bytes(clip)
             clip = path
         object_store.upload_file(clip, key, "audio/flac")
         with Session(db) as session:
-            if session.get(User, s3_user) is None:
-                session.add(User(id=s3_user))
+            if session.get(User, user_id) is None:
+                session.add(User(id=user_id))
                 session.flush()
             session.add(
                 Job(
                     id=job_id,
-                    user_id=s3_user,
+                    user_id=user_id,
                     status=job.pop("status", JobStatus.QUEUED),
-                    config={"instrument": instrument},
+                    config={"instrument": instrument, **(config or {})},
                     source_key=key,
                     source_content_type="audio/flac",
                     source_size_bytes=clip.stat().st_size,
                 )
             )
             session.commit()
-        message = StageMessage(job_id=job_id, user_id=s3_user, stage="normalize", **job)
+        message = StageMessage(job_id=job_id, user_id=user_id, stage="normalize", **job)
         queue.enqueue(QueueName.CPU, message)
         return job_id
 
@@ -283,6 +288,75 @@ def test_message_for_a_finished_job_is_dropped(
     assert job.status is JobStatus.FAILED
     assert runs == {}
     assert queue.dead_letters() == []
+
+
+def test_identical_upload_reuses_the_results(
+    stage_worker: StageWorker,
+    queue: RedisJobQueue,
+    submit_job: SubmitJob,
+    db: Engine,
+    object_store: ObjectStore,
+    notifier: RecordingNotifier,
+) -> None:
+    first = submit_job()
+    drain(stage_worker, queue)
+    second = submit_job()
+    assert drain(stage_worker, queue) == 1  # normalize only; the rest is copied
+
+    job, runs = load(db, second)
+    assert job.status is JobStatus.SUCCEEDED
+    assert job.pipeline_version == load(db, first)[0].pipeline_version
+    assert runs["normalize"].status is StageStatus.SUCCEEDED
+    later = ["separate", "transcribe", "quantize", "notation", "tab"]
+    assert [runs[s].status for s in later] == [StageStatus.CACHED] * len(later)
+    with Session(db) as session:
+        score = session.scalars(select(ScoreVersion).where(ScoreVersion.job_id == second)).one()
+    for key in (score.musicxml_key, score.tab_musicxml_key, score.midi_key):
+        assert key is not None and f"/jobs/{second}/" in key  # its own copy
+        assert object_store.head(key) is not None
+    assert notifier.sent[-1] == (job.user_id, second, JobStatus.SUCCEEDED)
+
+
+def test_different_options_are_not_reused(
+    stage_worker: StageWorker, queue: RedisJobQueue, submit_job: SubmitJob
+) -> None:
+    submit_job()
+    drain(stage_worker, queue)
+    submit_job(config={"capo": 2})
+    assert drain(stage_worker, queue) == 6
+
+
+def test_another_users_results_are_not_reused(
+    stage_worker: StageWorker,
+    queue: RedisJobQueue,
+    submit_job: SubmitJob,
+    object_store: ObjectStore,
+    s3_user: str,
+) -> None:
+    submit_job()
+    drain(stage_worker, queue)
+    other = f"{s3_user}-b"
+    try:
+        submit_job(user_id=other)
+        assert drain(stage_worker, queue) == 6
+    finally:
+        object_store.delete_prefix(f"users/{other}/")
+
+
+def test_lost_files_mean_running_the_stages(
+    stage_worker: StageWorker,
+    queue: RedisJobQueue,
+    submit_job: SubmitJob,
+    db: Engine,
+    object_store: ObjectStore,
+    s3_user: str,
+) -> None:
+    first = submit_job()
+    drain(stage_worker, queue)
+    object_store.delete_prefix(f"{job_prefix(s3_user, str(first))}notation/")  # e.g. lifecycle
+    second = submit_job()
+    assert drain(stage_worker, queue) == 6
+    assert load(db, second)[0].status is JobStatus.SUCCEEDED
 
 
 @pytest.mark.unit

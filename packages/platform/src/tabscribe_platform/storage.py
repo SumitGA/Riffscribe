@@ -132,6 +132,12 @@ class ObjectStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._s3.download_file(self.bucket, key, str(path))
 
+    def copy(self, source_key: str, dest_key: str) -> None:
+        """Server-side copy within the bucket: nothing passes through this process."""
+        self._s3.copy_object(
+            Bucket=self.bucket, Key=dest_key, CopySource={"Bucket": self.bucket, "Key": source_key}
+        )
+
     def list_keys(self, prefix: str) -> list[str]:
         keys: list[str] = []
         for page in self._s3.get_paginator("list_objects_v2").paginate(

@@ -26,6 +26,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
 | [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | Phase 3 adds sign-in (Cognito) |
 | [TD-18](#td-18-simple-quotas-and-rate-limits) | Simple quotas and rate limits | Backend / billing | Billing (Phase 5), or users complain about lost quota |
+| [TD-19](#td-19-dedup-cache-per-user-reused-after-normalize) | Dedup cache per user, reused after normalize | Backend / cost | Profiling shows many identical uploads across users |
 
 ---
 
@@ -593,3 +594,33 @@ counters in Redis, so every API instance sees the same numbers (`services/api/sr
 
 **Revisit when** billing arrives (Phase 5, RevenueCat): store the plan on the user, refund quota
 for jobs that fail for our reasons, and keep usage in Postgres if it has to be auditable.
+
+---
+
+## TD-19: Dedup cache per user, reused after normalize
+
+**Concept.** A *dedup cache* recognises work already done and reuses its result. The key is a
+hash of the normalized audio samples, the pipeline version and the job's options, so a re-encoded
+copy of a recording still matches, while a model upgrade or a different capo doesn't
+(`services/worker/src/worker/dedup.py`). When `normalize` finishes, the worker looks the key up;
+on a hit it copies the earlier job's files inside object storage and marks the later stages
+`cached`.
+
+**Pros**
+- A repeat upload costs one decode instead of a full transcription, and finishes in seconds.
+- The copy happens inside the bucket (S3 CopyObject); no audio passes through the worker.
+- If the earlier job's files are gone (deleted, or removed by a lifecycle rule), the worker just
+  runs the stages, so the cache can never fail a job.
+
+**Cons**
+- **Per user only.** The key includes the user ID, because CLAUDE.md requires every query to be
+  scoped by user and every object to live under its owner's prefix. Two users uploading the same
+  file both pay for a full run. Sharing across users would be a deliberate exception to tenant
+  isolation, and it would let a user infer someone else uploaded the same audio (from how fast
+  the job finishes).
+- Normalize always runs first, since the key needs the decoded audio; hashing the raw upload
+  would skip it but would miss re-encoded copies.
+- Each hit stores a second copy of the result files rather than pointing at the first job's.
+  Pointing would save storage but tie one job's files to another job's lifetime.
+
+**Revisit when** storage costs grow, or metrics show many identical uploads across users.

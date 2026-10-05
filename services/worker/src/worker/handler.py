@@ -32,7 +32,14 @@ from pipeline.stages.notation import Notation
 from pipeline.stages.quantize import QuantizedScore
 from pipeline.stages.tab import Tablature
 from pipeline.types import StageName
-from tabscribe_platform.db import Job, JobStatus, ScoreVersion, StageRun, StageStatus
+from tabscribe_platform.db import (
+    Job,
+    JobStatus,
+    ResultCache,
+    ScoreVersion,
+    StageRun,
+    StageStatus,
+)
 from tabscribe_platform.jobqueue import (
     MAX_ATTEMPTS,
     STAGES,
@@ -42,6 +49,7 @@ from tabscribe_platform.jobqueue import (
     queue_for_stage,
 )
 from tabscribe_platform.storage import ObjectStore, job_prefix
+from worker.dedup import full_pipeline_version, result_cache_key
 from worker.notify import Notifier
 
 logger = logging.getLogger(__name__)
@@ -53,6 +61,16 @@ _ACTIVE = (JobStatus.QUEUED, JobStatus.RUNNING)
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+@dataclass(frozen=True)
+class _Outputs:
+    """A finished job's score files (object keys) and the pipeline that made them."""
+
+    pipeline_version: str
+    musicxml_key: str
+    tab_musicxml_key: str | None
+    midi_key: str | None
 
 
 @dataclass(frozen=True)
@@ -79,6 +97,7 @@ class StageWorker:
         self._notifier = notifier
         self._heartbeat_s = heartbeat_s
         self._stages = stages
+        self._pipeline_version = full_pipeline_version(stages())
 
     def handle(self, delivery: Delivery) -> None:
         """Process one message; always acks or fails it."""
@@ -156,6 +175,8 @@ class StageWorker:
         stage_result = next(r for r in result.stages if r.stage == message.stage)
         index = STAGES.index(message.stage)
         next_stage = STAGES[index + 1] if index + 1 < len(STAGES) else None
+        # Once the audio is known, an identical earlier job can finish this one (dedup cache).
+        reused = self._reuse(message, result) if message.stage == StageName.NORMALIZE else None
         finished = False
         with self._sessions() as session:
             job = self._load(session, message)
@@ -174,7 +195,19 @@ class StageWorker:
             )
             if message.stage == StageName.NORMALIZE:
                 job.audio_sha256 = result.output(NormalizedAudio).pcm_sha256
-            if next_stage is not None:
+            if reused is not None:
+                for stage in STAGES[index + 1 :]:
+                    self._set_stage(
+                        session,
+                        message.model_copy(update={"stage": stage}),
+                        status=StageStatus.CACHED,
+                        attempts=0,
+                        finished_at=_now(),
+                        duration_s=0.0,
+                    )
+                self._finish(session, job, reused)
+                next_stage, finished = None, True
+            elif next_stage is not None:
                 self._set_stage(
                     session,
                     message.model_copy(update={"stage": next_stage}),
@@ -182,7 +215,7 @@ class StageWorker:
                     attempts=0,
                 )
             else:
-                self._finish(session, job, result)
+                self._finish(session, job, self._outputs(job, result))
                 finished = True
             session.commit()
 
@@ -199,24 +232,96 @@ class StageWorker:
         if finished:
             self._notifier.job_finished(message.user_id, message.job_id, JobStatus.SUCCEEDED)
 
-    def _finish(self, session: Session, job: Job, result: RunResult) -> None:
+    @staticmethod
+    def _outputs(job: Job, result: RunResult) -> _Outputs:
         prefix = job_prefix(job.user_id, str(job.id))
         tab = result.outputs.get(Tablature)
+        return _Outputs(
+            pipeline_version=result.pipeline_version,
+            musicxml_key=prefix + result.output(Notation).musicxml.path,
+            tab_musicxml_key=prefix + tab.musicxml.path if isinstance(tab, Tablature) else None,
+            midi_key=prefix + result.output(QuantizedScore).midi.path,
+        )
+
+    def _finish(self, session: Session, job: Job, outputs: _Outputs) -> None:
         session.execute(
             insert(ScoreVersion)
             .values(
                 job_id=job.id,
                 user_id=job.user_id,
                 version=0,  # the pipeline's output; the editor's saves are 1, 2, ...
-                musicxml_key=prefix + result.output(Notation).musicxml.path,
-                tab_musicxml_key=prefix + tab.musicxml.path if isinstance(tab, Tablature) else None,
-                midi_key=prefix + result.output(QuantizedScore).midi.path,
+                musicxml_key=outputs.musicxml_key,
+                tab_musicxml_key=outputs.tab_musicxml_key,
+                midi_key=outputs.midi_key,
             )
             .on_conflict_do_nothing(index_elements=["job_id", "version"])
         )
+        if job.audio_sha256 is not None:
+            key = result_cache_key(
+                job.user_id, job.audio_sha256, outputs.pipeline_version, job.config
+            )
+            session.execute(
+                insert(ResultCache).values(key=key, job_id=job.id).on_conflict_do_nothing()
+            )
         job.status = JobStatus.SUCCEEDED
-        job.pipeline_version = result.pipeline_version
+        job.pipeline_version = outputs.pipeline_version
         job.finished_at = _now()
+
+    def _reuse(self, message: StageMessage, result: RunResult) -> _Outputs | None:
+        """Copy the results of an identical earlier job of this user, if there is one.
+
+        None (run the stages as usual) when there's no such job or its files are gone, e.g.
+        removed by a storage lifecycle rule.
+        """
+        audio_sha256 = result.output(NormalizedAudio).pcm_sha256
+        with self._sessions() as session:
+            job = self._load(session, message)
+            if job is None:
+                return None
+            key = result_cache_key(
+                message.user_id, audio_sha256, self._pipeline_version, job.config
+            )
+            row = session.execute(
+                select(Job, ScoreVersion)
+                .join(ResultCache, ResultCache.job_id == Job.id)
+                .join(ScoreVersion, (ScoreVersion.job_id == Job.id) & (ScoreVersion.version == 0))
+                .where(
+                    ResultCache.key == key,
+                    Job.user_id == message.user_id,
+                    Job.status == JobStatus.SUCCEEDED,
+                    Job.id != message.job_id,
+                )
+                .limit(1)
+            ).first()
+        if row is None:
+            return None
+        cached, score = row
+
+        old = job_prefix(message.user_id, str(cached.id))
+        new = job_prefix(message.user_id, str(message.job_id))
+        later = set(STAGES[STAGES.index(StageName.NORMALIZE) + 1 :])
+        try:
+            keys = [k for k in self._store.list_keys(old) if k[len(old) :].split("/")[0] in later]
+            needed = {score.musicxml_key, score.midi_key, score.tab_musicxml_key} - {None}
+            if not needed <= set(keys):
+                logger.info("cached job %s has lost files; running the stages", cached.id)
+                return None
+            for k in keys:
+                self._store.copy(k, new + k[len(old) :])
+        except Exception:
+            logger.exception("could not reuse job %s; running the stages", cached.id)
+            return None
+
+        def moved(k: str) -> str:
+            return new + k[len(old) :]
+
+        logger.info("job %s reuses the results of job %s", message.job_id, cached.id)
+        return _Outputs(
+            pipeline_version=self._pipeline_version,
+            musicxml_key=moved(score.musicxml_key),
+            tab_musicxml_key=moved(score.tab_musicxml_key) if score.tab_musicxml_key else None,
+            midi_key=moved(score.midi_key) if score.midi_key else None,
+        )
 
     def _fail(
         self,

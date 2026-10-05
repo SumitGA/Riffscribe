@@ -71,6 +71,7 @@ class StageStatus(StrEnum):
     SUCCEEDED = "succeeded"
     SKIPPED = "skipped"
     FAILED = "failed"
+    CACHED = "cached"  # reused from an identical earlier job (dedup cache); nothing ran
 
 
 class User(Base):
@@ -154,7 +155,8 @@ class ScoreVersion(Base):
 class ResultCache(Base):
     """Dedup cache: a finished job whose results can be copied instead of recomputed.
 
-    `key` = sha256 of (normalized audio sha256, pipeline version, pipeline config).
+    `key` = sha256 of (user ID, normalized audio sha256, pipeline version, pipeline config).
+    The user ID keeps reuse within one user's jobs (tenant isolation, TD-19).
     """
 
     __tablename__ = "result_cache"

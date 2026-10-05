@@ -7,7 +7,7 @@ from sqlalchemy import Engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from tabscribe_platform.db import Base, Job, JobStatus, ScoreVersion, User
+from tabscribe_platform.db import Base, Job, JobStatus, ScoreVersion, StageStatus, User
 
 pytestmark = pytest.mark.integration
 
@@ -92,3 +92,10 @@ def test_deleting_a_user_deletes_their_jobs(db: Engine) -> None:
         session.delete(session.get_one(User, "alice"))
         session.commit()
         assert session.scalars(select(Job)).all() == []
+
+
+def test_stage_status_constraint_allows_every_status(db: Engine) -> None:
+    [check] = inspect(db).get_check_constraints("stage_runs")
+    assert check["name"] == "ck_stage_runs_stagestatus"
+    for status in StageStatus:
+        assert f"'{status.value}'" in check["sqltext"]
