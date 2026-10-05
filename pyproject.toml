@@ -52,13 +52,14 @@ files = [
     "packages/pipeline/src", "packages/pipeline/tests", "tools/preview",
     "packages/platform/src", "packages/platform/tests",
     "services/api/src", "services/api/tests",
+    "testsupport",
 ]
 explicit_package_bases = true
 mypy_path = "packages/pipeline/src:packages/pipeline/tests:packages/platform/src:services/api/src"
 
 [[tool.mypy.overrides]]
 module = [
-    "demucs", "demucs.*", "mido", "mir_eval", "mir_eval.*", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile", "torch",
+    "alembic.*", "demucs", "demucs.*", "mido", "mir_eval", "mir_eval.*", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile", "torch",
 ]
 ignore_missing_imports = true
 
@@ -69,10 +70,14 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["packages/pipeline/tests", "packages/platform/tests", "services/api/tests"]
-pythonpath = ["packages/pipeline/tests"]  # test helpers such as basic_pitch_oracle
+pythonpath = [
+    ".",  # testsupport/: fixtures shared across packages
+    "packages/pipeline/tests",  # test helpers such as basic_pitch_oracle
+]
 addopts = "--import-mode=importlib -m 'not accuracy and not separation'"
 markers = [
     "unit: fast tests, no ML models",
+    "integration: needs the local services from `make up` (Postgres, Redis, S3)",
     "golden: compares deterministic stage output with committed snapshots",
     "accuracy: runs real models and checks mir_eval metrics against baselines",
     "separation: needs the optional Demucs install (`uv sync --group separation`)",

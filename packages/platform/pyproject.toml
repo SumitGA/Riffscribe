@@ -10,6 +10,9 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "pydantic>=2.8,<3",           # typed models shared with the pipeline (MIT)
     "pydantic-settings>=2.4,<3",  # 12-factor config: every setting from an env var (MIT)
+    "sqlalchemy>=2.0,<3",         # ORM and connection pool for Postgres (MIT)
+    "alembic>=1.13",              # schema migrations (MIT)
+    "psycopg[binary]>=3.2",       # Postgres driver; libpq bundled (LGPL-3.0, used unmodified)
 ]
 
 [tool.uv.build-backend]

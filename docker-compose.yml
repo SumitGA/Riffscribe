@@ -13,7 +13,8 @@ services:
       POSTGRES_USER: tabscribe
       POSTGRES_PASSWORD: tabscribe
       POSTGRES_DB: tabscribe
-    ports: ["5432:5432"]
+    # 5433 on the host: a developer's own Postgres often already has 5432.
+    ports: ["${POSTGRES_HOST_PORT:-5433}:5432"]
     volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tabscribe -d tabscribe"]
@@ -24,7 +25,7 @@ services:
   # Valkey: the BSD-licensed fork of Redis 7.2, same protocol and Streams API (ADR-0007).
   redis:
     image: valkey/valkey:8-alpine
-    ports: ["6379:6379"]
+    ports: ["${REDIS_HOST_PORT:-6379}:6379"]
     volumes: [redis-data:/data]
     command: ["valkey-server", "--appendonly", "yes"]
     healthcheck:
@@ -39,7 +40,7 @@ services:
     command: >
       server -dir=/data -ip.bind=0.0.0.0 -volume.max=0
       -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
-    ports: ["8333:8333"]
+    ports: ["${S3_HOST_PORT:-8333}:8333"]
     volumes:
       - seaweedfs-data:/data
       - ./infra/local/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro

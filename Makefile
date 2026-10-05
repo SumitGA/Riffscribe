@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up down check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up down migrate check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -11,6 +11,7 @@ ARGS ?=
 # make doesn't expand a leading ~ (and zsh doesn't after FILE=), so do it here.
 FILE_PATH = $(patsubst ~/%,$(HOME)/%,$(FILE))
 OUT_PATH = $(patsubst ~/%,$(HOME)/%,$(OUT))
+LOCAL_DATABASE_URL ?= postgresql+psycopg://tabscribe:tabscribe@localhost:5433/tabscribe
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -33,6 +34,9 @@ up: ## Start local Postgres, Redis (Valkey) and S3 (SeaweedFS) in Docker
 
 down: ## Stop the local services (data is kept; `docker compose down -v` wipes it)
 	docker compose down
+
+migrate: ## Apply database migrations to the local Postgres
+	DATABASE_URL=$(LOCAL_DATABASE_URL) uv run alembic -c packages/platform/alembic.ini upgrade head
 
 check: lint typecheck test rust ## Run everything CI runs
 
