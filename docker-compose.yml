@@ -51,8 +51,11 @@ services:
       retries: 60
 
   # One-shot: create the bucket. Safe to re-run (an existing bucket is left alone).
+  # `make up` runs it with `docker compose run`; it sits in a profile because
+  # `docker compose up --wait` fails when any container exits, even successfully.
   seaweedfs-init:
     image: chrislusf/seaweedfs:4.48
+    profiles: ["init"]
     depends_on:
       seaweedfs: {condition: service_healthy}
     entrypoint: ["sh", "-c"]

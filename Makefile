@@ -40,6 +40,7 @@ view: ## Preview OUT (default out/) as notation + tab with playback, in the brow
 
 up: ## Start local Postgres, Redis (Valkey) and S3 (SeaweedFS) in Docker
 	docker compose up -d --wait
+	docker compose run --rm seaweedfs-init
 
 down: ## Stop the local services (data is kept; `docker compose down -v` wipes it)
 	docker compose down

@@ -14,7 +14,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       # Postgres, Redis and S3 for the integration tests: the same docker-compose stack as
       # `make up` (SeaweedFS needs a command line, which GitHub service containers can't set).
-      - run: docker compose up -d --wait
+      - run: make up
       # Ubuntu's ffmpeg is a GPL build; fine for tests, not for shipping (TD-9).
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: uv sync --locked
