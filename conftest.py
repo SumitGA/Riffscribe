@@ -4,4 +4,4 @@ They are not defined here because mypy would see two `conftest` modules (this on
 pipeline tests' one).
 """
 
-pytest_plugins = ["testsupport.postgres", "testsupport.services"]
+pytest_plugins = ["testsupport.postgres", "testsupport.services", "testsupport.tracing"]

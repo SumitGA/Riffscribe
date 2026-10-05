@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 import redis
 from fastapi.testclient import TestClient
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
@@ -229,3 +230,34 @@ def test_succeeded_job_has_download_links(api: TestClient, alice: str, db: Engin
 
 def test_readyz(api: TestClient) -> None:
     assert api.get("/readyz").json() == {"status": "ok"}
+
+
+def test_metrics(api: TestClient, alice: str) -> None:
+    create(api, alice)
+    created = create(api, alice)
+    upload(created)
+    api.post(f"/jobs/{created['job']['id']}/submit", headers=auth(alice))
+
+    text = api.get("/metrics").text
+    assert 'tabscribe_queue_messages{priority="normal",queue="cpu",state="ready"} 1.0' in text
+    assert "tabscribe_queue_dead_letters 0.0" in text
+    # Latency is recorded per route template, not per job ID.
+    assert 'route="/jobs/{job_id}/submit"' in text
+    assert 'tabscribe_http_request_duration_seconds_count{method="POST",route="/jobs"' in text
+    assert 'route="/metrics"' not in text
+
+
+def test_submit_starts_the_jobs_trace(
+    api: TestClient, alice: str, job_queue: JobQueue, spans: InMemorySpanExporter
+) -> None:
+    created = create(api, alice)
+    upload(created)
+    api.post(f"/jobs/{created['job']['id']}/submit", headers=auth(alice))
+    delivery = job_queue.receive(QueueName.CPU, "test", wait_s=0.1)
+    assert delivery is not None
+
+    [submit] = [s for s in spans.get_finished_spans() if s.name.endswith("/submit")]
+    assert submit.attributes is not None
+    assert submit.attributes["job.id"] == created["job"]["id"]
+    trace_id = format(submit.context.trace_id, "032x")
+    assert delivery.message.trace["traceparent"].split("-")[1] == trace_id

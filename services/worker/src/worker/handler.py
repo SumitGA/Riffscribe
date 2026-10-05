@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind, Status, StatusCode
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
@@ -48,11 +50,14 @@ from tabscribe_platform.jobqueue import (
     StageMessage,
     queue_for_stage,
 )
+from tabscribe_platform.observability import extract_trace, inject_trace, log_context
 from tabscribe_platform.storage import ObjectStore, job_prefix
 from worker.dedup import full_pipeline_version, result_cache_key
+from worker.metrics import JOBS_FINISHED, STAGE_RUNS, STAGE_SECONDS
 from worker.notify import Notifier
 
 logger = logging.getLogger(__name__)
+_tracer = trace.get_tracer("tabscribe.worker")
 
 # Shown to the user when we failed them; the details stay in the logs and stage_runs.
 INTERNAL_ERROR_MESSAGE = "Something went wrong while processing this recording. Please try again."
@@ -100,19 +105,46 @@ class StageWorker:
         self._pipeline_version = full_pipeline_version(stages())
 
     def handle(self, delivery: Delivery) -> None:
-        """Process one message; always acks or fails it."""
+        """Process one message; always acks or fails it.
+
+        Runs in a span continuing the job's trace, with job_id/stage/attempt on every log line.
+        """
+        message = delivery.message
+        stage = message.stage
+        with (
+            log_context(job_id=str(message.job_id), stage=stage, attempt=message.attempt),
+            _tracer.start_as_current_span(
+                f"stage {stage}",
+                context=extract_trace(message.trace),
+                kind=SpanKind.CONSUMER,
+                attributes={
+                    "job.id": str(message.job_id),
+                    "stage": stage,
+                    "attempt": message.attempt,
+                },
+            ) as span,
+        ):
+            start = time.perf_counter()
+            outcome = self._handle(delivery)
+            elapsed = time.perf_counter() - start
+            span.set_attribute("stage.outcome", outcome)
+            if outcome in ("retried", "failed"):
+                span.set_status(Status(StatusCode.ERROR))
+            STAGE_RUNS.labels(stage, outcome).inc()
+            STAGE_SECONDS.labels(stage, outcome).observe(elapsed)
+            logger.info("stage %s", outcome, extra={"duration_s": round(elapsed, 3)})
+
+    def _handle(self, delivery: Delivery) -> str:
         message = delivery.message
         with self._sessions() as session:
             job = self._load(session, message)
             if job is None or job.status not in _ACTIVE:
                 # Deleted, already finished, or never submitted: a stale or duplicate message.
-                logger.info("dropping message for inactive job %s", message.job_id)
                 self._queue.ack(delivery)
-                return
+                return "dropped"
             if message.attempt > MAX_ATTEMPTS:  # its workers kept dying (see JobQueue.receive)
                 failure = _Failure(False, "worker stopped responding", INTERNAL_ERROR_MESSAGE)
-                self._fail(session, delivery, job, failure, error_code="stage_failed")
-                return
+                return self._fail(session, delivery, job, failure, error_code="stage_failed")
             config = PipelineConfig.model_validate(job.config)
             source_key = job.source_key
             job.status = JobStatus.RUNNING
@@ -131,14 +163,15 @@ class StageWorker:
                 result = self._run(message, source_key, config)
         except Exception as exc:
             failure = _classify(exc)
-            logger.warning("stage %s of job %s failed: %s", message.stage, message.job_id, exc)
+            logger.warning("stage failed: %s", failure.detail, exc_info=failure.retryable)
             with self._sessions() as session:
                 job = self._load(session, message)
-                if job is not None:
-                    self._fail(session, delivery, job, failure, error_code=None)
-            return
+                if job is None:
+                    self._queue.ack(delivery)
+                    return "dropped"
+                return self._fail(session, delivery, job, failure, error_code=None)
 
-        self._advance(delivery, result)
+        return self._advance(delivery, result)
 
     def _run(self, message: StageMessage, source_key: str, config: PipelineConfig) -> RunResult:
         prefix = job_prefix(message.user_id, str(message.job_id))
@@ -170,7 +203,7 @@ class StageWorker:
             if path.is_file():
                 self._store.upload_file(path, f"{prefix}{stage}/{path.name}")
 
-    def _advance(self, delivery: Delivery, result: RunResult) -> None:
+    def _advance(self, delivery: Delivery, result: RunResult) -> str:
         message = delivery.message
         stage_result = next(r for r in result.stages if r.stage == message.stage)
         index = STAGES.index(message.stage)
@@ -182,7 +215,7 @@ class StageWorker:
             job = self._load(session, message)
             if job is None or job.status not in _ACTIVE:
                 self._queue.ack(delivery)
-                return
+                return "dropped"
             self._set_stage(
                 session,
                 message,
@@ -197,6 +230,7 @@ class StageWorker:
                 job.audio_sha256 = result.output(NormalizedAudio).pcm_sha256
             if reused is not None:
                 for stage in STAGES[index + 1 :]:
+                    STAGE_RUNS.labels(stage, "cached").inc()
                     self._set_stage(
                         session,
                         message.model_copy(update={"stage": stage}),
@@ -223,14 +257,20 @@ class StageWorker:
         # ack, the stage runs again: cache hits, then the same next message (harmless).
         if next_stage is not None:
             next_message = StageMessage(
-                job_id=message.job_id, user_id=message.user_id, stage=next_stage
+                job_id=message.job_id,
+                user_id=message.user_id,
+                stage=next_stage,
+                trace=inject_trace(),  # the next stage's span is a child of this one
             )
             self._queue.enqueue(
                 queue_for_stage(next_stage), next_message, priority=delivery.priority
             )
         self._queue.ack(delivery)
         if finished:
+            JOBS_FINISHED.labels(JobStatus.SUCCEEDED).inc()
+            logger.info("job succeeded")
             self._notifier.job_finished(message.user_id, message.job_id, JobStatus.SUCCEEDED)
+        return "skipped" if stage_result.status == "skipped" else "succeeded"
 
     @staticmethod
     def _outputs(job: Job, result: RunResult) -> _Outputs:
@@ -331,7 +371,7 @@ class StageWorker:
         failure: _Failure,
         *,
         error_code: str | None,
-    ) -> None:
+    ) -> str:
         message = delivery.message
         dead = not failure.retryable or message.attempt >= MAX_ATTEMPTS
         self._set_stage(
@@ -353,8 +393,12 @@ class StageWorker:
         # and a failed job's message is dropped.
         session.commit()
         self._queue.fail(delivery, failure.detail, retry=failure.retryable)
-        if dead:
-            self._notifier.job_finished(message.user_id, message.job_id, JobStatus.FAILED)
+        if not dead:
+            return "retried"
+        JOBS_FINISHED.labels(JobStatus.FAILED).inc()
+        logger.warning("job failed", extra={"error_code": job.error_code})
+        self._notifier.job_finished(message.user_id, message.job_id, JobStatus.FAILED)
+        return "failed"
 
     @staticmethod
     def _load(session: Session, message: StageMessage) -> Job | None:

@@ -201,3 +201,26 @@ def test_crash_on_the_last_attempt_comes_back_to_a_worker(queue: RedisJobQueue) 
     assert delivery.message.attempt == MAX_ATTEMPTS + 1
     assert queue.fail(delivery, "worker kept crashing") is FailOutcome.DEAD
     assert queue.dead_letters()[0].error == "worker kept crashing"
+
+
+@pytest.mark.integration
+def test_depth_counts_ready_in_flight_delayed(queue: RedisJobQueue) -> None:
+    for _ in range(3):
+        queue.enqueue(QueueName.CPU, _message())
+    queue.enqueue(QueueName.ML, _message("transcribe"), priority=Priority.HIGH, delay_s=30)
+    delivery = queue.receive(QueueName.CPU, "w1", wait_s=0.1)
+    assert delivery is not None
+
+    depth = {(d.queue, d.priority): d for d in queue.depth()}
+    cpu = depth[QueueName.CPU, Priority.NORMAL]
+    assert (cpu.ready, cpu.in_flight, cpu.delayed) == (2, 1, 0)
+    ml = depth[QueueName.ML, Priority.HIGH]
+    assert (ml.ready, ml.in_flight, ml.delayed) == (0, 0, 1)
+    assert len(depth) == len(QueueName) * len(Priority)
+
+    queue.fail(delivery, "boom", retry=False)
+    assert queue.dead_letter_count() == 1
+    assert depth[QueueName.CPU, Priority.NORMAL].in_flight == 1  # the old snapshot
+    assert {(d.queue, d.priority): d.in_flight for d in queue.depth()}[
+        QueueName.CPU, Priority.NORMAL
+    ] == 0

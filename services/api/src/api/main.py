@@ -1,13 +1,30 @@
-from fastapi import FastAPI, HTTPException, status
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Response, status
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from sqlalchemy import text
 
 from api import jobs
 from api.auth import CurrentUserDep
-from api.deps import ApiSettingsDep, LimiterDep, RedisDep, SessionDep
+from api.deps import ApiSettingsDep, LimiterDep, QueueDep, RedisDep, SessionDep
+from api.observability import metrics_response, time_requests
 from api.schemas import MeOut
+from tabscribe_platform.observability import configure_logging, configure_tracing
 
-app = FastAPI(title="TabScribe API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    configure_logging("api")
+    configure_tracing("api")
+    yield
+
+
+app = FastAPI(title="TabScribe API", version="0.1.0", lifespan=lifespan)
 app.include_router(jobs.router)
+app.middleware("http")(time_requests)
+# One span per request; the submit span becomes the root of the job's trace.
+FastAPIInstrumentor.instrument_app(app, excluded_urls="healthz,readyz,metrics")
 
 
 @app.get("/healthz")
@@ -26,6 +43,12 @@ def readyz(session: SessionDep, redis_client: RedisDep) -> dict[str, str]:
     except Exception as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "not ready") from exc
     return {"status": "ok"}
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(queue: QueueDep) -> Response:
+    """Prometheus metrics (internal: not routed to clients)."""
+    return metrics_response(queue)
 
 
 @app.get("/me")

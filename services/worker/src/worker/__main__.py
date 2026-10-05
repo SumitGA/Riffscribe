@@ -8,8 +8,13 @@ import signal
 import threading
 from types import FrameType
 
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from prometheus_client import start_http_server
+
 from tabscribe_platform.db import make_engine, make_session_factory
 from tabscribe_platform.jobqueue import JobQueue, RedisJobQueue
+from tabscribe_platform.observability import configure_logging, configure_tracing
 from tabscribe_platform.settings import get_settings
 from tabscribe_platform.storage import ObjectStore
 from worker.handler import StageWorker, remove_stale_tempdirs
@@ -32,9 +37,12 @@ def serve(
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_logging("worker")
+    configure_tracing("worker")
     settings = get_settings()
     worker_settings = WorkerSettings()
+    if worker_settings.metrics_port:
+        start_http_server(worker_settings.metrics_port)
     queue = RedisJobQueue.from_url(
         str(settings.redis_url), visibility_timeout_s=settings.queue_visibility_timeout_s
     )
@@ -59,6 +67,9 @@ def main() -> None:
     remove_stale_tempdirs()
     logger.info("worker %s serving %s", worker_settings.id, ", ".join(worker_settings.queues))
     serve(worker, queue, worker_settings, stop)
+    provider = trace.get_tracer_provider()
+    if isinstance(provider, TracerProvider):
+        provider.shutdown()  # flush the last spans
 
 
 if __name__ == "__main__":

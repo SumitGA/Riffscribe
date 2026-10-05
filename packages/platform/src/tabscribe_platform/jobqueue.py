@@ -56,6 +56,8 @@ class StageMessage(BaseModel):
     user_id: str
     stage: str
     attempt: int = Field(default=1, ge=1)
+    # W3C trace context of the step that queued this one, so a job is one trace across workers.
+    trace: dict[str, str] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,15 @@ class Delivery:
 class FailOutcome(StrEnum):
     RETRY = "retry"  # scheduled again after a backoff delay
     DEAD = "dead"  # moved to the dead-letter queue
+
+
+@dataclass(frozen=True)
+class QueueDepth:
+    queue: QueueName
+    priority: Priority
+    ready: int  # waiting for a worker
+    in_flight: int  # received, not yet acked or failed
+    delayed: int  # waiting out a retry delay
 
 
 @dataclass(frozen=True)
@@ -119,6 +130,13 @@ class JobQueue(ABC):
 
     @abstractmethod
     def dead_letters(self, limit: int = 100) -> list[DeadLetter]: ...
+
+    @abstractmethod
+    def depth(self) -> list[QueueDepth]:
+        """Backlog of every queue and priority (the autoscaling signal)."""
+
+    @abstractmethod
+    def dead_letter_count(self) -> int: ...
 
 
 # Moves due delayed messages into their streams. One script, so two workers never both move
@@ -328,3 +346,29 @@ class RedisJobQueue(JobQueue):
             list[tuple[str, dict[str, str]]], self._redis.xrange(self._dlq_key, count=limit)
         )
         return [DeadLetter(f["queue"], f["body"], f["error"]) for _id, f in entries]
+
+    def depth(self) -> list[QueueDepth]:
+        delayed: dict[str, int] = {}
+        for member in cast(list[str], self._redis.zrange(self._delayed_key, 0, -1)):
+            stream = json.loads(member)["stream"]
+            delayed[stream] = delayed.get(stream, 0) + 1
+        depths = []
+        for queue in QueueName:
+            for priority in Priority:
+                stream = self._stream(queue, priority)
+                self._ensure_group(stream)
+                with self._redis.pipeline(transaction=False) as pipe:
+                    pipe.xlen(stream)
+                    pipe.xpending(stream, _GROUP)
+                    length, pending = pipe.execute()
+                in_flight = int(pending["pending"])
+                # Acked entries are deleted, so the stream holds exactly the unfinished ones.
+                depths.append(
+                    QueueDepth(
+                        queue, priority, int(length) - in_flight, in_flight, delayed.get(stream, 0)
+                    )
+                )
+        return depths
+
+    def dead_letter_count(self) -> int:
+        return int(self._redis.xlen(self._dlq_key))

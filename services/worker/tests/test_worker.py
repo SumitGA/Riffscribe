@@ -1,5 +1,7 @@
 """The worker against real Postgres, Redis and S3, running the real pipeline on short clips."""
 
+import json
+import logging
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -7,6 +9,9 @@ from typing import Any
 
 import pytest
 import redis
+from opentelemetry import trace
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from prometheus_client import REGISTRY
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
@@ -23,6 +28,7 @@ from tabscribe_platform.db import (
     make_session_factory,
 )
 from tabscribe_platform.jobqueue import MAX_ATTEMPTS, QueueName, RedisJobQueue, StageMessage
+from tabscribe_platform.observability import JsonFormatter, inject_trace
 from tabscribe_platform.storage import ObjectStore, job_key, job_prefix
 from worker.handler import INTERNAL_ERROR_MESSAGE, StageWorker
 from worker.settings import WorkerSettings
@@ -357,6 +363,42 @@ def test_lost_files_mean_running_the_stages(
     second = submit_job()
     assert drain(stage_worker, queue) == 6
     assert load(db, second)[0].status is JobStatus.SUCCEEDED
+
+
+def test_a_job_is_one_trace_with_metrics_and_logs(
+    stage_worker: StageWorker,
+    queue: RedisJobQueue,
+    submit_job: SubmitJob,
+    spans: InMemorySpanExporter,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def runs(outcome: str) -> float:
+        value = REGISTRY.get_sample_value(
+            "tabscribe_stage_runs_total", {"stage": "transcribe", "outcome": outcome}
+        )
+        return value or 0.0
+
+    before = runs("succeeded")
+    with trace.get_tracer("test").start_as_current_span("api submit") as submit:
+        job_id = submit_job(trace=inject_trace())
+    caplog.handler.setFormatter(JsonFormatter("worker"))
+    with caplog.at_level(logging.INFO):
+        drain(stage_worker, queue)
+
+    stage_spans = [s for s in spans.get_finished_spans() if s.name.startswith("stage ")]
+    assert [s.name for s in stage_spans] == [
+        f"stage {name}"
+        for name in ("normalize", "separate", "transcribe", "quantize", "notation", "tab")
+    ]
+    assert {s.context.trace_id for s in stage_spans} == {submit.get_span_context().trace_id}
+    assert all(s.attributes and s.attributes["job.id"] == str(job_id) for s in stage_spans)
+    assert runs("succeeded") == before + 1
+
+    lines = [json.loads(line) for line in caplog.text.splitlines()]
+    pipeline_lines = [e for e in lines if e["logger"] == "pipeline.runner"]
+    assert pipeline_lines  # the pipeline's own logs get the job's fields too
+    assert all(e["job_id"] == str(job_id) and "trace_id" in e for e in pipeline_lines)
+    assert any(e["message"] == "job succeeded" for e in lines)
 
 
 @pytest.mark.unit

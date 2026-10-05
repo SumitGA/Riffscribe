@@ -5,11 +5,13 @@ can't be probed. Audio never passes through the API: clients upload with a presi
 """
 
 import base64
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
+from opentelemetry import trace
 from sqlalchemy import Select, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -31,11 +33,19 @@ from api.schemas import (
 )
 from tabscribe_platform.db import Job, JobStatus, ScoreVersion, StageRun, User
 from tabscribe_platform.jobqueue import STAGES, Priority, StageMessage, queue_for_stage
+from tabscribe_platform.observability import inject_trace
 from tabscribe_platform.storage import ObjectStore, PresignedRequest, job_key
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+logger = logging.getLogger(__name__)
 
 _NOT_FOUND = HTTPException(status.HTTP_404_NOT_FOUND, "job not found")
+
+
+def _log(job_id: uuid.UUID, event: str, level: int = logging.INFO) -> None:
+    """Log a job event and tag the request's span, so logs and traces both find the job."""
+    trace.get_current_span().set_attribute("job.id", str(job_id))
+    logger.log(level, event, extra={"job_id": str(job_id)})
 
 
 def _presigned(request: PresignedRequest) -> PresignedRequestOut:
@@ -125,6 +135,7 @@ def create_job(
     )
     session.add(job)
     session.commit()
+    _log(job_id, "job created")
     upload = store.presign_put(job.source_key, body.content_type)
     return CreateJobResponse(job=_job_out(session, store, job), upload=_presigned(upload))
 
@@ -160,9 +171,11 @@ def submit_job(
         job.error_message = f"the upload is larger than {limits.max_upload_bytes} bytes"
         job.finished_at = datetime.now(UTC)
         session.commit()
+        _log(job.id, "upload larger than the limit", logging.WARNING)
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, job.error_message)
 
     if not limiter.take_monthly_job(user.id, limits.free_jobs_per_month):
+        _log(job.id, "monthly quota used up")
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
             f"monthly limit of {limits.free_jobs_per_month} jobs reached",
@@ -174,7 +187,8 @@ def submit_job(
 
     # Enqueued after the commit, so a worker never sees the job before it is `queued`.
     first = STAGES[0]
-    message = StageMessage(job_id=job.id, user_id=user.id, stage=first)
+    # The trace continues in the workers: one trace per job, rooted at this request.
+    message = StageMessage(job_id=job.id, user_id=user.id, stage=first, trace=inject_trace())
     try:
         # Paid tier (later) gets Priority.HIGH.
         queue.enqueue(queue_for_stage(first), message, priority=Priority.NORMAL)
@@ -184,9 +198,11 @@ def submit_job(
         job.submitted_at = None
         session.commit()
         limiter.refund_monthly_job(user.id)
+        logger.exception("could not enqueue job", extra={"job_id": str(job.id)})
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "queue unavailable; retry"
         ) from exc
+    _log(job.id, "job submitted")
     return _job_out(session, store, job)
 
 

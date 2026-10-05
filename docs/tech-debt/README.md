@@ -27,6 +27,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | Phase 3 adds sign-in (Cognito) |
 | [TD-18](#td-18-simple-quotas-and-rate-limits) | Simple quotas and rate limits | Backend / billing | Billing (Phase 5), or users complain about lost quota |
 | [TD-19](#td-19-dedup-cache-per-user-reused-after-normalize) | Dedup cache per user, reused after normalize | Backend / cost | Profiling shows many identical uploads across users |
+| [TD-20](#td-20-observability-prometheus-metrics-and-a-minimal-trace) | Observability: Prometheus metrics and a minimal trace | Ops | First production deploy; GPU workers |
 
 ---
 
@@ -624,3 +625,36 @@ on a hit it copies the earlier job's files inside object storage and marks the l
   Pointing would save storage but tie one job's files to another job's lifetime.
 
 **Revisit when** storage costs grow, or metrics show many identical uploads across users.
+
+---
+
+## TD-20: Observability: Prometheus metrics and a minimal trace
+
+**Concept.** *Logs* say what happened, *traces* show one request's path through the services
+with timings, and *metrics* are numbers over time for dashboards, alerts and autoscaling. Every
+log line is JSON with `job_id`, `stage`, `attempt`, `trace_id` and `span_id`. A job is one
+OpenTelemetry trace: the API's submit request, then one span per stage, passed along in the
+queue message. Metrics are Prometheus counters, histograms and gauges: queue depth (API
+`/metrics`), stage durations and outcomes (worker, port 9100) and API latency.
+
+**Pros**
+- Prometheus is pull-based and needs nothing else running: point a Prometheus at the
+  endpoints. Traces go to any OTLP collector only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+- The pipeline's own logs get the job's fields without depending on any of this (context
+  variables are read by the log formatter).
+- Queue depth is read from Redis at scrape time, so it is right on every instance.
+
+**Cons**
+- Two systems: OpenTelemetry for traces, `prometheus_client` for metrics. OpenTelemetry metrics
+  would unify them but need a collector even for the MVP.
+- Spans cover requests and stages only. Postgres, Redis and S3 calls aren't traced yet (their
+  instrumentation packages would add that).
+- The API serves `/metrics` on its public port. It holds no user data, but the ingress must not
+  route it (or it moves to a separate port).
+- Logs go to stderr; shipping and keeping them (Loki, CloudWatch) is the deployment's job.
+- No GPU utilisation metric: MVP workers are CPU-only. GPU workers should run NVIDIA's DCGM
+  exporter next to them.
+- Every API instance reports the same queue depth, so dashboards must use `max`, not `sum`.
+
+**Revisit when** the first production deploy (dashboards, alerts, ingress rules) and when GPU
+workers arrive (DCGM, queue-depth autoscaling with KEDA).

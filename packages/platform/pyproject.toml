@@ -15,6 +15,10 @@ dependencies = [
     "psycopg[binary]>=3.2",       # Postgres driver; libpq bundled (LGPL-3.0, used unmodified)
     "boto3>=1.35",                # S3 API client for R2 / SeaweedFS, presigned URLs (Apache-2.0)
     "redis>=5.2",                 # Redis Streams job queue; also speaks to Valkey (MIT)
+    "opentelemetry-api>=1.27",  # tracing API: spans carrying job_id (Apache-2.0)
+    "opentelemetry-sdk>=1.27",  # tracer provider, batching, sampling (Apache-2.0)
+    "opentelemetry-exporter-otlp-proto-http>=1.27",  # sends spans to any OTLP collector (Apache-2.0)
+    "prometheus-client>=0.21",  # /metrics: queue depth, stage durations, failures (Apache-2.0)
 ]
 
 [tool.uv.build-backend]

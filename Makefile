@@ -16,11 +16,14 @@ LOCAL_DATABASE_URL ?= postgresql+psycopg://tabscribe:tabscribe@localhost:5433/ta
 LOCAL_JWT_ISSUER ?= http://localhost/dev-issuer
 LOCAL_JWT_DEV_SECRET ?= tabscribe-local-dev-only-not-a-real-secret
 TTL ?= 3600
+# Readable logs locally; `make worker LOG_FORMAT=json` shows what production logs.
+LOG_FORMAT ?= text
 # Everything the API and worker read, pointing at the `make up` services (dev values only).
 LOCAL_ENV = DATABASE_URL=$(LOCAL_DATABASE_URL) REDIS_URL=redis://localhost:6379/0 \
 	S3_BUCKET=tabscribe S3_ENDPOINT_URL=http://localhost:8333 S3_REGION=us-east-1 \
 	AWS_ACCESS_KEY_ID=dev-access-key AWS_SECRET_ACCESS_KEY=dev-secret-key \
-	JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET)
+	JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) \
+	LOG_FORMAT=$(LOG_FORMAT)
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
