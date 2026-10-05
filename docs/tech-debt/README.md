@@ -24,6 +24,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
 | [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
 | [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
+| [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | Phase 3 adds sign-in (Cognito) |
 
 ---
 
@@ -538,3 +539,30 @@ bar at once instead of patching symptoms.
 - Tab string accuracy moved from 0.38 to 0.35 (a different set of notes is now found and scored).
 
 **Revisit when** user recordings with corrections exist (Phase 4): they are the right tuning set.
+
+---
+
+## TD-17: Local dev token issuer instead of a real auth provider
+
+**Concept.** The API trusts *JWTs* (signed JSON tokens saying who the user is) issued by a
+managed provider; it never sees passwords. In production the provider (Cognito by default) signs
+tokens with a private RSA key and publishes the public half as a *JWKS*; the API checks the
+signature against it (RS256). Locally, `make token USER=alice` signs tokens with a shared
+throwaway secret (HS256) and the API is configured with the same secret (`JWT_DEV_SECRET`).
+
+**Pros**
+- No provider account, network access or sign-up flow needed to work on or test the backend.
+- The checks after the signature (issuer, expiry, audience, subject rules) are the same code in
+  both modes, and the RS256/JWKS path has its own unit tests with a generated key.
+- Each mode accepts only its own algorithm and exactly one mode can be configured, so an HS256
+  token is rejected by a production API.
+
+**Cons**
+- The production key path (JWKS fetch, caching, key rotation) isn't exercised end to end until a
+  real provider is wired up.
+- Anyone with the dev secret can mint tokens for any user. Fine locally; a deployment that set
+  `JWT_DEV_SECRET` by mistake would have no real auth.
+
+**Revisit when** Phase 3 adds sign-in to the mobile app: create the Cognito user pool (Terraform),
+set `JWT_JWKS_URL`, `JWT_ISSUER` and `JWT_AUDIENCE`, and add a startup check that refuses
+`JWT_DEV_SECRET` outside local environments.

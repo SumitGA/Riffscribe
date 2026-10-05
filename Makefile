@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up down migrate check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up down migrate token check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -12,6 +12,10 @@ ARGS ?=
 FILE_PATH = $(patsubst ~/%,$(HOME)/%,$(FILE))
 OUT_PATH = $(patsubst ~/%,$(HOME)/%,$(OUT))
 LOCAL_DATABASE_URL ?= postgresql+psycopg://tabscribe:tabscribe@localhost:5433/tabscribe
+# Local dev auth (TD-17). Throwaway values, like the dev credentials in docker-compose.yml.
+LOCAL_JWT_ISSUER ?= http://localhost/dev-issuer
+LOCAL_JWT_DEV_SECRET ?= tabscribe-local-dev-only-not-a-real-secret
+TTL ?= 3600
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -37,6 +41,10 @@ down: ## Stop the local services (data is kept; `docker compose down -v` wipes i
 
 migrate: ## Apply database migrations to the local Postgres
 	DATABASE_URL=$(LOCAL_DATABASE_URL) uv run alembic -c packages/platform/alembic.ini upgrade head
+
+token: ## Print a local dev access token: make token [USER=alice] [TTL=3600]
+	@JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) \
+		uv run --quiet python -m api.devtoken "$(USER)" --ttl $(TTL)
 
 check: lint typecheck test rust ## Run everything CI runs
 

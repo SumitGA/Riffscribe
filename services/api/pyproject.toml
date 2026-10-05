@@ -11,6 +11,7 @@ dependencies = [
     "tabscribe-platform",
     "fastapi>=0.115,<1",  # HTTP API with Pydantic models and OpenAPI (MIT)
     "uvicorn>=0.30",      # ASGI server that runs it (BSD-3)
+    "pyjwt[crypto]>=2.9", # JWT validation, JWKS fetch + cache (MIT; cryptography: Apache-2.0)
 ]
 
 [tool.uv.sources]
