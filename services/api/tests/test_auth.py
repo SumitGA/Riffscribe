@@ -17,6 +17,7 @@ from api.auth import (
     get_token_verifier,
     issue_dev_token,
 )
+from api.deps import get_limiter
 from api.devtoken import main as devtoken_main
 from api.main import app
 
@@ -37,9 +38,15 @@ def _hs256(**overrides: Any) -> str:
     return jwt.encode(_claims(**overrides), SECRET, algorithm="HS256")
 
 
+class NoQuotaUsed:
+    def monthly_jobs_used(self, user_id: str) -> int:
+        return 0
+
+
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     app.dependency_overrides[get_token_verifier] = lambda: TokenVerifier(DEV)
+    app.dependency_overrides[get_limiter] = NoQuotaUsed  # /me shows quota; no Redis here
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -132,7 +139,7 @@ class TestJwks:
 def test_me(client: TestClient) -> None:
     response = client.get("/me", headers={"Authorization": f"Bearer {_hs256()}"})
     assert response.status_code == 200
-    assert response.json() == {"user_id": "alice"}
+    assert response.json()["user_id"] == "alice"
 
 
 @pytest.mark.parametrize("headers", [{}, {"Authorization": "Bearer junk"}])

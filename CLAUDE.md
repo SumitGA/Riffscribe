@@ -30,7 +30,7 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 ### Job flow
 1. `POST /jobs` creates a job (`pending_upload`) and returns a presigned PUT URL.
 2. The client uploads audio directly to object storage. Audio never passes through the API.
-3. `POST /jobs/{id}/submit` validates the upload (size, duration, format, quota) and enqueues the job.
+3. `POST /jobs/{id}/submit` checks the upload's size and type (one HEAD request) and the user's quota, then enqueues the job. Duration and format need the audio decoded, so the normalize stage checks them and fails the job without retrying.
 4. Workers run the stages in order: `normalize → separate → transcribe → quantize → notation → tab`. Each stage reads and writes artifacts under `s3://…/users/{user_id}/jobs/{job_id}/{stage}/`.
 5. Workers record job and stage status in Postgres. The client polls `GET /jobs/{id}` and also receives an Expo push notification on completion.
 6. Outputs: MusicXML (notation; for guitar also `tab.musicxml` with a TAB staff) and MIDI. alphaTex and Guitar Pro 7 are derived from the MusicXML by alphaTab's exporters (`AlphaTexExporter`, `Gp7Exporter`), so the pipeline doesn't write them. User edits are saved as new `score_versions`; originals are never overwritten.

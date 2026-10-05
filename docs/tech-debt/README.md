@@ -25,6 +25,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
 | [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
 | [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | Phase 3 adds sign-in (Cognito) |
+| [TD-18](#td-18-simple-quotas-and-rate-limits) | Simple quotas and rate limits | Backend / billing | Billing (Phase 5), or users complain about lost quota |
 
 ---
 
@@ -566,3 +567,28 @@ throwaway secret (HS256) and the API is configured with the same secret (`JWT_DE
 **Revisit when** Phase 3 adds sign-in to the mobile app: create the Cognito user pool (Terraform),
 set `JWT_JWKS_URL`, `JWT_ISSUER` and `JWT_AUDIENCE`, and add a startup check that refuses
 `JWT_DEV_SECRET` outside local environments.
+
+---
+
+## TD-18: Simple quotas and rate limits
+
+**Concept.** A *quota* caps how much a user may use per period (here: jobs per calendar month);
+a *rate limit* caps how fast they may make requests (here: new jobs per minute). Both are
+counters in Redis, so every API instance sees the same numbers (`services/api/src/api/limits.py`).
+
+**Pros**
+- Two Redis commands per check; no tables, no background jobs.
+- Counters expire on their own, and the month is the calendar month in UTC, which is easy to
+  explain to users.
+
+**Cons**
+- One tier only: `FREE_JOBS_PER_MONTH` for everyone. Paid plans (more jobs, longer clips,
+  `Priority.HIGH`) need a plan stored per user.
+- A job counts when it is submitted, even if the pipeline then fails on it (for example, the
+  normalize stage finds it's longer than 5 minutes). Refunding those is left out.
+- The rate limit is a fixed window, so a burst at a minute boundary can reach twice the limit.
+- Redis is the only record of usage. If its data is lost, this month's counts reset to zero.
+  Postgres has the jobs, so they could be rebuilt from it.
+
+**Revisit when** billing arrives (Phase 5, RevenueCat): store the plan on the user, refund quota
+for jobs that fail for our reasons, and keep usage in Postgres if it has to be auditable.

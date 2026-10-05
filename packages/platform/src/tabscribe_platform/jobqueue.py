@@ -33,6 +33,8 @@ class QueueName(StrEnum):
     ML = "ml"
 
 
+# The pipeline's stage order (pipeline.stages.default_stages; a test keeps them in sync).
+STAGES = ("normalize", "separate", "transcribe", "quantize", "notation", "tab")
 ML_STAGES = frozenset({"separate", "transcribe"})
 
 
