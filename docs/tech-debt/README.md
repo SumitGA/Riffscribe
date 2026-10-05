@@ -127,7 +127,8 @@ they stop retrying). SQS gives these out of the box. Redis Streams gives the bui
   touches keys it isn't passed, which **rules out Redis Cluster** (fine on one node).
 - A message whose worker neither acks nor sends a heartbeat within the visibility timeout
   (`QUEUE_VISIBILITY_TIMEOUT_S`) is reclaimed with `XAUTOCLAIM` and counts as a failed
-  attempt, so a message that crashes workers ends in the DLQ instead of looping.
+  attempt. After the last attempt it is handed to a worker once more, which fails the job and
+  dead-letters it, so a message that crashes workers neither loops nor leaves its job `running`.
 - Acked entries are deleted (`XDEL`), so stream length is the backlog.
 
 **Revisit when** daily job volume grows, or a lost job means a refund.

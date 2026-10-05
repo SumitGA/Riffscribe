@@ -187,3 +187,17 @@ def test_delayed_enqueue(queue: RedisJobQueue, clock: FakeClock) -> None:
     assert queue.receive(QueueName.CPU, "w1", wait_s=0.05) is None
     clock.now += 30
     assert queue.receive(QueueName.CPU, "w1", wait_s=0.05) is not None
+
+
+@pytest.mark.integration
+def test_crash_on_the_last_attempt_comes_back_to_a_worker(queue: RedisJobQueue) -> None:
+    queue.enqueue(QueueName.CPU, _message(attempt=MAX_ATTEMPTS))
+    assert queue.receive(QueueName.CPU, "crashed", wait_s=0.1) is not None
+    time.sleep(0.3)
+
+    # Not silently dead-lettered: a worker gets it, sees the attempts are used up, fails the job.
+    delivery = queue.receive(QueueName.CPU, "w2", wait_s=0.05)
+    assert delivery is not None
+    assert delivery.message.attempt == MAX_ATTEMPTS + 1
+    assert queue.fail(delivery, "worker kept crashing") is FailOutcome.DEAD
+    assert queue.dead_letters()[0].error == "worker kept crashing"

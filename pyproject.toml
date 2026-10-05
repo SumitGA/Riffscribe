@@ -10,18 +10,20 @@ environments = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/pipeline", "packages/platform", "services/api"]
+members = ["packages/pipeline", "packages/platform", "services/api", "services/worker"]
 
 [tool.uv.sources]
 tabscribe-pipeline = { workspace = true }
 tabscribe-platform = { workspace = true }
 tabscribe-api = { workspace = true }
+tabscribe-worker = { workspace = true }
 
 [dependency-groups]
 dev = [
     "tabscribe-pipeline",
     "tabscribe-platform",
     "tabscribe-api",
+    "tabscribe-worker",
     "httpx2>=2.13",  # FastAPI/Starlette TestClient runs on it; replaces httpx there (BSD-3)
     "maturin>=1.7,<2",
     "mypy>=1.11",
@@ -43,7 +45,7 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "N", "PTH"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pipeline", "tabscribe_platform", "api"]
+known-first-party = ["pipeline", "tabscribe_platform", "api", "worker"]
 
 [tool.mypy]
 strict = true
@@ -53,10 +55,11 @@ files = [
     "packages/pipeline/src", "packages/pipeline/tests", "tools/preview",
     "packages/platform/src", "packages/platform/tests",
     "services/api/src", "services/api/tests",
+    "services/worker/src", "services/worker/tests",
     "testsupport",
 ]
 explicit_package_bases = true
-mypy_path = "packages/pipeline/src:packages/pipeline/tests:packages/platform/src:services/api/src"
+mypy_path = "packages/pipeline/src:packages/pipeline/tests:packages/platform/src:services/api/src:services/worker/src"
 
 [[tool.mypy.overrides]]
 module = [
@@ -70,7 +73,9 @@ module = ["basic_pitch", "basic_pitch.*", "librosa", "librosa.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["packages/pipeline/tests", "packages/platform/tests", "services/api/tests"]
+testpaths = [
+    "packages/pipeline/tests", "packages/platform/tests", "services/api/tests", "services/worker/tests",
+]
 pythonpath = [
     ".",  # testsupport/: fixtures shared across packages
     "packages/pipeline/tests",  # test helpers such as basic_pitch_oracle

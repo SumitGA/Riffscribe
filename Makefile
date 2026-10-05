@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up down migrate token check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up down migrate api worker token check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -16,6 +16,11 @@ LOCAL_DATABASE_URL ?= postgresql+psycopg://tabscribe:tabscribe@localhost:5433/ta
 LOCAL_JWT_ISSUER ?= http://localhost/dev-issuer
 LOCAL_JWT_DEV_SECRET ?= tabscribe-local-dev-only-not-a-real-secret
 TTL ?= 3600
+# Everything the API and worker read, pointing at the `make up` services (dev values only).
+LOCAL_ENV = DATABASE_URL=$(LOCAL_DATABASE_URL) REDIS_URL=redis://localhost:6379/0 \
+	S3_BUCKET=tabscribe S3_ENDPOINT_URL=http://localhost:8333 S3_REGION=us-east-1 \
+	AWS_ACCESS_KEY_ID=dev-access-key AWS_SECRET_ACCESS_KEY=dev-secret-key \
+	JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET)
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -41,6 +46,12 @@ down: ## Stop the local services (data is kept; `docker compose down -v` wipes i
 
 migrate: ## Apply database migrations to the local Postgres
 	DATABASE_URL=$(LOCAL_DATABASE_URL) uv run alembic -c packages/platform/alembic.ini upgrade head
+
+api: ## Run the API on http://localhost:8000 against the local services (reloads on change)
+	$(LOCAL_ENV) uv run uvicorn api.main:app --reload --port 8000
+
+worker: ## Run a worker (both queues) against the local services
+	$(LOCAL_ENV) uv run python -m worker
 
 token: ## Print a local dev access token: make token [USER=alice] [TTL=3600]
 	@JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) \

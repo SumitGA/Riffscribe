@@ -97,7 +97,8 @@ class JobQueue(ABC):
 
         The message stays invisible to other consumers until it is acked or failed, or until
         the visibility timeout passes without `extend` (the consumer is presumed dead, and
-        that counts as a failed attempt).
+        that counts as a failed attempt). A message with `attempt > MAX_ATTEMPTS` means its
+        consumers kept dying: fail its job and call `fail(..., retry=False)`.
         """
 
     @abstractmethod
@@ -258,8 +259,14 @@ class RedisJobQueue(JobQueue):
         for entry_id, fields in response[1]:
             if fields is None:  # deleted from the stream meanwhile
                 continue
-            if delivery := self._delivery(queue, consumer, (stream, entry_id, fields)):
-                self.fail(delivery, "worker stopped responding (visibility timeout)")
+            delivery = self._delivery(queue, consumer, (stream, entry_id, fields))
+            if delivery is None:
+                continue
+            # Never dead-lettered here: the worker must see the message to fail its job, so
+            # after the last attempt it comes back at once with attempt > MAX_ATTEMPTS.
+            attempt = delivery.message.attempt
+            delay = retry_delay_s(attempt) if attempt < MAX_ATTEMPTS else 0.0
+            self._requeue(delivery, delay)
 
     @staticmethod
     def _remove(pipe: "redis.client.Pipeline", stream: str, entry_id: str) -> None:
@@ -284,12 +291,20 @@ class RedisJobQueue(JobQueue):
         if not retry or attempt >= MAX_ATTEMPTS:
             self._dead_letter(stream, entry_id, delivery.message.model_dump_json(), error)
             return FailOutcome.DEAD
-        next_message = delivery.message.model_copy(update={"attempt": attempt + 1})
-        with self._redis.pipeline() as pipe:  # MULTI/EXEC: rescheduled and removed together
-            self._schedule(pipe, stream, next_message.model_dump_json(), retry_delay_s(attempt))
+        self._requeue(delivery, retry_delay_s(attempt))
+        return FailOutcome.RETRY
+
+    def _requeue(self, delivery: Delivery, delay_s: float) -> None:
+        """Put the message back as its next attempt, after `delay_s`."""
+        stream, entry_id, _consumer = self._parse_receipt(delivery)
+        body = delivery.message.model_copy(update={"attempt": delivery.message.attempt + 1})
+        with self._redis.pipeline() as pipe:  # MULTI/EXEC: requeued and removed together
+            if delay_s > 0:
+                self._schedule(pipe, stream, body.model_dump_json(), delay_s)
+            else:
+                pipe.xadd(stream, {"body": body.model_dump_json()})
             self._remove(pipe, stream, entry_id)
             pipe.execute()
-        return FailOutcome.RETRY
 
     def _dead_letter(self, stream: str, entry_id: str, body: str, error: str) -> None:
         with self._redis.pipeline() as pipe:

@@ -15,6 +15,7 @@ members = [
     "tabscribe-api",
     "tabscribe-pipeline",
     "tabscribe-platform",
+    "tabscribe-worker",
 ]
 
 [manifest.dependency-groups]
@@ -30,6 +31,7 @@ dev = [
     { name = "tabscribe-api", editable = "services/api" },
     { name = "tabscribe-pipeline", editable = "packages/pipeline" },
     { name = "tabscribe-platform", editable = "packages/platform" },
+    { name = "tabscribe-worker", editable = "services/worker" },
 ]
 separation = [{ name = "tabscribe-pipeline", extras = ["separation"], editable = "packages/pipeline" }]
 
@@ -1380,6 +1382,21 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.4,<3" },
     { name = "redis", specifier = ">=5.2" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
+]
+
+[[package]]
+name = "tabscribe-worker"
+version = "0.1.0"
+source = { editable = "services/worker" }
+dependencies = [
+    { name = "tabscribe-pipeline", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
+    { name = "tabscribe-platform", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or sys_platform == 'linux'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "tabscribe-pipeline", editable = "packages/pipeline" },
+    { name = "tabscribe-platform", editable = "packages/platform" },
 ]
 
 [[package]]
