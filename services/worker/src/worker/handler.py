@@ -23,7 +23,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from pipeline.config import PipelineConfig
-from pipeline.errors import StageFailedError
+from pipeline.errors import InvalidInputError, StageFailedError
 from pipeline.runner import RunResult, run_pipeline
 from pipeline.stage import Stage
 from pipeline.stages import default_stages
@@ -290,8 +290,9 @@ class StageWorker:
 
 def _classify(exc: Exception) -> _Failure:
     if isinstance(exc, StageFailedError) and not exc.retryable:
-        # Bad input (not audio, too long, silent): the reason is meant for the user.
-        reason = str(exc.__cause__ or exc)
+        # Bad input (not audio, too long, silent): tell the user why, without the details.
+        cause = exc.__cause__
+        reason = cause.user_message if isinstance(cause, InvalidInputError) else "invalid input"
         return _Failure(False, str(exc), f"This recording can't be transcribed: {reason}.")
     return _Failure(True, f"{type(exc).__name__}: {exc}", INTERNAL_ERROR_MESSAGE)
 

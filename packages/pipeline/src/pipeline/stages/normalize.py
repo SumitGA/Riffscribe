@@ -88,7 +88,7 @@ def decode(path: Path, max_seconds: float) -> Audio:
             raise RuntimeError("ffmpeg not found; install it or set FFMPEG_BINARY") from exc
         if proc.returncode != 0:
             detail = proc.stderr.decode(errors="replace").strip()[-300:]
-            raise InvalidInputError(f"could not decode audio: {detail}")
+            raise InvalidInputError("could not decode audio", detail=detail)
         audio: Audio = (
             np.fromfile(raw, dtype=np.float32) if raw.exists() else np.empty(0, np.float32)
         )

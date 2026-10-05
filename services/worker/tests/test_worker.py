@@ -197,8 +197,10 @@ def test_bad_input_fails_the_job_without_retrying(
     job, runs = load(db, job_id)
     assert job.status is JobStatus.FAILED
     assert job.error_code == "invalid_input"
-    assert job.error_message is not None
-    assert job.error_message.startswith("This recording can't be transcribed: could not decode")
+    # Only the reason: ffmpeg's output (with server paths) stays in stage_runs and the logs.
+    assert job.error_message == "This recording can't be transcribed: could not decode audio."
+    last_error = runs["normalize"].last_error or ""
+    assert last_error.startswith("stage 'normalize' failed: could not decode audio: ")
     assert runs["normalize"].status is StageStatus.FAILED
     assert len(queue.dead_letters()) == 1
     assert notifier.sent[-1][2] is JobStatus.FAILED
