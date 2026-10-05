@@ -117,6 +117,17 @@ they stop retrying). SQS gives these out of the box. Redis Streams gives the bui
 - Retry, back-off and DLQ handling are our code, so they're our bugs.
 - Queue-depth autoscaling has to be built by hand.
 
+**How it's built** (`tabscribe_platform/jobqueue.py`)
+- One stream per queue and priority (`cpu`/`ml` × `high`/`normal`), one consumer group.
+  Workers read `high` first.
+- Streams have no delayed delivery, so retries wait in a sorted set scored by due time. A Lua
+  script moves due messages into their streams, so two workers never both move one. That script
+  touches keys it isn't passed, which **rules out Redis Cluster** (fine on one node).
+- A message whose worker neither acks nor sends a heartbeat within the visibility timeout
+  (`QUEUE_VISIBILITY_TIMEOUT_S`) is reclaimed with `XAUTOCLAIM` and counts as a failed
+  attempt, so a message that crashes workers ends in the DLQ instead of looping.
+- Acked entries are deleted (`XDEL`), so stream length is the backlog.
+
 **Revisit when** daily job volume grows, or a lost job means a refund.
 
 ---

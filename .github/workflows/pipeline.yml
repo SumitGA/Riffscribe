@@ -8,23 +8,13 @@ on:
 jobs:
   python:
     runs-on: ubuntu-latest
-    # Backing services for the platform/API integration tests (same images as docker-compose).
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: tabscribe
-          POSTGRES_PASSWORD: tabscribe
-          POSTGRES_DB: tabscribe
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U tabscribe" --health-interval 2s --health-retries 30
-    env:
-      TEST_DATABASE_URL: postgresql+psycopg://tabscribe:tabscribe@localhost:5432/tabscribe
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v6
+      # Postgres, Redis and S3 for the integration tests: the same docker-compose stack as
+      # `make up` (SeaweedFS needs a command line, which GitHub service containers can't set).
+      - run: docker compose up -d --wait
       # Ubuntu's ffmpeg is a GPL build; fine for tests, not for shipping (TD-9).
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: uv sync --locked

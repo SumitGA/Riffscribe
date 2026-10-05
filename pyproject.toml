@@ -29,6 +29,7 @@ dev = [
     "ruff>=0.6",
     "pyloudnorm>=0.1.1",  # reference implementation that tests check our loudness against (MIT)
     "mir-eval>=0.8",
+    "boto3-stubs[s3]>=1.35",  # types for the boto3 S3 client, so mypy --strict checks it (MIT)
 ]
 
 # `uv sync --group separation` adds Demucs; not part of the default install or CI.

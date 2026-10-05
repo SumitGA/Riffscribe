@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     s3_public_endpoint_url: str | None = None
     s3_region: str = "auto"
     presign_ttl_s: int = Field(default=MAX_PRESIGN_TTL_S, gt=0, le=MAX_PRESIGN_TTL_S)
+    # A received stage message is redelivered to another worker if its worker neither finishes
+    # nor sends a heartbeat (`JobQueue.extend`) within this time.
+    queue_visibility_timeout_s: int = Field(default=300, gt=0)
 
     @model_validator(mode="after")
     def _public_endpoint_needs_endpoint(self) -> "Settings":
