@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up down migrate api worker token check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -45,8 +45,16 @@ up: ## Start local Postgres, Redis (Valkey) and S3 (SeaweedFS) in Docker
 	docker compose up -d --wait
 	docker compose run --rm seaweedfs-init
 
-down: ## Stop the local services (data is kept; `docker compose down -v` wipes it)
-	docker compose down
+stack: ## Build and run the whole backend in Docker: API on :8000, a worker (needs ports free)
+	$(MAKE) up
+	docker compose run --rm migrate
+	docker compose --profile app up -d --wait --build api worker
+
+e2e: ## End-to-end test against the running stack: upload, transcribe, download (`make stack` first)
+	JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) uv run python tools/e2e.py
+
+down: ## Stop everything (data is kept; `docker compose down -v` wipes it)
+	docker compose --profile app --profile init down
 
 migrate: ## Apply database migrations to the local Postgres
 	DATABASE_URL=$(LOCAL_DATABASE_URL) uv run alembic -c packages/platform/alembic.ini upgrade head

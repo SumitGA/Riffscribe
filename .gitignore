@@ -34,5 +34,6 @@ work/
 *.midi
 *.npz
 !**/tests/fixtures/**
+!tools/e2e_fixtures/**
 # ...but never caches, even inside fixtures (the line above would re-include them).
 **/__pycache__/

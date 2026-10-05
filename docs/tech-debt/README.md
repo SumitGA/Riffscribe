@@ -274,8 +274,16 @@ obligations on the code that links them.
 - A file the user can't decode and an ffmpeg bug both look like "could not decode". We treat both
   as bad input (no retry).
 
-**Revisit when** building the Phase 2 worker image: pin an LGPL ffmpeg build and record its
-configure flags.
+**Production build (done in Phase 2).** The worker image compiles ffmpeg from a source tarball
+pinned by version and sha256 (`Dockerfile`, stage `ffmpeg`). It is configured without
+`--enable-gpl`/`--enable-nonfree`, with no external libraries and only the demuxers and decoders
+for the upload types the API accepts (m4a/AAC, mp3, wav, flac, ogg/Vorbis/Opus, ALAC). The build
+fails if its configuration ever contains `--enable-gpl` or `--enable-nonfree`; the image keeps
+the configure line (`/usr/share/doc/ffmpeg/BUILDCONF`) and the LGPL text next to the binary.
+`make e2e` decodes m4a and mp3 uploads with it.
+
+**Revisit when** the API accepts a new upload type (add its demuxer and decoder), or before
+launch for the legal review (LGPL notice in the app's licences screen, offer of source).
 
 ---
 

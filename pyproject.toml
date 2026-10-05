@@ -52,7 +52,7 @@ strict = true
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
 files = [
-    "packages/pipeline/src", "packages/pipeline/tests", "tools/preview",
+    "packages/pipeline/src", "packages/pipeline/tests", "tools/preview", "tools/e2e.py",
     "packages/platform/src", "packages/platform/tests",
     "services/api/src", "services/api/tests",
     "services/worker/src", "services/worker/tests",
