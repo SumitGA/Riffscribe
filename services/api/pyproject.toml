@@ -1,0 +1,20 @@
+[build-system]
+requires = ["uv_build>=0.9,<0.10"]
+build-backend = "uv_build"
+
+[project]
+name = "tabscribe-api"
+version = "0.1.0"
+description = "Stateless HTTP API: jobs, presigned uploads and downloads. Never runs ML."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "tabscribe-platform",
+    "fastapi>=0.115,<1",  # HTTP API with Pydantic models and OpenAPI (MIT)
+    "uvicorn>=0.30",      # ASGI server that runs it (BSD-3)
+]
+
+[tool.uv.sources]
+tabscribe-platform = { workspace = true }
+
+[tool.uv.build-backend]
+module-name = "api"

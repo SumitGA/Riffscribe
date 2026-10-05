@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up down check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -27,6 +27,12 @@ run: ## Transcribe FILE=<audio> [INSTRUMENT=guitar|piano] [OUT=out] [ARGS="--for
 
 view: ## Preview OUT (default out/) as notation + tab with playback, in the browser
 	uv run python tools/preview/serve.py --out "$(OUT_PATH)"
+
+up: ## Start local Postgres, Redis (Valkey) and S3 (SeaweedFS) in Docker
+	docker compose up -d --wait
+
+down: ## Stop the local services (data is kept; `docker compose down -v` wipes it)
+	docker compose down
 
 check: lint typecheck test rust ## Run everything CI runs
 

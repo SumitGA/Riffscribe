@@ -1,0 +1,16 @@
+[build-system]
+requires = ["uv_build>=0.9,<0.10"]
+build-backend = "uv_build"
+
+[project]
+name = "tabscribe-platform"
+version = "0.1.0"
+description = "Infra code shared by the API and the worker: settings, database, storage, queue"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.8,<3",           # typed models shared with the pipeline (MIT)
+    "pydantic-settings>=2.4,<3",  # 12-factor config: every setting from an env var (MIT)
+]
+
+[tool.uv.build-backend]
+module-name = "tabscribe_platform"

@@ -9,8 +9,8 @@ Mobile app. A user uploads or records audio and gets back editable sheet music a
 - **Mobile:** Expo (React Native, TypeScript strict), expo-router, TanStack Query, alphaTab rendered in a WebView (renders both standard notation and tab).
 - **API:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 + Alembic, PostgreSQL 16.
 - **Rust kernels:** CPU-bound algorithms we write ourselves (tab-fingering Viterbi first) are Rust, exposed to Python via PyO3 + maturin as `pipeline._tabcore`. Move code to Rust only when profiling shows our own Python is the bottleneck (ADR-0003).
-- **Queue:** `JobQueue` interface. Redis Streams for local dev and the MVP; SQS on the AWS scale-up path.
-- **Object storage:** Cloudflare R2 through the S3 API (boto3 + `S3_ENDPOINT_URL`); S3-compatible server locally. Clients use presigned URLs only. No provider-specific SDK calls (ADR-0002).
+- **Queue:** `JobQueue` interface. Redis Streams for local dev and the MVP (Valkey image locally, ADR-0007); SQS on the AWS scale-up path.
+- **Object storage:** Cloudflare R2 through the S3 API (boto3 + `S3_ENDPOINT_URL`); SeaweedFS locally (ADR-0007). Clients use presigned URLs only. No provider-specific SDK calls (ADR-0002).
 - **Auth:** managed provider issuing JWTs (default: AWS Cognito). The API only validates JWTs and never stores passwords.
 - **ML pipeline (CPU-only by default):** Basic Pitch for audio→MIDI: the model file is vendored in `pipeline/models/basic_pitch/` and run with ONNX Runtime; its pre/post-processing is ported in `pipeline/basic_pitch.py` (the `basic-pitch` package can't install on Python 3.12, see TD-11), our port of librosa's beat tracker for beat and tempo, fed by Basic Pitch onset activations (`pipeline/beats.py`; librosa itself is not a dependency, ADR-0005), our own MusicXML writer (`pipeline/musicxml.py`, ADR-0006; music21 is not a dependency), and a Rust tab-fingering module (Viterbi over playable positions). Demucs (htdemucs) source separation is an optional extra, off by default (`separate` is a passthrough).
 - **Infra (MVP):** self-hosted OpenStack VMs, docker-compose (or k3s), CPU workers only, Postgres on a VM with nightly backups to R2, Terraform via the OpenStack provider (ADR-0004).
@@ -53,6 +53,7 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 apps/mobile/            Expo app
 services/api/           FastAPI app
 services/worker/        Queue consumer; thin wrapper around packages/pipeline
+packages/platform/      Infra code shared by api and worker (settings, DB, storage, queue); imports as `tabscribe_platform`
 packages/pipeline/      Transcription library — NO infra dependencies
   src/pipeline/           Python package (stages, runner, CLI)
   rust/                   Rust crate built into pipeline._tabcore (maturin)
@@ -66,7 +67,7 @@ pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 - `packages/pipeline` must run standalone, for example `python -m pipeline transcribe in.wav --out out/`, so model work can be iterated without the app or infra.
 
 ## Conventions
-- `make check` runs every CI check (lint, types, tests, Rust); `make help` lists all shortcuts.
+- `make check` runs every CI check (lint, types, tests, Rust); `make help` lists all shortcuts. `make up` / `make down` start and stop the local Docker services.
 - Supported dev/CI platforms: Linux and Apple Silicon macOS (`[tool.uv] environments`); Intel Macs are excluded because Demucs pins numpy<2 there.
 - Optional Demucs separation: `make setup-separation`, then `--separation`; its tests run with `make test-separation`, not in CI.
 - Python: uv, ruff, mypy --strict, pytest. Rust: cargo fmt, clippy `-D warnings`, cargo test. TypeScript: strict mode, eslint.

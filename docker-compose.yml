@@ -1,0 +1,67 @@
+# Local development stack. Credentials here are throwaway dev values, not secrets: nothing in
+# this file is used outside a developer's machine or CI. Production config comes from env vars.
+#
+#   make up     start the backing services
+#   make down   stop them (data volumes are kept; `docker compose down -v` wipes them)
+
+name: tabscribe
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tabscribe
+      POSTGRES_PASSWORD: tabscribe
+      POSTGRES_DB: tabscribe
+    ports: ["5432:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tabscribe -d tabscribe"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Valkey: the BSD-licensed fork of Redis 7.2, same protocol and Streams API (ADR-0007).
+  redis:
+    image: valkey/valkey:8-alpine
+    ports: ["6379:6379"]
+    volumes: [redis-data:/data]
+    command: ["valkey-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # S3-compatible object storage standing in for Cloudflare R2 (ADR-0002, ADR-0007).
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    command: >
+      server -dir=/data -ip.bind=0.0.0.0 -volume.max=0
+      -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports: ["8333:8333"]
+    volumes:
+      - seaweedfs-data:/data
+      - ./infra/local/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  # One-shot: create the bucket. Safe to re-run (an existing bucket is left alone).
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:4.48
+    depends_on:
+      seaweedfs: {condition: service_healthy}
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        echo 's3.bucket.list' | weed shell -master=seaweedfs:9333 | grep -qw tabscribe
+        || echo 's3.bucket.create -name tabscribe' | weed shell -master=seaweedfs:9333
+    restart: "no"
+
+volumes:
+  postgres-data:
+  redis-data:
+  seaweedfs-data:

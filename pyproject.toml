@@ -10,14 +10,19 @@ environments = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/pipeline"]
+members = ["packages/pipeline", "packages/platform", "services/api"]
 
 [tool.uv.sources]
 tabscribe-pipeline = { workspace = true }
+tabscribe-platform = { workspace = true }
+tabscribe-api = { workspace = true }
 
 [dependency-groups]
 dev = [
     "tabscribe-pipeline",
+    "tabscribe-platform",
+    "tabscribe-api",
+    "httpx>=0.27",  # FastAPI's TestClient runs on it (BSD-3)
     "maturin>=1.7,<2",
     "mypy>=1.11",
     "pytest>=8",
@@ -37,15 +42,19 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "N", "PTH"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pipeline"]
+known-first-party = ["pipeline", "tabscribe_platform", "api"]
 
 [tool.mypy]
 strict = true
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
-files = ["packages/pipeline/src", "packages/pipeline/tests", "tools/preview"]
+files = [
+    "packages/pipeline/src", "packages/pipeline/tests", "tools/preview",
+    "packages/platform/src", "packages/platform/tests",
+    "services/api/src", "services/api/tests",
+]
 explicit_package_bases = true
-mypy_path = "packages/pipeline/src:packages/pipeline/tests"
+mypy_path = "packages/pipeline/src:packages/pipeline/tests:packages/platform/src:services/api/src"
 
 [[tool.mypy.overrides]]
 module = [
@@ -59,7 +68,7 @@ module = ["basic_pitch", "basic_pitch.*", "librosa", "librosa.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["packages/pipeline/tests"]
+testpaths = ["packages/pipeline/tests", "packages/platform/tests", "services/api/tests"]
 pythonpath = ["packages/pipeline/tests"]  # test helpers such as basic_pitch_oracle
 addopts = "--import-mode=importlib -m 'not accuracy and not separation'"
 markers = [
