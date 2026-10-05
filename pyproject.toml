@@ -22,7 +22,7 @@ dev = [
     "tabscribe-pipeline",
     "tabscribe-platform",
     "tabscribe-api",
-    "httpx>=0.27",  # FastAPI's TestClient runs on it (BSD-3)
+    "httpx2>=2.13",  # FastAPI/Starlette TestClient runs on it; replaces httpx there (BSD-3)
     "maturin>=1.7,<2",
     "mypy>=1.11",
     "pytest>=8",
