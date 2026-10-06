@@ -666,3 +666,27 @@ queue message. Metrics are Prometheus counters, histograms and gauges: queue dep
 
 **Revisit when** the first production deploy (dashboards, alerts, ingress rules) and when GPU
 workers arrive (DCGM, queue-depth autoscaling with KEDA).
+
+## TD-21: App API types generated from a committed OpenAPI copy
+
+**Concept.** The app's request and response types are generated from the API's OpenAPI schema,
+not written by hand. `make api-types` writes the schema to `apps/mobile/src/api/openapi.json`
+(committed) and `openapi-typescript` turns it into `schema.d.ts`; `openapi-fetch` checks every
+call's path, parameters and body against those types. An API test fails when the committed
+schema is stale, and `make mobile-check` fails when `schema.d.ts` doesn't match it.
+
+**Pros**
+- An API change that breaks the app breaks the build, not a user's phone.
+- The app needs no running API or Python to build: CI's mobile job reads the committed copy.
+- `openapi-fetch` is a few kB; its one dependency holds only types.
+
+**Cons**
+- One more step after API changes (`make api-types`), and generated files in review diffs.
+- `openapi-typescript` 7 declares a peer of TypeScript 5 while the app is on TypeScript 6
+  (Expo SDK 57). An npm `overrides` entry gives it our TypeScript; generation works, but the
+  combination isn't one its authors test.
+- Types aren't runtime checks: a deployed API that drifts from the schema (an older server)
+  isn't caught until a field is missing.
+
+**Revisit when** openapi-typescript supports TypeScript 6 (drop the override), or when old app
+versions in the wild need a versioned API (generate per API version).

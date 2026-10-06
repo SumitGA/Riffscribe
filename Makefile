@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token mobile mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token api-types mobile mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -82,8 +82,13 @@ check: lint typecheck test rust mobile-check ## Run everything CI runs (except e
 mobile: ## Start the Expo dev server for the app [HOST_IP=<LAN IP> to use a phone]
 	cd $(MOBILE_DIR) && $(if $(HOST_IP),EXPO_PUBLIC_API_URL=http://$(HOST_IP):8000) npx expo start
 
-mobile-check: ## App: TypeScript, ESLint + Prettier, Jest, and an iOS + Android bundle
-	cd $(MOBILE_DIR) && npx tsc --noEmit && CI=1 npx expo lint && npx jest --ci \
+api-types: ## Regenerate the app's API types from the API's OpenAPI schema (after API changes)
+	uv run --quiet python -m api.openapi $(MOBILE_DIR)/src/api/openapi.json
+	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false
+
+mobile-check: ## App: API types current, TypeScript, ESLint + Prettier, Jest, iOS + Android bundle
+	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false --check \
+		&& npx tsc --noEmit && CI=1 npx expo lint && npx jest --ci \
 		&& CI=1 npx expo export --platform ios --platform android --output-dir dist >/dev/null
 
 lint: ## Ruff lint and format check

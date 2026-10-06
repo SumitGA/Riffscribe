@@ -39,7 +39,8 @@ class JobOptions(BaseModel):
     pipeline: it would pull the ML libraries into the API.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    # The second flag: in responses, defaulted fields are always present, so the schema says so.
+    model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
 
     instrument: Instrument
     tuning: Tuning = Tuning.STANDARD  # guitar only
