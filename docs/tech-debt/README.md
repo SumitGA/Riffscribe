@@ -24,10 +24,12 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
 | [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
 | [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
-| [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | Phase 3 adds sign-in (Cognito) |
+| [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | First deployment (refuse `JWT_DEV_SECRET` outside local) |
 | [TD-18](#td-18-simple-quotas-and-rate-limits) | Simple quotas and rate limits | Backend / billing | Billing (Phase 5), or users complain about lost quota |
 | [TD-19](#td-19-dedup-cache-per-user-reused-after-normalize) | Dedup cache per user, reused after normalize | Backend / cost | Profiling shows many identical uploads across users |
 | [TD-20](#td-20-observability-prometheus-metrics-and-a-minimal-trace) | Observability: Prometheus metrics and a minimal trace | Ops | First production deploy; GPU workers |
+| [TD-21](#td-21-app-api-types-generated-from-a-committed-openapi-copy) | App API types generated from a committed OpenAPI copy | Mobile / API | openapi-typescript supports TypeScript 6; old app versions in the wild |
+| [TD-22](#td-22-clerks-native-sign-in-screen) | Clerk's native sign-in screen | Mobile / auth | Paid Apple account (Apple sign-in); branding needs beyond Clerk's theme |
 
 ---
 
@@ -557,7 +559,7 @@ bar at once instead of patching symptoms.
 ## TD-17: Local dev token issuer instead of a real auth provider
 
 **Concept.** The API trusts *JWTs* (signed JSON tokens saying who the user is) issued by a
-managed provider; it never sees passwords. In production the provider (Cognito by default) signs
+managed provider; it never sees passwords. In production the provider (Clerk, ADR-0008) signs
 tokens with a private RSA key and publishes the public half as a *JWKS*; the API checks the
 signature against it (RS256). Locally, `make token USER=alice` signs tokens with a shared
 throwaway secret (HS256) and the API is configured with the same secret (`JWT_DEV_SECRET`).
@@ -575,9 +577,9 @@ throwaway secret (HS256) and the API is configured with the same secret (`JWT_DE
 - Anyone with the dev secret can mint tokens for any user. Fine locally; a deployment that set
   `JWT_DEV_SECRET` by mistake would have no real auth.
 
-**Revisit when** Phase 3 adds sign-in to the mobile app: create the Cognito user pool (Terraform),
-set `JWT_JWKS_URL`, `JWT_ISSUER` and `JWT_AUDIENCE`, and add a startup check that refuses
-`JWT_DEV_SECRET` outside local environments.
+**Revisit when** the first deployment: add a startup check that refuses `JWT_DEV_SECRET` outside
+local environments. (Phase 3 wired up Clerk: `make api CLERK_ISSUER=...` runs the JWKS path
+against a real provider, which answers the first con.)
 
 ---
 
@@ -690,3 +692,34 @@ schema is stale, and `make mobile-check` fails when `schema.d.ts` doesn't match 
 
 **Revisit when** openapi-typescript supports TypeScript 6 (drop the override), or when old app
 versions in the wild need a versioned API (generate per API version).
+
+## TD-22: Clerk's native sign-in screen
+
+**Concept.** Sign-in and sign-up are Clerk's prebuilt native screen (`AuthView` from
+`@clerk/expo/native`, built on Clerk's iOS and Android SDKs) rather than screens we build. It
+covers email + password with email verification, password reset, Google, and Apple on iOS, as
+switched on in the Clerk dashboard. The session lives in the Keychain / Keystore
+(`expo-secure-store`), and the API client sends Clerk's short-lived session token on every call.
+
+**Pros**
+- Little code: no forms, verification-code screens, reset flows or error states of our own.
+- Native Google and Apple sign-in (system sheets, no browser), and new Clerk features (passkeys,
+  MFA) arrive with SDK updates.
+- Clerk maintains the security-sensitive parts.
+
+**Cons**
+- **Minimum iOS 17**, set by Clerk's config plugin (Expo SDK 57 otherwise allows older).
+- **No Expo Go.** The app needs a development build (`make mobile-ios`, `make mobile-android`),
+  which needs Xcode and Android Studio. Push notifications need one anyway.
+- **Look is limited** to Clerk's dashboard branding and the plugin's `theme` colours.
+- **Sign in with Apple is off** (`appleSignIn: false` in `app.json`) until there's a paid Apple
+  Developer account: the entitlement can't be signed without one. Don't enable Apple in the Clerk
+  dashboard until then; the button would appear and fail. App Store guideline 4.8 requires it
+  before an iOS release that offers Google.
+- Locally the API accepts either dev tokens or Clerk tokens, not both (`CLERK_ISSUER`, TD-17), so
+  `make e2e` and the app can't share one running API.
+- Ties the app's sign-in screen to Clerk. The API side stays provider-neutral (plain JWKS).
+
+**Revisit when** the Apple Developer account exists (set `appleSignIn` to true, register the iOS
+app in Clerk, enable Apple), or when design needs more than Clerk's theming (build our own screens
+on `useSignIn`/`useSignUp`; the API doesn't change).

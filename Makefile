@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token api-types mobile mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token api-types mobile mobile-ios mobile-android mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -24,12 +24,17 @@ LOCAL_JWT_DEV_SECRET ?= tabscribe-local-dev-only-not-a-real-secret
 TTL ?= 3600
 # Readable logs locally; `make worker LOG_FORMAT=json` shows what production logs.
 LOG_FORMAT ?= text
+# `make api CLERK_ISSUER=https://<instance>.clerk.accounts.dev` makes the API accept the app's
+# Clerk sign-ins instead of dev tokens (one or the other; `make token` and e2e need dev tokens).
+CLERK_ISSUER ?=
+LOCAL_AUTH = $(if $(CLERK_ISSUER),JWT_ISSUER=$(CLERK_ISSUER) \
+	JWT_JWKS_URL=$(CLERK_ISSUER)/.well-known/jwks.json,JWT_ISSUER=$(LOCAL_JWT_ISSUER) \
+	JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET))
 # Everything the API and worker read, pointing at the `make up` services (dev values only).
 LOCAL_ENV = DATABASE_URL=$(LOCAL_DATABASE_URL) REDIS_URL=redis://localhost:6379/0 \
 	S3_BUCKET=tabscribe S3_ENDPOINT_URL=http://localhost:8333 S3_REGION=us-east-1 \
 	AWS_ACCESS_KEY_ID=dev-access-key AWS_SECRET_ACCESS_KEY=dev-secret-key \
-	JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) \
-	LOG_FORMAT=$(LOG_FORMAT) $(if $(HOST_IP),S3_PUBLIC_ENDPOINT_URL=http://$(HOST_IP):8333)
+	$(LOCAL_AUTH) LOG_FORMAT=$(LOG_FORMAT) $(if $(HOST_IP),S3_PUBLIC_ENDPOINT_URL=http://$(HOST_IP):8333)
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -67,7 +72,7 @@ down: ## Stop everything (data is kept; `docker compose down -v` wipes it)
 migrate: ## Apply database migrations to the local Postgres
 	DATABASE_URL=$(LOCAL_DATABASE_URL) uv run alembic -c packages/platform/alembic.ini upgrade head
 
-api: ## Run the API on http://localhost:8000 against the local services (reloads on change)
+api: ## Run the API on :8000 against the local services, reloading [CLERK_ISSUER=... for app sign-in]
 	$(LOCAL_ENV) uv run uvicorn api.main:app --reload --host $(PUBLIC_BIND) --port 8000
 
 worker: ## Run a worker (both queues) against the local services
@@ -79,8 +84,14 @@ token: ## Print a local dev access token: make token [USER=alice] [TTL=3600]
 
 check: lint typecheck test rust mobile-check ## Run everything CI runs (except e2e)
 
-mobile: ## Start the Expo dev server for the app [HOST_IP=<LAN IP> to use a phone]
+mobile: ## Start the Expo dev server for the app's dev build [HOST_IP=<LAN IP> to use a phone]
 	cd $(MOBILE_DIR) && $(if $(HOST_IP),EXPO_PUBLIC_API_URL=http://$(HOST_IP):8000) npx expo start
+
+mobile-ios: ## Build the dev build and run it in the iOS Simulator (needs Xcode)
+	cd $(MOBILE_DIR) && npx expo run:ios
+
+mobile-android: ## Build the dev build and run it in the Android Emulator (needs Android Studio)
+	cd $(MOBILE_DIR) && npx expo run:android
 
 api-types: ## Regenerate the app's API types from the API's OpenAPI schema (after API changes)
 	uv run --quiet python -m api.openapi $(MOBILE_DIR)/src/api/openapi.json

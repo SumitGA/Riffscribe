@@ -17,3 +17,18 @@ export function apiUrl(
   }
   return os === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
 }
+
+/**
+ * The Clerk instance the app signs in with (Clerk dashboard > API keys; see .env.example). The
+ * publishable key is public by design: it names the instance and grants nothing on its own.
+ */
+export function clerkPublishableKey(
+  env: string | undefined = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
+): string {
+  if (!env) {
+    throw new Error(
+      'EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is not set: copy apps/mobile/.env.example to .env.local',
+    );
+  }
+  return env;
+}

@@ -1,13 +1,15 @@
 {
   "expo": {
-    "name": "TabScribe",
-    "slug": "tabscribe",
+    "name": "Riffscribe",
+    "slug": "riffscribe",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "scheme": "riffscribe",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sumitga.riffscribe"
     },
     "android": {
       "adaptiveIcon": {
@@ -16,12 +18,19 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.sumitga.riffscribe"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "@clerk/expo",
+        {
+          "appleSignIn": false
+        }
+      ],
+      "expo-secure-store"
     ],
-    "scheme": "tabscribe",
     "experiments": {
       "typedRoutes": true
     }
