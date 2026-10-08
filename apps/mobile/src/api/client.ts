@@ -51,6 +51,12 @@ async function unwrap<T>(
   return data;
 }
 
+function ok({ error, response }: { error?: unknown; response: Response }): void {
+  if (!response.ok) {
+    throw new ApiError(response.status, errorMessage(response.status, error));
+  }
+}
+
 export type ApiOptions = {
   baseUrl: string;
   /** The current access token, or null when signed out (requests then go without one). */
@@ -79,13 +85,13 @@ export function createApi({ baseUrl, getToken, fetch }: ApiOptions) {
     getJob: (jobId: string) => unwrap(client.GET('/jobs/{job_id}', jobPath(jobId))),
     listJobs: (query: { cursor?: string; limit?: number } = {}) =>
       unwrap(client.GET('/jobs', { params: { query } })),
-    // 204 No Content: success has no body to unwrap.
-    deleteJob: async (jobId: string): Promise<void> => {
-      const { error, response } = await client.DELETE('/jobs/{job_id}', jobPath(jobId));
-      if (!response.ok) {
-        throw new ApiError(response.status, errorMessage(response.status, error));
-      }
-    },
+    // These answer 204 No Content: success has no body to unwrap.
+    deleteJob: async (jobId: string): Promise<void> =>
+      ok(await client.DELETE('/jobs/{job_id}', jobPath(jobId))),
+    registerPushToken: async (token: string, platform: 'ios' | 'android'): Promise<void> =>
+      ok(await client.PUT('/me/push-tokens', { body: { token, platform } })),
+    removePushToken: async (token: string): Promise<void> =>
+      ok(await client.DELETE('/me/push-tokens/{token}', { params: { path: { token } } })),
   };
 }
 

@@ -15,7 +15,10 @@ const listJobs = jest.fn<Promise<JobList>, []>();
 async function renderLibrary() {
   const queryClient = new QueryClient({
     // No retries, and gcTime Infinity starts no cleanup timer that would keep Jest running.
-    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { gcTime: Infinity },
+    },
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

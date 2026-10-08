@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -20,6 +21,7 @@ const take: AudioClip = {
 };
 
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
+jest.mock('@/push', () => ({ askForPushOnce: jest.fn(async () => {}) }));
 jest.mock('expo-router', () => ({ router: { replace: jest.fn() } }));
 jest.mock('expo-audio', () => ({
   useAudioPlayer: () => ({ play: jest.fn(), pause: jest.fn(), seekTo: jest.fn() }),
@@ -53,7 +55,10 @@ beforeEach(() => {
 
 async function renderNewTake() {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { gcTime: Infinity },
+    },
   });
   const metrics = {
     frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -87,6 +92,12 @@ describe('NewTake', () => {
       expect.any(Function),
       expect.any(Function),
     );
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith({
+        pathname: '/jobs/[id]',
+        params: { id: 'job-1' },
+      }),
+    );
   });
 
   it('sends piano takes without guitar settings', async () => {
@@ -94,6 +105,7 @@ describe('NewTake', () => {
     await fireEvent.press(screen.getByRole('radio', { name: 'Piano' }));
     expect(screen.queryByText('Standard tuning')).toBeNull();
     await fireEvent.press(screen.getByText('Finish recording'));
+    await screen.findByText(/remaining transcriptions/); // settled
     await fireEvent.press(screen.getByText('Transcribe'));
 
     expect(startTranscription).toHaveBeenCalledWith(
@@ -103,6 +115,7 @@ describe('NewTake', () => {
       expect.any(Function),
       expect.any(Function),
     );
+    await waitFor(() => expect(router.replace).toHaveBeenCalled());
   });
 });
 

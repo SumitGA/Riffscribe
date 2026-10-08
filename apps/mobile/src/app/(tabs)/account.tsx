@@ -1,12 +1,13 @@
 import { useClerk, useUser } from '@clerk/expo';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApi } from '@/api/provider';
+import { disablePush, enablePush, pushState } from '@/push';
 import { colors, fonts, space } from '@/theme';
-import { Button, Card, ProgressBar, Row, Text } from '@/ui';
+import { Button, Card, ProgressBar, Row, Text, Toggle } from '@/ui';
 
 /** Who's signed in, this month's usage, and sign out. */
 export default function Account() {
@@ -23,7 +24,16 @@ export default function Account() {
     ? `Signed in with ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`
     : email;
 
+  const push = useQuery({ queryKey: ['push'], queryFn: pushState });
+  const setPush = useMutation({
+    mutationFn: async (on: boolean) =>
+      on ? enablePush(api) : disablePush(api).then(() => 'off' as const),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['push'] }),
+  });
+
   const onSignOut = async () => {
+    // Stop this device's notifications before the account changes hands.
+    await disablePush(api).catch(() => {});
     await signOut();
     queryClient.clear(); // the next user must not see this one's cached data
   };
@@ -60,6 +70,19 @@ export default function Account() {
         </Card>
 
         <Card style={styles.list}>
+          {push.data && push.data !== 'unavailable' && (
+            <Row label="Notify me when a score is ready">
+              {push.data === 'denied' ? (
+                <Text variant="muted">Blocked in Settings</Text>
+              ) : (
+                <Toggle
+                  label="Notifications"
+                  value={setPush.isPending ? !!setPush.variables : push.data === 'on'}
+                  onChange={(on) => setPush.mutate(on)}
+                />
+              )}
+            </Row>
+          )}
           <Row label="Appearance">
             <Text variant="muted">Dark</Text>
           </Row>

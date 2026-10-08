@@ -32,6 +32,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-22](#td-22-clerks-native-sign-in-screen) | Clerk's native sign-in screen | Mobile / auth | Paid Apple account (Apple sign-in); branding needs beyond Clerk's theme |
 | [TD-23](#td-23-local-android-builds-jdk-17-and-a-slow-react-native-repository) | Local Android builds: JDK 17 and a slow React Native repository | Mobile / tooling | Moving builds to EAS or CI; React Native supports newer JDKs |
 | [TD-24](#td-24-score-viewer-alphatab-in-a-webview-from-local-files) | Score viewer: alphaTab in a WebView from local files | Mobile | Long scores feel slow; editing (Phase 4) needs tighter integration |
+| [TD-25](#td-25-push-notifications-through-expos-push-service) | Push notifications through Expo's push service | Backend / mobile | Many users (receipts, batching); dropping Expo |
 
 ---
 
@@ -778,3 +779,31 @@ because audio may only start from a tap inside it.
 
 **Revisit when** long scores feel slow (serve the page from a local HTTP origin so workers run),
 or Phase 4's editor needs tighter app/page integration.
+
+## TD-25: Push notifications through Expo's push service
+
+**Concept.** Phones receive notifications from Apple (APNs) and Google (FCM). Expo's push
+service sits in front of both: the app gets one *Expo push token* per install, registers it with
+our API (`PUT /me/push-tokens`), and the worker sends "your score is ready" to Expo, which
+forwards it (`WORKER_NOTIFIER=expo`). The app asks for permission the first time the user sends
+a transcription; Account has an on/off switch; sign-out removes the device's token.
+
+**Pros**
+- One HTTP call for iOS and Android; no APNs or FCM code on our side, and no new Python
+  dependency (standard-library HTTP).
+- Notification failures are logged and never affect the job. Devices Expo reports as gone are
+  forgotten.
+
+**Cons**
+- A third party sees notification text (the take's name). Expo's service is free; it is one
+  more service to depend on.
+- Needs setup outside the repo: an Expo project (`eas init` writes its ID to `app.json`), and
+  for Android a Firebase project with its FCM key uploaded to Expo. Until then the app hides
+  the option (push "unavailable").
+- Only Expo's *tickets* are checked. Some failures (e.g. an uninstalled app) arrive later as
+  *receipts*, which we don't fetch yet, so dead tokens can linger until a later send fails.
+- Sent from the worker, inline, after the job is acknowledged: a slow Expo call delays that
+  worker's next stage by up to its 10 s timeout.
+
+**Revisit when** users have many devices or notifications fail silently (fetch receipts in a
+small periodic task, send from a queue), or if we move off Expo (APNs/FCM directly).

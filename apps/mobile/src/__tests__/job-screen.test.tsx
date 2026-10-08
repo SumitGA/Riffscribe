@@ -63,7 +63,10 @@ const deleteJob = jest.fn(async () => {});
 async function renderJob(data: Job) {
   jest.mocked(useApi).mockReturnValue({ getJob: async () => data, deleteJob } as unknown as Api);
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity, refetchInterval: false } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity, refetchInterval: false },
+      mutations: { gcTime: Infinity },
+    },
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

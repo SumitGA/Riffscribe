@@ -20,6 +20,7 @@ import { LevelBars } from '@/audio/LevelBars';
 import { pickAudioFile } from '@/audio/pickAudioFile';
 import { Recorder } from '@/audio/Recorder';
 import { type Step, startTranscription, uploadFile } from '@/jobs/transcribe';
+import { askForPushOnce } from '@/push';
 import { colors, fonts, radius, space } from '@/theme';
 import { Button, Card, Chip, IconButton, Row, Segmented, Text } from '@/ui';
 import { OptionSheet } from '@/ui/OptionSheet';
@@ -163,6 +164,8 @@ function Review({
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
       void queryClient.invalidateQueries({ queryKey: ['me'] });
       router.replace({ pathname: '/jobs/[id]', params: { id: job.id } });
+      // The moment a "score ready" notification helps: ask (once) to send one.
+      void askForPushOnce(api);
     },
   });
 

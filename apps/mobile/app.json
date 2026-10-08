@@ -39,7 +39,13 @@
       ],
       "expo-asset",
       "expo-font",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-notifications",
+        {
+          "color": "#FFB224"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

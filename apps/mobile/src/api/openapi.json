@@ -255,6 +255,88 @@
         }
       }
     },
+    "/me/push-tokens": {
+      "put": {
+        "tags": [
+          "push"
+        ],
+        "summary": "Register Push Token",
+        "description": "Notify this device about the caller's jobs. Safe to repeat; a device that was another\nuser's moves to the caller (it signed in as someone else).",
+        "operationId": "register_push_token_me_push_tokens_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/me/push-tokens/{token}": {
+      "delete": {
+        "tags": [
+          "push"
+        ],
+        "summary": "Remove Push Token",
+        "description": "Stop notifying this device (sign-out, or notifications turned off). Only the caller's own\ntokens can be removed; anything else is quietly ignored, so this can't probe tokens.",
+        "operationId": "remove_push_token_me_push_tokens__token__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 255,
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "summary": "Healthz",
@@ -747,6 +829,30 @@
           "expires_in_s"
         ],
         "title": "PresignedRequestOut"
+      },
+      "PushTokenIn": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^Expo(nent)?PushToken\\[[A-Za-z0-9_-]+\\]$",
+            "title": "Token"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android"
+            ],
+            "title": "Platform"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "platform"
+        ],
+        "title": "PushTokenIn"
       },
       "StageOut": {
         "properties": {

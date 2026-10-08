@@ -4,11 +4,13 @@ import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { usePushResponses } from '@/push/usePushResponses';
 import { colors, fonts } from '@/theme';
 import { Text } from '@/ui';
 
 /** Library and Account, with the record button raised between them (it opens New take). */
 export default function TabsLayout() {
+  usePushResponses();
   return (
     <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
       <Tabs.Screen name="index" options={{ title: 'Library' }} />

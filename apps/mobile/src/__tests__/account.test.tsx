@@ -9,6 +9,11 @@ import Account from '@/app/(tabs)/account';
 
 jest.mock('@clerk/expo', () => ({ useClerk: jest.fn(), useUser: jest.fn() }));
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
+jest.mock('@/push', () => ({
+  pushState: jest.fn(async () => 'unavailable'),
+  enablePush: jest.fn(),
+  disablePush: jest.fn(async () => {}),
+}));
 
 const signOut = jest.fn(async () => {});
 
@@ -28,7 +33,10 @@ beforeEach(() => {
 
 async function renderAccount() {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { gcTime: Infinity },
+    },
   });
   queryClient.setQueryData(['jobs'], { jobs: [], next_cursor: null });
   const wrapper = ({ children }: { children: ReactNode }) => (
@@ -48,6 +56,7 @@ describe('Account', () => {
 
   it('signs out and forgets the cached data', async () => {
     const queryClient = await renderAccount();
+    await screen.findByText(/3 of 10 transcriptions this month/); // settled
     await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
     expect(signOut).toHaveBeenCalled();
     expect(queryClient.getQueryData(['jobs'])).toBeUndefined();
