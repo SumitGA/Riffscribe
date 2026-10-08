@@ -31,6 +31,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-21](#td-21-app-api-types-generated-from-a-committed-openapi-copy) | App API types generated from a committed OpenAPI copy | Mobile / API | openapi-typescript supports TypeScript 6; old app versions in the wild |
 | [TD-22](#td-22-clerks-native-sign-in-screen) | Clerk's native sign-in screen | Mobile / auth | Paid Apple account (Apple sign-in); branding needs beyond Clerk's theme |
 | [TD-23](#td-23-local-android-builds-jdk-17-and-a-slow-react-native-repository) | Local Android builds: JDK 17 and a slow React Native repository | Mobile / tooling | Moving builds to EAS or CI; React Native supports newer JDKs |
+| [TD-24](#td-24-score-viewer-alphatab-in-a-webview-from-local-files) | Score viewer: alphaTab in a WebView from local files | Mobile | Long scores feel slow; editing (Phase 4) needs tighter integration |
 
 ---
 
@@ -750,3 +751,27 @@ one-off `--init-script`. They're in Gradle's cache now.
 - A fresh cache on a slow network repeats the download problem.
 
 **Revisit when** builds move to EAS Build or CI (Phase 5), or React Native supports newer JDKs.
+
+## TD-24: Score viewer: alphaTab in a WebView from local files
+
+**Concept.** alphaTab (MPL-2.0) is a web library, so the app runs it in a WebView. Its script,
+music font (Bravura, SIL OFL) and soundfont (Sonivox, Apache-2.0) ship inside the app (about
+2.8 MB, copied from the npm package on install by `scripts/viewer-assets.js`) and are laid out in
+the cache on first use, so the page loads them by relative `file://` URLs. The app downloads the
+score's MusicXML (presigned GET) and hands it to the page; playback controls live in the page
+because audio may only start from a tap inside it.
+
+**Pros**
+- The same renderer and exporters as the preview page (`make view`) and, later, the editor.
+- Works offline; nothing loads from a CDN, so no third-party request sees what users open.
+
+**Cons**
+- The WebView may read local files (`allowFileAccessFromFileURLs`,
+  `allowUniversalAccessFromFileURLs`). It only ever loads our own page, but those flags must
+  never be combined with remote content.
+- Workers and AudioWorklets can't load from `file://`, so rendering runs on the page's main
+  thread and audio uses the older ScriptProcessor path: long scores render more slowly.
+- Two UIs in one screen: the page's toolbar is HTML, styled to match by hand.
+
+**Revisit when** long scores feel slow (serve the page from a local HTTP origin so workers run),
+or Phase 4's editor needs tighter app/page integration.

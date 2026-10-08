@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Score viewer files copied from @coderline/alphatab on install (scripts/viewer-assets.js)
+/assets/viewer/

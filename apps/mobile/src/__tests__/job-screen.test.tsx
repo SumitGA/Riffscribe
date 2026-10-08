@@ -9,6 +9,12 @@ import { stageStates } from '@/jobs/status';
 
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ id: 'job-1' }) }));
+jest.mock('@/score/ScoreView', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    ScoreView: ({ musicXml }: { musicXml: string }) => <Text testID="score">{musicXml}</Text>,
+  };
+});
 
 const t = (s: number) => new Date(Date.UTC(2026, 9, 8, 5, 0, s)).toISOString();
 const run = (
@@ -87,16 +93,27 @@ describe('JobScreen', () => {
     expect(screen.getAllByTestId('stage-running')).toHaveLength(1);
   });
 
-  it('says when the score is ready', async () => {
-    const presigned = { method: 'GET', url: 'u', headers: {}, expires_in_s: 900 };
+  it('shows the score of a finished guitar job, with its tab', async () => {
+    const get = (url: string) => ({ method: 'GET', url, headers: {}, expires_in_s: 900 });
+    const fetchMock = jest.fn(
+      async (url: string) => new Response(`<score-partwise from="${url}"/>`),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
     await renderJob(
       job({
         status: 'succeeded',
-        outputs: { version: 1, musicxml: presigned, tab_musicxml: presigned, midi: presigned },
+        outputs: {
+          version: 1,
+          musicxml: get('https://s3/score'),
+          tab_musicxml: get('https://s3/tab'),
+          midi: null,
+        },
       }),
     );
-    expect(await screen.findByText('Your score is ready')).toBeTruthy();
-    expect(screen.getByText(/Sheet music, guitar tab and MIDI/)).toBeTruthy();
+    expect(await screen.findByTestId('score')).toHaveTextContent(
+      '<score-partwise from="https://s3/tab"/>',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows why a job failed', async () => {

@@ -2,8 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import type { Job } from '@/api/client';
 import { useApi } from '@/api/provider';
 import { isFinished, STATUS_LABELS, type StageState, stageStates } from '@/jobs/status';
+import { ScoreView } from '@/score/ScoreView';
 
 const ICONS: Record<StageState, string> = {
   waiting: '○',
@@ -32,7 +34,11 @@ export default function JobScreen() {
     return <Text style={[styles.container, styles.error]}>{job.error.message}</Text>;
   }
 
-  const { status, options, error, outputs } = job.data;
+  if (job.data.outputs) {
+    return <Score outputs={job.data.outputs} jobId={job.data.id} />;
+  }
+
+  const { status, options, error } = job.data;
   const running = !isFinished(status);
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -62,17 +68,35 @@ export default function JobScreen() {
           {error.message ?? 'Something went wrong while transcribing.'} ({error.code})
         </Text>
       )}
-      {outputs && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Your score is ready</Text>
-          <Text style={styles.muted}>
-            Sheet music{outputs.tab_musicxml ? ', guitar tab' : ''}
-            {outputs.midi ? ' and MIDI' : ''} were written. Viewing them in the app is next.
-          </Text>
-        </View>
-      )}
     </ScrollView>
   );
+}
+
+/**
+ * A finished job's score. Guitar jobs show the version with a TAB staff under the notation.
+ * Presigned links expire in 15 minutes, but the score is fetched once per version and cached.
+ */
+function Score({ outputs, jobId }: { outputs: NonNullable<Job['outputs']>; jobId: string }) {
+  const source = outputs.tab_musicxml ?? outputs.musicxml;
+  const musicXml = useQuery({
+    queryKey: ['score', jobId, outputs.version],
+    queryFn: async () => {
+      const response = await fetch(source.url, { headers: source.headers });
+      if (!response.ok) {
+        throw new Error(`couldn't download the score (HTTP ${response.status})`);
+      }
+      return response.text();
+    },
+    staleTime: Infinity,
+  });
+
+  if (musicXml.isPending) {
+    return <ActivityIndicator style={styles.loading} />;
+  }
+  if (musicXml.isError) {
+    return <Text style={[styles.container, styles.error]}>{musicXml.error.message}</Text>;
+  }
+  return <ScoreView musicXml={musicXml.data} />;
 }
 
 const styles = StyleSheet.create({
@@ -91,6 +115,4 @@ const styles = StyleSheet.create({
   failed: { color: '#b00020' },
   muted: { opacity: 0.6 },
   error: { color: '#b00020' },
-  card: { padding: 16, borderRadius: 12, backgroundColor: '#e9f5ec', gap: 6 },
-  cardTitle: { fontSize: 18, fontWeight: '600' },
 });
