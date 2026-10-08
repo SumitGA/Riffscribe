@@ -2,7 +2,9 @@
 
 ## Product
 Mobile app. A user uploads or records audio and gets back editable sheet music and guitar tab, exportable as PDF, MusicXML, MIDI and Guitar Pro.
-- v1 scope: **solo guitar or solo piano** recordings, max 5 min (free tier).
+- **Goal: upload a song and get tabs for the guitar parts in it** (strummed chords, lead and riffs, fingerpicking) (ADR-0009). Built in steps: **A** make solo guitar transcription good (chords, fingering, sound; current); **B** song mode (separate the guitar from a full mix); **C** several guitars in one song, distortion, techniques.
+- Until song mode ships, uploads are **solo guitar or solo piano** recordings, max 5 min (free tier).
+- **Personal use only** (ADR-0009): a transcription is private to its uploader. No public song pages, sharing links or catalogue; uploaded audio is deleted after processing; separated stems are never downloadable. Public sharing would need publisher licensing.
 - Monetisation later: free tier with monthly quota; paid tier with longer clips, more jobs, priority queue.
 
 ## Tech stack (defaults — ask before changing)
@@ -86,5 +88,5 @@ pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 4. **Editor**: note and fret corrections, with score versions.
 5. **Production**: Terraform, autoscaling, monitoring, billing (RevenueCat for in-app subscriptions).
 
-## Out of scope for v1
-Full-band mixes, vocals and drums, advanced guitar techniques (bends, slides, hammer-ons), real-time transcription.
+## Out of scope for now
+Transcribing vocals, bass and drums; telling several guitars apart and guitar techniques (bends, slides, hammer-ons) until step C; real-time transcription; public sharing of transcriptions.
