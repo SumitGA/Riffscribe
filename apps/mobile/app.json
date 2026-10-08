@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "scheme": "riffscribe",
     "ios": {
       "supportsTablet": true,
@@ -26,7 +26,8 @@
       [
         "@clerk/expo",
         {
-          "appleSignIn": false
+          "appleSignIn": false,
+          "theme": "./assets/clerk-theme.json"
         }
       ],
       "expo-secure-store",
@@ -36,10 +37,12 @@
           "microphonePermission": "Riffscribe records what you play so it can transcribe it."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "backgroundColor": "#0D0E11"
   }
 }

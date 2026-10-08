@@ -1,0 +1,37 @@
+{
+  "colors": {
+    "primary": "#FFB224",
+    "primaryForeground": "#1B1305",
+    "background": "#0D0E11",
+    "foreground": "#F3F4F6",
+    "mutedForeground": "#9CA3AF",
+    "muted": "#16181D",
+    "input": "#16181D",
+    "inputForeground": "#F3F4F6",
+    "border": "#2A2E36",
+    "ring": "#FFB224",
+    "neutral": "#9CA3AF",
+    "danger": "#FF6B6B",
+    "success": "#3DD68C",
+    "secondaryButtonBackground": "#16181D",
+    "secondaryButtonForeground": "#F3F4F6"
+  },
+  "darkColors": {
+    "primary": "#FFB224",
+    "primaryForeground": "#1B1305",
+    "background": "#0D0E11",
+    "foreground": "#F3F4F6",
+    "mutedForeground": "#9CA3AF",
+    "muted": "#16181D",
+    "input": "#16181D",
+    "inputForeground": "#F3F4F6",
+    "border": "#2A2E36",
+    "ring": "#FFB224",
+    "neutral": "#9CA3AF",
+    "danger": "#FF6B6B",
+    "success": "#3DD68C",
+    "secondaryButtonBackground": "#16181D",
+    "secondaryButtonForeground": "#F3F4F6"
+  },
+  "design": { "borderRadius": 14 }
+}
