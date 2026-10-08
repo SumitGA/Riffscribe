@@ -9,6 +9,7 @@ import Home from '@/app/index';
 
 jest.mock('@clerk/expo', () => ({ useClerk: jest.fn(), useUser: jest.fn() }));
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
+jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactNode }) => children }));
 
 const signOut = jest.fn(async () => {});
 const me = jest.fn<ReturnType<Api['me']>, []>();

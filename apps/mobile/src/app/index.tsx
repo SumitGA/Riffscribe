@@ -1,5 +1,6 @@
 import { useClerk, useUser } from '@clerk/expo';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'expo-router';
 import { Button, StyleSheet, Text, View } from 'react-native';
 
 import { useApi } from '@/api/provider';
@@ -31,6 +32,9 @@ export default function Home() {
             ? `Can't reach the API: ${me.error.message}`
             : `${me.data.jobs_this_month} of ${me.data.jobs_per_month} transcriptions used this month`}
       </Text>
+      <Link href="/new" asChild>
+        <Button title="New transcription" />
+      </Link>
       <Button title="Sign out" onPress={onSignOut} />
       <Text style={styles.detail} testID="api-url">
         API: {apiUrl()}
