@@ -8,11 +8,16 @@ import JobScreen from '@/app/jobs/[id]';
 import { stageStates } from '@/jobs/status';
 
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ id: 'job-1' }) }));
+jest.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({ id: 'job-1' }),
+  Stack: { Screen: () => null },
+}));
 jest.mock('@/score/ScoreView', () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    ScoreView: ({ musicXml }: { musicXml: string }) => <Text testID="score">{musicXml}</Text>,
+    ScoreView: ({ musicXml }: { musicXml: string; hasTab: boolean }) => (
+      <Text testID="score">{musicXml}</Text>
+    ),
   };
 });
 
@@ -87,8 +92,8 @@ describe('JobScreen', () => {
     await renderJob(
       job({ stages: [run('normalize', 'succeeded', 0, 1), run('transcribe', 'running', 1)] }),
     );
-    expect(await screen.findByText('Transcribing')).toBeTruthy();
-    expect(screen.getByText('Listening for notes')).toBeTruthy();
+    expect(await screen.findByTestId('job-headline')).toHaveTextContent('Listening for notes…');
+    expect(screen.getByText('17%')).toBeTruthy(); // 1 of 6 stages done
     expect(screen.getAllByTestId('stage-done')).toHaveLength(1);
     expect(screen.getAllByTestId('stage-running')).toHaveLength(1);
   });
