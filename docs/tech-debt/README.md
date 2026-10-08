@@ -797,7 +797,7 @@ a transcription; Account has an on/off switch; sign-out removes the device's tok
 **Cons**
 - A third party sees notification text (the take's name). Expo's service is free; it is one
   more service to depend on.
-- Needs setup outside the repo: an Expo project (`eas init` writes its ID to `app.json`), and
+- Needs setup outside the repo: an Expo project (`npx eas-cli@latest init` writes its ID to `app.json`), and
   for Android a Firebase project with its FCM key uploaded to Expo. Until then the app hides
   the option (push "unavailable").
 - Only Expo's *tickets* are checked. Some failures (e.g. an uninstalled app) arrive later as

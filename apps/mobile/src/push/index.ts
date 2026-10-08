@@ -16,7 +16,7 @@ const CHANNEL = 'default';
 export type PushState = 'on' | 'off' | 'denied' | 'unavailable';
 
 /**
- * The Expo project the app's push tokens belong to (`eas init` writes it to app.json). Without
+ * The Expo project the app's push tokens belong to (`npx eas-cli@latest init` writes it to app.json). Without
  * one, or on an emulator, push isn't available and the app simply doesn't offer it.
  */
 function projectId(): string | undefined {
