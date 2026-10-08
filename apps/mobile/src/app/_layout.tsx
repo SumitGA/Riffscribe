@@ -34,6 +34,7 @@ function Screens() {
       <Stack.Protected guard={!!isSignedIn}>
         <Stack.Screen name="index" />
         <Stack.Screen name="new" options={{ headerTitle: 'New transcription' }} />
+        <Stack.Screen name="jobs/[id]" options={{ headerTitle: 'Transcription' }} />
       </Stack.Protected>
       <Stack.Protected guard={!isSignedIn}>
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />

@@ -38,10 +38,10 @@ export default function NewTranscription() {
   const transcribe = useMutation({
     mutationFn: (audio: AudioClip) =>
       startTranscription(api, audio, instrument, uploadFile, setStep),
-    onSuccess: () => {
+    onSuccess: (job) => {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
       void queryClient.invalidateQueries({ queryKey: ['me'] });
-      router.replace('/'); // the job's own screen comes next
+      router.replace({ pathname: '/jobs/[id]', params: { id: job.id } });
     },
   });
 
