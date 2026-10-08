@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.sumitga.riffscribe"
+      "package": "com.sumitga.riffscribe",
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
@@ -34,7 +35,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Riffscribe records what you play so it can transcribe it."
+          "microphonePermission": "Riffscribe records what you play so it can transcribe it.",
+          "enableBackgroundPlayback": false
         }
       ],
       "expo-asset",
@@ -50,6 +52,13 @@
     "experiments": {
       "typedRoutes": true
     },
-    "backgroundColor": "#0D0E11"
+    "backgroundColor": "#0D0E11",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d0b25db2-3690-4096-9c98-fc02105deb85"
+      }
+    },
+    "owner": "sumitga"
   }
 }
