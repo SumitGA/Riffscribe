@@ -71,6 +71,21 @@ describe('createApi', () => {
     ]);
   });
 
+  it('deletes a job (204, no body)', async () => {
+    const { fetch, requests } = fakeFetch(
+      new Response(null, { status: 204 }),
+      json(404, { detail: 'job not found' }),
+    );
+    const api = createApi({ baseUrl: BASE, getToken: async () => 'tok', fetch });
+
+    await expect(api.deleteJob('j1')).resolves.toBeUndefined();
+    expect(`${requests[0]?.method} ${requests[0]?.url}`).toBe(`DELETE ${BASE}/jobs/j1`);
+    await expect(api.deleteJob('j1')).rejects.toMatchObject({
+      status: 404,
+      message: 'job not found',
+    });
+  });
+
   it("rejects with an ApiError carrying FastAPI's detail", async () => {
     const { fetch } = fakeFetch(json(429, { detail: 'monthly limit of 10 jobs reached' }));
     const api = createApi({ baseUrl: BASE, getToken: async () => 'tok', fetch });

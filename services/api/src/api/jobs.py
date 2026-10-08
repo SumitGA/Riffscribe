@@ -34,7 +34,7 @@ from api.schemas import (
 from tabscribe_platform.db import Job, JobStatus, ScoreVersion, StageRun, User
 from tabscribe_platform.jobqueue import STAGES, Priority, StageMessage, queue_for_stage
 from tabscribe_platform.observability import inject_trace
-from tabscribe_platform.storage import ObjectStore, PresignedRequest, job_key
+from tabscribe_platform.storage import ObjectStore, PresignedRequest, job_key, job_prefix
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 logger = logging.getLogger(__name__)
@@ -217,6 +217,28 @@ def get_job(
     if job is None:
         raise _NOT_FOUND
     return _job_out(session, store, job)
+
+
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_job(
+    job_id: uuid.UUID, user: CurrentUserDep, session: SessionDep, store: StoreDep
+) -> None:
+    """Delete a job, its scores and its files. It still counts towards this month's quota.
+
+    A running job can be deleted too: its worker drops the job's remaining stages and removes
+    any files it writes after this (worker.handler).
+    """
+    job = session.scalars(_own_job(user.id, job_id)).first()
+    if job is None:
+        raise _NOT_FOUND
+    session.delete(job)  # stage runs, score versions and its dedup-cache entry cascade
+    session.commit()
+    # Files after the row: a failure here leaves unreachable files, never a job without its files.
+    try:
+        store.delete_prefix(job_prefix(user.id, str(job_id)))
+    except Exception:
+        logger.exception("could not delete the job's files", extra={"job_id": str(job_id)})
+    _log(job_id, "job deleted")
 
 
 # Keyset pagination on (created_at, id): stable while new jobs arrive. The cursor is opaque

@@ -24,7 +24,7 @@ from api.main import app
 from api.settings import ApiSettings
 from tabscribe_platform.db import Job, JobStatus, ScoreVersion, make_session_factory
 from tabscribe_platform.jobqueue import JobQueue, QueueName, RedisJobQueue
-from tabscribe_platform.storage import ObjectStore, job_key
+from tabscribe_platform.storage import ObjectStore, job_key, job_prefix
 
 pytestmark = pytest.mark.integration
 
@@ -202,6 +202,27 @@ def test_failed_enqueue_is_undone(
     assert api.post(f"/jobs/{job_id}/submit", headers=auth(alice)).status_code == 503
     assert api.get(f"/jobs/{job_id}", headers=auth(alice)).json()["status"] == "pending_upload"
     assert api.get("/me", headers=auth(alice)).json()["jobs_this_month"] == 0
+
+
+def test_delete_job_removes_it_and_its_files(
+    api: TestClient, alice: str, object_store: ObjectStore
+) -> None:
+    created = create(api, alice)
+    upload(created)
+    job_id = created["job"]["id"]
+    kept = create(api, alice)["job"]["id"]
+    prefix = job_prefix(alice, job_id)
+    assert object_store.list_keys(prefix)
+
+    assert api.delete(f"/jobs/{job_id}", headers=auth("mallory")).status_code == 404
+    response = api.delete(f"/jobs/{job_id}", headers=auth(alice))
+    assert response.status_code == 204, response.text
+
+    assert api.get(f"/jobs/{job_id}", headers=auth(alice)).status_code == 404
+    assert api.delete(f"/jobs/{job_id}", headers=auth(alice)).status_code == 404
+    assert object_store.list_keys(prefix) == []
+    listed = api.get("/jobs", headers=auth(alice)).json()["jobs"]
+    assert [j["id"] for j in listed] == [kept]
 
 
 def test_list_jobs_pages_newest_first(api: TestClient, alice: str) -> None:

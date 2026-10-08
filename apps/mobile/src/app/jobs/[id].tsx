@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { Check, Share2, X } from 'lucide-react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Check, Share2, Trash2, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Job } from '@/api/client';
@@ -19,6 +19,17 @@ import { ProgressRing } from '@/ui/ProgressRing';
 export default function JobScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const api = useApi();
+  const queryClient = useQueryClient();
+  const [exporting, setExporting] = useState(false);
+  const remove = useMutation({
+    mutationFn: () => api.deleteJob(id),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ['job', id] });
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      router.back();
+    },
+    onError: (error) => Alert.alert("Couldn't delete it", error.message),
+  });
   const job = useQuery({
     queryKey: ['job', id],
     queryFn: () => api.getJob(id),
@@ -36,13 +47,45 @@ export default function JobScreen() {
 
   const instrument = job.data.options.instrument === 'guitar' ? 'Guitar' : 'Piano';
   const title = job.data.name ?? `${instrument} take`;
+  const confirmDelete = () =>
+    Alert.alert(
+      `Delete “${title}”?`,
+      "This removes the score and the recording. It still counts towards this month's transcriptions.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => remove.mutate() },
+      ],
+    );
+  const hasScore = job.data.outputs !== null;
   return (
     <SafeAreaView edges={['bottom']} style={styles.screen}>
-      <Stack.Screen options={{ headerTitle: title }} />
+      <Stack.Screen
+        options={{
+          headerTitle: title,
+          headerRight: () => (
+            <View style={styles.headerActions}>
+              {hasScore && (
+                <IconButton label="Export and share" onPress={() => setExporting(true)}>
+                  <Share2 color={colors.text} size={22} />
+                </IconButton>
+              )}
+              <IconButton label="Delete" onPress={confirmDelete} disabled={remove.isPending}>
+                {remove.isPending ? (
+                  <ActivityIndicator color={colors.dangerText} />
+                ) : (
+                  <Trash2 color={colors.dangerText} size={22} />
+                )}
+              </IconButton>
+            </View>
+          ),
+        }}
+      />
       {job.data.outputs ? (
         <Score
           job={job.data}
           outputs={job.data.outputs}
+          exporting={exporting}
+          onCloseExport={() => setExporting(false)}
           title={title}
           subtitle={`${instrument} · ${formatWhen(job.data.created_at)}`}
         />
@@ -139,16 +182,19 @@ function StepMark({ state }: { state: StageState }) {
 function Score({
   job,
   outputs,
+  exporting,
+  onCloseExport,
   title,
   subtitle,
 }: {
   job: Job;
   outputs: NonNullable<Job['outputs']>;
+  exporting: boolean;
+  onCloseExport: () => void;
   title: string;
   subtitle: string;
 }) {
   const scoreView = useRef<ScoreHandle>(null);
-  const [exporting, setExporting] = useState(false);
   const source = outputs.tab_musicxml ?? outputs.musicxml;
   const guitar = job.options.instrument === 'guitar';
   const formats: ExportFormat[] = [
@@ -188,20 +234,11 @@ function Score({
 
   return (
     <View style={styles.score}>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <IconButton label="Export and share" onPress={() => setExporting(true)}>
-              <Share2 color={colors.text} size={22} />
-            </IconButton>
-          ),
-        }}
-      />
       <ExportSheet
         visible={exporting}
         formats={formats}
         onExport={onExport}
-        onClose={() => setExporting(false)}
+        onClose={onCloseExport}
       />
       <Text variant="muted" style={styles.subtitle}>
         {subtitle}
@@ -249,5 +286,6 @@ const styles = StyleSheet.create({
   markRunning: { borderWidth: 3, borderColor: colors.accent },
   markWaiting: { borderWidth: 2, borderColor: colors.faint },
   score: { flex: 1 },
+  headerActions: { flexDirection: 'row' },
   subtitle: { textAlign: 'center', paddingBottom: space.md },
 });

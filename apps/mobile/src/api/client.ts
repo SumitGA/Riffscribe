@@ -79,6 +79,13 @@ export function createApi({ baseUrl, getToken, fetch }: ApiOptions) {
     getJob: (jobId: string) => unwrap(client.GET('/jobs/{job_id}', jobPath(jobId))),
     listJobs: (query: { cursor?: string; limit?: number } = {}) =>
       unwrap(client.GET('/jobs', { params: { query } })),
+    // 204 No Content: success has no body to unwrap.
+    deleteJob: async (jobId: string): Promise<void> => {
+      const { error, response } = await client.DELETE('/jobs/{job_id}', jobPath(jobId));
+      if (!response.ok) {
+        throw new ApiError(response.status, errorMessage(response.status, error));
+      }
+    },
   };
 }
 

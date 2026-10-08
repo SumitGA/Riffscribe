@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { router } from 'expo-router';
+import { Alert } from 'react-native';
 import type { ReactNode } from 'react';
 
 import type { Api, Job } from '@/api/client';
@@ -8,9 +10,14 @@ import JobScreen from '@/app/jobs/[id]';
 import { stageStates } from '@/jobs/status';
 
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
+// Renders the screen's header buttons, so tests can press them.
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: 'job-1' }),
-  Stack: { Screen: () => null },
+  router: { back: jest.fn() },
+  Stack: {
+    Screen: ({ options }: { options: { headerRight?: () => unknown } }) =>
+      options.headerRight?.() ?? null,
+  },
 }));
 jest.mock('@/score/exports', () => ({ fileName: jest.fn() }));
 jest.mock('@/score/ExportSheet', () => ({ ExportSheet: () => null }));
@@ -51,8 +58,10 @@ const job = (overrides: Partial<Job>): Job =>
     ...overrides,
   }) as Job;
 
+const deleteJob = jest.fn(async () => {});
+
 async function renderJob(data: Job) {
-  jest.mocked(useApi).mockReturnValue({ getJob: async () => data } as unknown as Api);
+  jest.mocked(useApi).mockReturnValue({ getJob: async () => data, deleteJob } as unknown as Api);
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity, refetchInterval: false } },
   });
@@ -131,5 +140,23 @@ describe('JobScreen', () => {
       }),
     );
     expect(await screen.findByText(/longer than 5 minutes/)).toBeTruthy();
+  });
+
+  it('deletes the job after the user confirms, then goes back', async () => {
+    const alert = jest.spyOn(Alert, 'alert');
+    await renderJob(job({ name: 'Blues riff in A', status: 'failed' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Delete' }));
+
+    expect(alert).toHaveBeenCalledWith(
+      'Delete “Blues riff in A”?',
+      expect.stringContaining('still counts'),
+      expect.any(Array),
+    );
+    expect(deleteJob).not.toHaveBeenCalled();
+
+    const confirm = alert.mock.calls[0]?.[2]?.find((button) => button.text === 'Delete');
+    await act(async () => confirm?.onPress?.());
+    expect(deleteJob).toHaveBeenCalledWith('job-1');
+    expect(router.back).toHaveBeenCalled();
   });
 });

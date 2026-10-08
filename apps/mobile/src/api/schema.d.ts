@@ -65,7 +65,14 @@ export interface paths {
         get: operations["get_job_jobs__job_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Job
+         * @description Delete a job, its scores and its files. It still counts towards this month's quota.
+         *
+         *     A running job can be deleted too: its worker drops the job's remaining stages and removes
+         *     any files it writes after this (worker.handler).
+         */
+        delete: operations["delete_job_jobs__job_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -448,6 +455,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["JobOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_job_jobs__job_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
