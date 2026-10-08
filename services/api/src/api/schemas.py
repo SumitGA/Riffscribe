@@ -4,9 +4,9 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from tabscribe_platform.db import JobStatus, StageStatus
+from tabscribe_platform.db import JOB_NAME_MAX, JobStatus, StageStatus
 
 # Upload types the API accepts, and the file extension the stored upload gets. The normalize
 # stage decodes with ffmpeg and rejects anything that isn't really audio.
@@ -50,6 +50,12 @@ class JobOptions(BaseModel):
 class CreateJobRequest(JobOptions):
     content_type: str = Field(description=f"One of: {', '.join(sorted(AUDIO_TYPES))}")
     size_bytes: int = Field(gt=0, description="Size of the file the client will upload")
+    name: str | None = Field(default=None, max_length=JOB_NAME_MAX, description="Optional title")
+
+    @field_validator("name")
+    @classmethod
+    def _blank_name_is_none(cls, name: str | None) -> str | None:
+        return name.strip() or None if name is not None else None
 
 
 class PresignedRequestOut(BaseModel):
@@ -85,6 +91,7 @@ class JobOutputs(BaseModel):
 
 class JobOut(BaseModel):
     id: uuid.UUID
+    name: str | None
     status: JobStatus
     options: JobOptions
     created_at: datetime
@@ -103,6 +110,7 @@ class CreateJobResponse(BaseModel):
 
 class JobSummary(BaseModel):
     id: uuid.UUID
+    name: str | None
     status: JobStatus
     instrument: Instrument
     created_at: datetime

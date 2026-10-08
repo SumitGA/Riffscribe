@@ -137,11 +137,22 @@ def test_needs_a_token(api: TestClient) -> None:
         ({"instrument": "drums"}, 422),
         ({"capo": 13}, 422),
         ({"separation": True}, 422),  # not offered yet
+        ({"name": "x" * 121}, 422),
     ],
 )
 def test_create_rejects(api: TestClient, alice: str, body: dict[str, Any], code: int) -> None:
     response = api.post("/jobs", json={**NEW_JOB, **body}, headers=auth(alice))
     assert response.status_code == code, response.text
+
+
+def test_jobs_keep_their_name(api: TestClient, alice: str) -> None:
+    named = create(api, alice, name="  Blues riff in A ")["job"]
+    unnamed = create(api, alice, name="   ")["job"]
+    assert named["name"] == "Blues riff in A"  # trimmed
+    assert unnamed["name"] is None  # blank means no name
+    assert api.get(f"/jobs/{named['id']}", headers=auth(alice)).json()["name"] == "Blues riff in A"
+    listed = api.get("/jobs", headers=auth(alice)).json()["jobs"]
+    assert [j["name"] for j in listed] == [None, "Blues riff in A"]
 
 
 def test_upload_larger_than_the_limit_fails_the_job(api: TestClient, alice: str) -> None:

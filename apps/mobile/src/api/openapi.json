@@ -314,6 +314,19 @@
             "exclusiveMinimum": 0.0,
             "title": "Size Bytes",
             "description": "Size of the file the client will upload"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Optional title"
           }
         },
         "additionalProperties": false,
@@ -449,6 +462,17 @@
             "format": "uuid",
             "title": "Id"
           },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
           "status": {
             "$ref": "#/components/schemas/JobStatus"
           },
@@ -526,6 +550,7 @@
         "type": "object",
         "required": [
           "id",
+          "name",
           "status",
           "options",
           "created_at",
@@ -596,6 +621,17 @@
             "format": "uuid",
             "title": "Id"
           },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
           "status": {
             "$ref": "#/components/schemas/JobStatus"
           },
@@ -611,6 +647,7 @@
         "type": "object",
         "required": [
           "id",
+          "name",
           "status",
           "instrument",
           "created_at"

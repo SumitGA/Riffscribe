@@ -57,6 +57,9 @@ def _enum[E: StrEnum](cls: type[E]) -> Enum:
     )
 
 
+JOB_NAME_MAX = 120
+
+
 class JobStatus(StrEnum):
     PENDING_UPLOAD = "pending_upload"
     QUEUED = "queued"
@@ -95,6 +98,8 @@ class Job(Base):
     status: Mapped[JobStatus] = mapped_column(_enum(JobStatus), default=JobStatus.PENDING_UPLOAD)
     # The pipeline settings (instrument, tuning, capo, ...) as `PipelineConfig` JSON.
     config: Mapped[dict[str, Any]]
+    # What the user called it ("Blues riff in A"); None shows as the instrument and date.
+    name: Mapped[str | None] = mapped_column(String(JOB_NAME_MAX))
 
     # The upload, as declared by the client and checked on submit.
     source_key: Mapped[str] = mapped_column(String(512))

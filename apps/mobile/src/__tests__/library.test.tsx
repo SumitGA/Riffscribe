@@ -25,9 +25,27 @@ async function renderLibrary() {
 
 const jobList: JobList = {
   jobs: [
-    { id: 'a', status: 'running', instrument: 'guitar', created_at: '2026-10-08T05:22:00Z' },
-    { id: 'b', status: 'succeeded', instrument: 'piano', created_at: '2026-10-07T05:22:00Z' },
-    { id: 'c', status: 'failed', instrument: 'guitar', created_at: '2026-10-06T05:22:00Z' },
+    {
+      id: 'a',
+      name: 'Blues riff in A',
+      status: 'running',
+      instrument: 'guitar',
+      created_at: '2026-10-08T05:22:00Z',
+    },
+    {
+      id: 'b',
+      name: null,
+      status: 'succeeded',
+      instrument: 'piano',
+      created_at: '2026-10-07T05:22:00Z',
+    },
+    {
+      id: 'c',
+      name: null,
+      status: 'failed',
+      instrument: 'guitar',
+      created_at: '2026-10-06T05:22:00Z',
+    },
   ],
   next_cursor: null,
 };
@@ -51,7 +69,8 @@ describe('Library', () => {
     expect(await screen.findByText('Transcribing')).toBeTruthy();
     expect(screen.getByText('Ready')).toBeTruthy();
     expect(screen.getByText('Failed')).toBeTruthy();
-    expect(screen.getAllByText('Guitar take')).toHaveLength(2);
+    expect(screen.getByText('Blues riff in A')).toBeTruthy();
+    expect(screen.getByText('Guitar take')).toBeTruthy();
   });
 
   it('filters by instrument', async () => {
@@ -61,6 +80,7 @@ describe('Library', () => {
 
     await fireEvent.press(screen.getByRole('button', { name: 'Piano' }));
     expect(screen.queryByText('Guitar take')).toBeNull();
+    expect(screen.queryByText('Blues riff in A')).toBeNull();
     expect(screen.getByText('Piano take')).toBeTruthy();
   });
 

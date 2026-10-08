@@ -85,6 +85,7 @@ def _job_out(session: Session, store: ObjectStore, job: Job) -> JobOut:
             )
     return JobOut(
         id=job.id,
+        name=job.name,
         status=job.status,
         options=JobOptions.model_validate(job.config),
         created_at=job.created_at,
@@ -126,6 +127,7 @@ def create_job(
     job = Job(
         id=job_id,
         user_id=user.id,
+        name=body.name,
         config=JobOptions.model_validate(
             body.model_dump(include=set(JobOptions.model_fields))
         ).model_dump(mode="json"),
@@ -250,7 +252,11 @@ def list_jobs(
     return JobList(
         jobs=[
             JobSummary(
-                id=j.id, status=j.status, instrument=j.config["instrument"], created_at=j.created_at
+                id=j.id,
+                name=j.name,
+                status=j.status,
+                instrument=j.config["instrument"],
+                created_at=j.created_at,
             )
             for j in page
         ],

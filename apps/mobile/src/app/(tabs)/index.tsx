@@ -125,11 +125,12 @@ function JobCard({ job }: { job: JobSummary }) {
   const running = !isFinished(job.status);
   const Icon = job.instrument === 'guitar' ? Guitar : Piano;
   const instrument = job.instrument === 'guitar' ? 'Guitar' : 'Piano';
+  const title = job.name ?? `${instrument} take`;
   return (
     <Link href={{ pathname: '/jobs/[id]', params: { id: job.id } }} asChild>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${instrument} take, ${formatWhen(job.created_at)}, ${status.label}`}
+        accessibilityLabel={`${title}, ${instrument}, ${formatWhen(job.created_at)}, ${status.label}`}
         style={({ pressed }) => [
           styles.card,
           running && styles.cardRunning,
@@ -146,8 +147,13 @@ function JobCard({ job }: { job: JobSummary }) {
           />
         </View>
         <View style={styles.cardBody}>
-          <Text variant="label">{instrument} take</Text>
-          <Text variant="muted">{formatWhen(job.created_at)}</Text>
+          <Text variant="label" numberOfLines={1}>
+            {title}
+          </Text>
+          <Text variant="muted">
+            {job.name ? `${instrument} · ` : ''}
+            {formatWhen(job.created_at)}
+          </Text>
         </View>
         {running && <ActivityIndicator color={colors.accent} />}
         <Text style={[styles.status, { color: status.color }]}>{status.label}</Text>

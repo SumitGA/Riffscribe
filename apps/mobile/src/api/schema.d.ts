@@ -156,6 +156,11 @@ export interface components {
              * @description Size of the file the client will upload
              */
             size_bytes: number;
+            /**
+             * Name
+             * @description Optional title
+             */
+            name?: string | null;
         };
         /** CreateJobResponse */
         CreateJobResponse: {
@@ -209,6 +214,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Name */
+            name: string | null;
             status: components["schemas"]["JobStatus"];
             options: components["schemas"]["JobOptions"];
             /**
@@ -250,6 +257,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Name */
+            name: string | null;
             status: components["schemas"]["JobStatus"];
             instrument: components["schemas"]["Instrument"];
             /**
