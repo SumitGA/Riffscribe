@@ -12,6 +12,8 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: 'job-1' }),
   Stack: { Screen: () => null },
 }));
+jest.mock('@/score/exports', () => ({ fileName: jest.fn() }));
+jest.mock('@/score/ExportSheet', () => ({ ExportSheet: () => null }));
 jest.mock('@/score/ScoreView', () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return {

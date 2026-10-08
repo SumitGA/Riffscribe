@@ -1,5 +1,5 @@
 import { Pause, Play, Repeat, SkipBack, Timer } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import WebView, { type WebViewMessageEvent } from 'react-native-webview';
 
@@ -22,8 +22,29 @@ const SPEEDS = [1, 0.75, 0.5];
  * controls. alphaTab is a web library, so it runs in a WebView on files bundled with the app;
  * nothing loads from the network (TD-24).
  */
-export function ScoreView({ musicXml, hasTab }: { musicXml: string; hasTab: boolean }) {
+/** What a screen can ask of a ScoreView beyond showing the score. */
+export type ScoreHandle = {
+  /** The score as a Guitar Pro 7 file, base64-encoded. */
+  guitarPro: () => Promise<string>;
+  /** A self-contained black-on-white HTML page of the whole score, to print to PDF. */
+  printable: () => Promise<string>;
+};
+
+export function ScoreView({
+  musicXml,
+  hasTab,
+  ref,
+}: {
+  musicXml: string;
+  hasTab: boolean;
+  ref?: Ref<ScoreHandle>;
+}) {
   const webView = useRef<WebView>(null);
+  // Exports in flight, by id: the page answers each with an `exported` or `exportFailed` message.
+  const requests = useRef(
+    new Map<number, { resolve: (data: string) => void; reject: (e: Error) => void }>(),
+  );
+  const nextId = useRef(1);
   const [files, setFiles] = useState<ViewerFiles | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +58,16 @@ export function ScoreView({ musicXml, hasTab }: { musicXml: string; hasTab: bool
 
   const run = (name: string, ...args: unknown[]) =>
     webView.current?.injectJavaScript(command(name, ...args));
+
+  useImperativeHandle(ref, () => {
+    const ask = (name: string) =>
+      new Promise<string>((resolve, reject) => {
+        const id = nextId.current++;
+        requests.current.set(id, { resolve, reject });
+        webView.current?.injectJavaScript(command(name, id));
+      });
+    return { guitarPro: () => ask('exportGuitarPro'), printable: () => ask('exportPrintable') };
+  }, []);
 
   useEffect(() => {
     prepareViewer().then(setFiles, (e: unknown) => setError(String(e)));
@@ -69,6 +100,17 @@ export function ScoreView({ musicXml, hasTab }: { musicXml: string; hasTab: bool
       case 'error':
         setError(message.message);
         break;
+      case 'exported':
+      case 'exportFailed': {
+        const request = requests.current.get(message.id);
+        requests.current.delete(message.id);
+        if (message.type === 'exported') {
+          request?.resolve(message.data);
+        } else {
+          request?.reject(new Error(message.message));
+        }
+        break;
+      }
     }
   };
 

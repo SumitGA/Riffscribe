@@ -771,7 +771,10 @@ because audio may only start from a tap inside it.
   never be combined with remote content.
 - Workers and AudioWorklets can't load from `file://`, so rendering runs on the page's main
   thread and audio uses the older ScriptProcessor path: long scores render more slowly.
-- Two UIs in one screen: the page's toolbar is HTML, styled to match by hand.
+- PDF export prints the off-screen, black-on-white rendering of the score as HTML. alphaTab
+  positions each system absolutely, so the printer splits pages at fixed heights: a system can
+  be cut across a page break in longer scores. Proper engraving-quality PDFs would come from a
+  layout that knows page sizes (alphaTab's print layout, or MuseScore server-side).
 
 **Revisit when** long scores feel slow (serve the page from a local HTTP origin so workers run),
 or Phase 4's editor needs tighter app/page integration.

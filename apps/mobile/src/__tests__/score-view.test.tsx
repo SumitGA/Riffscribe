@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import type { ReactNode } from 'react';
+import { createRef, type ReactNode } from 'react';
 
 import { prepareViewer } from '@/score/prepareViewer';
-import { ScoreView } from '@/score/ScoreView';
+import { type ScoreHandle, ScoreView } from '@/score/ScoreView';
 import { command } from '@/score/viewerPage';
 
 const mockInjectJavaScript = jest.fn();
@@ -81,6 +81,24 @@ describe('ScoreView', () => {
     expect(mockInjectJavaScript).toHaveBeenCalledWith(
       command('load', '<score-partwise/>', 'score'),
     );
+  });
+
+  it('asks the page for exports and returns its answers', async () => {
+    const handle = createRef<ScoreHandle>();
+    await render(<ScoreView ref={handle} musicXml="<score-partwise/>" hasTab />);
+    await screen.findByTestId('score-view');
+
+    const gp = handle.current?.guitarPro();
+    expect(mockInjectJavaScript).toHaveBeenLastCalledWith(command('exportGuitarPro', 1));
+    const pdf = handle.current?.printable();
+    expect(mockInjectJavaScript).toHaveBeenLastCalledWith(command('exportPrintable', 2));
+
+    const gpChecked = expect(gp).resolves.toBe('UEsDBA==');
+    const pdfChecked = expect(pdf).rejects.toThrow('render failed');
+    await send({ type: 'exportFailed', id: 2, message: 'render failed' });
+    await send({ type: 'exported', id: 1, data: 'UEsDBA==' });
+    await gpChecked;
+    await pdfChecked;
   });
 
   it("explains when the score can't be drawn", async () => {

@@ -1,15 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { Check, X } from 'lucide-react-native';
+import { Check, Share2, X } from 'lucide-react-native';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Job } from '@/api/client';
 import { useApi } from '@/api/provider';
 import { formatWhen, isFinished, type StageState, stageStates } from '@/jobs/status';
-import { ScoreView } from '@/score/ScoreView';
+import { ExportSheet } from '@/score/ExportSheet';
+import { type ExportFormat, fileName, shareBase64, shareDownload, sharePdf } from '@/score/exports';
+import { type ScoreHandle, ScoreView } from '@/score/ScoreView';
 import { colors, fonts, space } from '@/theme';
-import { Card, Text } from '@/ui';
+import { Card, IconButton, Text } from '@/ui';
 import { ProgressRing } from '@/ui/ProgressRing';
 
 /** One transcription: its progress, live, then its score. */
@@ -40,6 +43,7 @@ export default function JobScreen() {
         <Score
           job={job.data}
           outputs={job.data.outputs}
+          title={title}
           subtitle={`${instrument} · ${formatWhen(job.data.created_at)}`}
         />
       ) : (
@@ -135,13 +139,41 @@ function StepMark({ state }: { state: StageState }) {
 function Score({
   job,
   outputs,
+  title,
   subtitle,
 }: {
   job: Job;
   outputs: NonNullable<Job['outputs']>;
+  title: string;
   subtitle: string;
 }) {
+  const scoreView = useRef<ScoreHandle>(null);
+  const [exporting, setExporting] = useState(false);
   const source = outputs.tab_musicxml ?? outputs.musicxml;
+  const guitar = job.options.instrument === 'guitar';
+  const formats: ExportFormat[] = [
+    'pdf',
+    ...(guitar ? (['guitarPro'] as const) : []),
+    'musicxml',
+    ...(outputs.midi ? (['midi'] as const) : []),
+  ];
+
+  const onExport = async (format: ExportFormat) => {
+    const name = fileName(title, format);
+    const view = scoreView.current;
+    switch (format) {
+      case 'musicxml':
+        return shareDownload(source, name, format);
+      case 'midi':
+        return outputs.midi ? shareDownload(outputs.midi, name, format) : undefined;
+      case 'guitarPro':
+        if (!view) throw new Error('the score is still loading');
+        return shareBase64(await view.guitarPro(), name, format);
+      case 'pdf':
+        if (!view) throw new Error('the score is still loading');
+        return sharePdf(await view.printable(), name);
+    }
+  };
   const musicXml = useQuery({
     queryKey: ['score', job.id, outputs.version],
     queryFn: async () => {
@@ -156,6 +188,21 @@ function Score({
 
   return (
     <View style={styles.score}>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <IconButton label="Export and share" onPress={() => setExporting(true)}>
+              <Share2 color={colors.text} size={22} />
+            </IconButton>
+          ),
+        }}
+      />
+      <ExportSheet
+        visible={exporting}
+        formats={formats}
+        onExport={onExport}
+        onClose={() => setExporting(false)}
+      />
       <Text variant="muted" style={styles.subtitle}>
         {subtitle}
       </Text>
@@ -164,7 +211,11 @@ function Score({
       ) : musicXml.isError ? (
         <Text style={styles.error}>{musicXml.error.message}</Text>
       ) : (
-        <ScoreView musicXml={musicXml.data} hasTab={outputs.tab_musicxml !== null} />
+        <ScoreView
+          ref={scoreView}
+          musicXml={musicXml.data}
+          hasTab={outputs.tab_musicxml !== null}
+        />
       )}
     </View>
   );

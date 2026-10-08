@@ -85,7 +85,82 @@ export const VIEWER_PAGE = `<!doctype html>
     setSpeed(speed) { api.playbackSpeed = speed; },
     setMetronome(on) { api.metronomeVolume = on ? 1 : 0; },
     setLoop(on) { api.isLooping = on; },
+
+    // Exports answer with { type: "exported", id, data } or { type: "exportFailed", id, message }.
+    exportGuitarPro(id) {
+      try {
+        const bytes = new alphaTab.exporter.Gp7Exporter().export(api.score, api.settings);
+        post({ type: "exported", id, data: toBase64(bytes) });
+      } catch (error) {
+        post({ type: "exportFailed", id, message: String(error?.message ?? error) });
+      }
+    },
+    // A self-contained, black-on-white HTML page of the whole score, for printing to PDF.
+    exportPrintable(id) {
+      printable().then(
+        (html) => post({ type: "exported", id, data: html }),
+        (error) => post({ type: "exportFailed", id, message: String(error?.message ?? error) }),
+      );
+    },
   };
+
+  function toBase64(bytes) {
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(binary);
+  }
+
+  // fetch() can't read file:// URLs; XHR can (the WebView allows file access from file URLs).
+  function readBase64(path) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", path);
+      xhr.responseType = "arraybuffer";
+      xhr.onload = () => resolve(toBase64(new Uint8Array(xhr.response)));
+      xhr.onerror = () => reject(new Error("couldn't read " + path));
+      xhr.send();
+    });
+  }
+
+  function printable() {
+    return new Promise((resolve, reject) => {
+      const host = document.createElement("div");
+      host.style.cssText = "position: absolute; left: -10000px; top: 0; width: 700px;";
+      document.body.appendChild(host);
+      const printer = new alphaTab.AlphaTabApi(host, {
+        core: { fontDirectory: "font/", useWorkers: false, enableLazyLoading: false, engine: "svg" },
+        display: { layoutMode: alphaTab.LayoutMode.Page, scale: 0.9, staveProfile: api.settings.display.staveProfile },
+        player: { playerMode: alphaTab.PlayerMode.Disabled },
+      });
+      let done = false;
+      printer.error.on((error) => reject(error));
+      printer.renderFinished.on(async () => {
+        if (done) return;
+        done = true;
+        try {
+          const font = await readBase64("font/Bravura.woff2");
+          const css = Array.from(document.querySelectorAll("style"))
+            .map((style) => style.innerHTML)
+            .join(" ")
+            // The music font goes inside the document: the PDF printer can't read our files.
+            .replace(/src:[^;]*;/g, "src: url(data:font/woff2;base64," + font + ") format('woff2');");
+          host.style.cssText = "width: 700px;";
+          const html = "<!doctype html><html><head><meta charset='utf-8'><style>" + css +
+            " body { margin: 0; background: #fff; } .sheet { zoom: 0.78; }</style></head><body>" +
+            "<div class='sheet'>" + host.outerHTML + "</div></body></html>";
+          resolve(html);
+        } catch (error) {
+          reject(error);
+        } finally {
+          printer.destroy();
+          host.remove();
+        }
+      });
+      printer.renderScore(api.score);
+    });
+  }
   post({ type: "ready" });
 </script>
 </body>
@@ -101,7 +176,9 @@ export type ViewerMessage =
   | { type: 'playerReady' }
   | { type: 'playing'; playing: boolean }
   | { type: 'position'; currentMs: number; endMs: number }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'exported'; id: number; data: string }
+  | { type: 'exportFailed'; id: number; message: string };
 
 /** The JavaScript that runs `window.riff.<name>(...args)` in the page. */
 export function command(name: string, ...args: unknown[]): string {
