@@ -30,6 +30,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-20](#td-20-observability-prometheus-metrics-and-a-minimal-trace) | Observability: Prometheus metrics and a minimal trace | Ops | First production deploy; GPU workers |
 | [TD-21](#td-21-app-api-types-generated-from-a-committed-openapi-copy) | App API types generated from a committed OpenAPI copy | Mobile / API | openapi-typescript supports TypeScript 6; old app versions in the wild |
 | [TD-22](#td-22-clerks-native-sign-in-screen) | Clerk's native sign-in screen | Mobile / auth | Paid Apple account (Apple sign-in); branding needs beyond Clerk's theme |
+| [TD-23](#td-23-local-android-builds-jdk-17-and-a-slow-react-native-repository) | Local Android builds: JDK 17 and a slow React Native repository | Mobile / tooling | Moving builds to EAS or CI; React Native supports newer JDKs |
 
 ---
 
@@ -718,8 +719,34 @@ switched on in the Clerk dashboard. The session lives in the Keychain / Keystore
   before an iOS release that offers Google.
 - Locally the API accepts either dev tokens or Clerk tokens, not both (`CLERK_ISSUER`, TD-17), so
   `make e2e` and the app can't share one running API.
+- **First-time Google sign-up fails on Android phones with no Google account.** Clerk then
+  falls back to Google in a browser, and its Android SDK (1.1.11) returns from the browser
+  without turning the sign-in into a sign-up: no user is created and the screen starts over.
+  With a Google account on the phone (nearly every Android phone) the native picker is used and
+  sign-up works (tested 2026-10-08). Report to Clerk; retest when `@clerk/expo` updates its SDK.
 - Ties the app's sign-in screen to Clerk. The API side stays provider-neutral (plain JWKS).
 
 **Revisit when** the Apple Developer account exists (set `appleSignIn` to true, register the iOS
 app in Clerk, enable Apple), or when design needs more than Clerk's theming (build our own screens
 on `useSignIn`/`useSignUp`; the API doesn't change).
+
+## TD-23: Local Android builds: JDK 17 and a slow React Native repository
+
+**Concept.** `make mobile-android` compiles the development build on this Mac with Gradle. React
+Native 0.86 supports JDK 17; Android Studio ships JDK 25, whose native-access warnings make the
+Android Gradle plugin fail CMake steps (`react-native-worklets`). The Makefile picks JDK 17 with
+`/usr/libexec/java_home -v 17` (Temurin 17 in `~/Library/Java/JavaVirtualMachines`). React
+Native's own Maven repository (`repo.reactnative.dev`, which Maven Central redirects to) was very
+slow from our network (about 58 KB/s, with resets) for its 279 MB and 112 MB debug libraries;
+Gradle can't resume downloads, so they were fetched once with `curl -C -` and served through a
+one-off `--init-script`. They're in Gradle's cache now.
+
+**Pros**
+- No cloud build service or account; a rebuild takes minutes once the cache is warm, and
+  JavaScript changes reach the phone in seconds through Metro without rebuilding.
+
+**Cons**
+- Each developer machine needs Android Studio, JDK 17 and ~15 GB of SDK, NDK and caches.
+- A fresh cache on a slow network repeats the download problem.
+
+**Revisit when** builds move to EAS Build or CI (Phase 5), or React Native supports newer JDKs.

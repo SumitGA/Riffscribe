@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token api-types mobile mobile-ios mobile-android mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -18,6 +18,12 @@ MOBILE_DIR := apps/mobile
 HOST_IP ?=
 PUBLIC_HOST = $(if $(HOST_IP),$(HOST_IP),localhost)
 PUBLIC_BIND = $(if $(HOST_IP),0.0.0.0,127.0.0.1)
+# Android builds: React Native needs JDK 17 (Android Studio's bundled JDK 25 breaks native builds).
+ANDROID_SDK ?= $(HOME)/Library/Android/sdk
+ANDROID_JAVA_HOME ?= $(shell /usr/libexec/java_home -v 17 2>/dev/null)
+# Where the app finds the API: a USB phone through `adb reverse` (localhost), or a phone on Wi-Fi.
+USB ?=
+MOBILE_API_ENV = $(if $(USB),EXPO_PUBLIC_API_URL=http://localhost:8000,$(if $(HOST_IP),EXPO_PUBLIC_API_URL=http://$(HOST_IP):8000))
 # Local dev auth (TD-17). Throwaway values, like the dev credentials in docker-compose.yml.
 LOCAL_JWT_ISSUER ?= http://localhost/dev-issuer
 LOCAL_JWT_DEV_SECRET ?= tabscribe-local-dev-only-not-a-real-secret
@@ -84,14 +90,18 @@ token: ## Print a local dev access token: make token [USER=alice] [TTL=3600]
 
 check: lint typecheck test rust mobile-check ## Run everything CI runs (except e2e)
 
-mobile: ## Start the Expo dev server for the app's dev build [HOST_IP=<LAN IP> to use a phone]
-	cd $(MOBILE_DIR) && $(if $(HOST_IP),EXPO_PUBLIC_API_URL=http://$(HOST_IP):8000) npx expo start
+mobile: ## Start the Expo dev server for the dev build [USB=1 after make mobile-usb, or HOST_IP=<LAN IP>]
+	cd $(MOBILE_DIR) && $(MOBILE_API_ENV) npx expo start --dev-client
 
 mobile-ios: ## Build the dev build and run it in the iOS Simulator (needs Xcode)
 	cd $(MOBILE_DIR) && npx expo run:ios
 
-mobile-android: ## Build the dev build and run it in the Android Emulator (needs Android Studio)
-	cd $(MOBILE_DIR) && npx expo run:android
+mobile-android: ## Build the dev build and install it on the emulator or a USB phone (needs JDK 17, TD-23)
+	cd $(MOBILE_DIR) && JAVA_HOME="$(ANDROID_JAVA_HOME)" ANDROID_HOME="$(ANDROID_SDK)" npx expo run:android
+
+mobile-usb: ## Forward Metro, the API and S3 to a USB-connected Android phone (rerun after replugging)
+	@for port in 8081 8000 8333; do "$(ANDROID_SDK)/platform-tools/adb" reverse tcp:$$port tcp:$$port; done
+	@echo "Now: make mobile USB=1 (the phone reaches this Mac as localhost)"
 
 api-types: ## Regenerate the app's API types from the API's OpenAPI schema (after API changes)
 	uv run --quiet python -m api.openapi $(MOBILE_DIR)/src/api/openapi.json
