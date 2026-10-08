@@ -28,6 +28,8 @@ MOBILE_API_ENV = $(if $(USB),EXPO_PUBLIC_API_URL=http://localhost:8000,$(if $(HO
 LOCAL_JWT_ISSUER ?= http://localhost/dev-issuer
 LOCAL_JWT_DEV_SECRET ?= tabscribe-local-dev-only-not-a-real-secret
 TTL ?= 3600
+# Local testing shouldn't run out of transcriptions; production keeps the free tier's default (10).
+LOCAL_FREE_JOBS_PER_MONTH ?= 1000
 # Readable logs locally; `make worker LOG_FORMAT=json` shows what production logs.
 LOG_FORMAT ?= text
 # `make api CLERK_ISSUER=https://<instance>.clerk.accounts.dev` makes the API accept the app's
@@ -40,7 +42,7 @@ LOCAL_AUTH = $(if $(CLERK_ISSUER),JWT_ISSUER=$(CLERK_ISSUER) \
 LOCAL_ENV = DATABASE_URL=$(LOCAL_DATABASE_URL) REDIS_URL=redis://localhost:6379/0 \
 	S3_BUCKET=tabscribe S3_ENDPOINT_URL=http://localhost:8333 S3_REGION=us-east-1 \
 	AWS_ACCESS_KEY_ID=dev-access-key AWS_SECRET_ACCESS_KEY=dev-secret-key \
-	$(LOCAL_AUTH) LOG_FORMAT=$(LOG_FORMAT) $(if $(HOST_IP),S3_PUBLIC_ENDPOINT_URL=http://$(HOST_IP):8333)
+	$(LOCAL_AUTH) FREE_JOBS_PER_MONTH=$(LOCAL_FREE_JOBS_PER_MONTH) LOG_FORMAT=$(LOG_FORMAT) $(if $(HOST_IP),S3_PUBLIC_ENDPOINT_URL=http://$(HOST_IP):8333)
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
