@@ -1,6 +1,6 @@
 import { File, UploadType } from 'expo-file-system';
 
-import type { Api, Instrument, Job, PresignedRequest } from '@/api/client';
+import type { Api, CreateJobRequest, Job, PresignedRequest } from '@/api/client';
 import type { AudioClip } from '@/audio/clip';
 
 /** Sends a local file to a presigned URL, reporting progress from 0 to 1. */
@@ -9,6 +9,9 @@ export type Uploader = (
   request: PresignedRequest,
   onProgress: (fraction: number) => void,
 ) => Promise<void>;
+
+/** What the user chose for the take: everything in a new job except the upload's details. */
+export type TakeOptions = Omit<CreateJobRequest, 'content_type' | 'size_bytes'>;
 
 export type Step =
   { step: 'creating' } | { step: 'uploading'; fraction: number } | { step: 'submitting' };
@@ -21,13 +24,13 @@ export type Step =
 export async function startTranscription(
   api: Pick<Api, 'createJob' | 'submitJob'>,
   clip: AudioClip,
-  instrument: Instrument,
+  options: TakeOptions,
   upload: Uploader,
   onStep: (step: Step) => void = () => {},
 ): Promise<Job> {
   onStep({ step: 'creating' });
   const created = await api.createJob({
-    instrument,
+    ...options,
     content_type: clip.contentType,
     size_bytes: clip.sizeBytes,
   });

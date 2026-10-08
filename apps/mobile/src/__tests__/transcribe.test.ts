@@ -38,10 +38,13 @@ describe('startTranscription', () => {
     const steps: Step[] = [];
 
     await expect(
-      startTranscription(api, clip, 'piano', upload, (s) => steps.push(s)),
+      startTranscription(api, clip, { instrument: 'piano', name: 'Nocturne' }, upload, (s) =>
+        steps.push(s),
+      ),
     ).resolves.toBe(queued);
     expect(api.createJob).toHaveBeenCalledWith({
       instrument: 'piano',
+      name: 'Nocturne',
       content_type: 'audio/mp4',
       size_bytes: 1234,
     });
@@ -62,7 +65,9 @@ describe('startTranscription', () => {
       throw new Error('The upload failed (HTTP 403). Try again.');
     };
 
-    await expect(startTranscription(api, clip, 'guitar', upload)).rejects.toThrow('HTTP 403');
+    await expect(startTranscription(api, clip, { instrument: 'guitar' }, upload)).rejects.toThrow(
+      'HTTP 403',
+    );
     expect(api.submitJob).not.toHaveBeenCalled();
   });
 });

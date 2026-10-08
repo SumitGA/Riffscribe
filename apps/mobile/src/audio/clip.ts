@@ -7,6 +7,8 @@ export type AudioClip = {
   sizeBytes: number;
   /** Known for recordings; picked files are measured by the server. */
   durationMs?: number;
+  /** Input levels (0-1) sampled while recording, for the review screen's waveform. */
+  waveform?: number[];
 };
 
 /** The free tier's limit (CLAUDE.md); the server rejects longer audio, this stops sooner. */
