@@ -98,7 +98,9 @@ export async function askForPushOnce(api: Pick<Api, 'registerPushToken'>): Promi
     }
     await setItemAsync(ASKED_KEY, 'yes');
     await enablePush(api);
-  } catch {
-    // Registration failed (network, Expo); the Account screen can try again.
+  } catch (error) {
+    // Registration failed (network, Expo, Firebase); the Account screen can try again and shows
+    // the error there.
+    console.warn('push registration failed', error);
   }
 }
