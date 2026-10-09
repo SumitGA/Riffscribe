@@ -36,6 +36,8 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-26](#td-26-chord-names-by-template-matching) | Chord names by template matching | Pipeline | Chord accuracy plateaus, or users need sus/dim/inversions |
 | [TD-27](#td-27-synced-playback-from-the-phones-own-copy-of-the-take) | Synced playback from the phone's own copy of the take | Mobile / legal | Users want playback on other devices, or the retention policy changes |
 | [TD-28](#td-28-guitar-sound-from-a-trimmed-musescore_general-font) | Guitar sound from a trimmed MuseScore_General font | Mobile / legal | Before a store release (notices screen); users want a better piano |
+| [TD-29](#td-29-staging-is-one-vm-with-logs-only) | Staging is one VM with logs only | Infra | Real users, or staging downtime blocks work |
+| [TD-30](#td-30-terraform-state-in-a-local-file) | Terraform state in a local file | Infra | A second person runs Terraform, or before production |
 
 ---
 
@@ -935,3 +937,49 @@ first and MuseScore's guitars on top; alphaTab uses the last font that has a pre
 **Revisit when** preparing any store release (add an Acknowledgements screen listing these
 notices), or when piano users ask for a better piano (MuseScore's is 15 MB: offer it as a
 download rather than bundle it).
+
+## TD-29: Staging is one VM with logs only
+
+**Concept.** *High availability* means a service survives the loss of a machine; it needs at
+least two of everything plus a load balancer. *Observability* is being able to see what the
+system does: metrics, dashboards, alerts.
+
+**What we did (ADR-0010).** Staging runs every service on one OpenStack VM with docker compose.
+Postgres data sits on a separate volume and is dumped to R2 nightly. The API (`/metrics`) and
+worker (`:9100`) still expose Prometheus metrics, but only inside the VM; nothing collects them.
+Logs are JSON in `docker compose logs`.
+
+**Pros**
+- Cheap, quick to set up and easy to understand; the same images and settings as production.
+- Replacing the VM loses nothing: the data volume and R2 hold all state.
+
+**Cons**
+- Any VM problem takes staging down until it is fixed or replaced.
+- Nobody is alerted when something breaks; queue depth and failure rate are only visible by
+  asking the VM.
+- One worker: two long transcriptions queue behind each other.
+
+**Revisit when** real users depend on it (Phase 5: Prometheus + Grafana or a hosted service,
+alerts on failure rate and queue depth, two VMs or managed hosting), or when staging downtime
+starts blocking work.
+
+## TD-30: Terraform state in a local file
+
+**Concept.** Terraform remembers what it created in a *state* file and compares it with the code
+on every run. Teams keep it in a shared *remote backend* (an S3 bucket, Terraform Cloud) with
+locking, so two people can't change the same infrastructure at once.
+
+**What we did.** `infra/terraform/staging` keeps its state in a local, git-ignored
+`terraform.tfstate` on the owner's machine.
+
+**Pros**
+- Nothing to set up first; fine for one person and one environment.
+
+**Cons**
+- The state exists on one laptop: lose it and Terraform no longer knows the VM, volume and IP it
+  made (they keep running, but have to be imported or deleted by hand).
+- No locking; two runs at once can corrupt it.
+- The state file holds resource details (IPs, IDs), so it must never be committed.
+
+**Revisit when** a second person runs Terraform, or before production: move it to an S3 backend
+on R2 (`backend "s3"` with R2's endpoint) with a lock.
