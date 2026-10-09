@@ -1,10 +1,11 @@
-# HTTPS for the staging API (ADR-0010). Caddy gets and renews a Let's Encrypt certificate for
-# STAGING_HOST by itself; the DNS A record must point at the VM first.
+# Internal reverse proxy for staging (ADR-0010). HTTPS is Cloudflare's job: the tunnel forwards
+# requests here over the stack's private network, so Caddy only listens on plain HTTP and
+# publishes no port.
 {
-	email {$ACME_EMAIL}
+	auto_https off
 }
 
-{$STAGING_HOST} {
+:80 {
 	encode zstd gzip
 	# Metrics are for whoever operates the VM, not the internet (TD-29).
 	@internal path /metrics

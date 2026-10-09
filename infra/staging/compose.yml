@@ -1,9 +1,10 @@
-# Staging stack (ADR-0010): everything on one VM, behind Caddy. Deployed by
+# Staging stack (ADR-0010): everything on one VM in the home lab. Deployed by
 # `make deploy-staging`, which copies this folder to the VM and runs it with the VM's `.env`
 # (see .env.example; secrets never live in the repo). Images come from GHCR, pinned by TAG.
 #
-# Only Caddy publishes ports. Postgres, Valkey and the metrics endpoints are reachable only on
-# the stack's internal network.
+# The internet reaches the API through a Cloudflare Tunnel: cloudflared connects *out* to
+# Cloudflare, which serves HTTPS for STAGING_HOST and forwards requests to Caddy (internal,
+# plain HTTP), which hides /metrics and proxies to the API. Nothing publishes a port.
 
 name: riffscribe-staging
 
@@ -25,17 +26,19 @@ x-api-image: &api-image ghcr.io/${IMAGE_OWNER:-sumitga}/riffscribe-api:${TAG:?se
 x-worker-image: &worker-image ghcr.io/${IMAGE_OWNER:-sumitga}/riffscribe-worker:${TAG:?set TAG to a commit SHA}
 
 services:
+  cloudflared:
+    image: cloudflare/cloudflared:2025.9.1
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set in .env}  # the tunnel's routes live in Cloudflare
+    depends_on:
+      caddy: {condition: service_started}
+
   caddy:
     image: caddy:2.10-alpine
     restart: unless-stopped
-    ports: ["80:80", "443:443", "443:443/udp"]
-    environment:
-      STAGING_HOST: ${STAGING_HOST:?set in .env}
-      ACME_EMAIL: ${ACME_EMAIL:?set in .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data  # certificates: keep them, or Let's Encrypt rate limits apply
-      - caddy-config:/config
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro"]
     depends_on:
       api: {condition: service_healthy}
 
@@ -82,7 +85,7 @@ services:
       POSTGRES_USER: riffscribe
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
       POSTGRES_DB: riffscribe
-    # The VM's separate data volume (mounted by cloud-init), so the VM can be replaced.
+    # On the VM's disk (the lab has no block storage); the nightly R2 backup is the safety net.
     volumes: ["${POSTGRES_DATA_DIR:-/srv/riffscribe/postgres}:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U riffscribe -d riffscribe"]
@@ -103,6 +106,4 @@ services:
       retries: 30
 
 volumes:
-  caddy-data:
-  caddy-config:
   valkey-data:

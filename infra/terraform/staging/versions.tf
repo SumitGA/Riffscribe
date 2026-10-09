@@ -10,6 +10,10 @@ terraform {
 }
 
 # Credentials come from clouds.yaml (~/.config/openstack/clouds.yaml), never from this repo.
+# The lab's public endpoints sit behind Cloudflare's proxy, which doesn't forward OpenStack's
+# ports, so every call uses the internal endpoints over the LAN (the provider ignores
+# clouds.yaml's `interface`).
 provider "openstack" {
-  cloud = var.cloud
+  cloud         = var.cloud
+  endpoint_type = "internal"
 }
