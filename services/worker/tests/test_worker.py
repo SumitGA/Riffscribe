@@ -174,7 +174,7 @@ def test_guitar_job_runs_every_stage(
     with Session(db) as session:
         score = session.scalars(select(ScoreVersion).where(ScoreVersion.job_id == job_id)).one()
     assert score.version == 0
-    for key in (score.musicxml_key, score.tab_musicxml_key, score.midi_key):
+    for key in (score.musicxml_key, score.tab_musicxml_key, score.midi_key, score.sync_key):
         assert key is not None and object_store.head(key) is not None
     keys = object_store.list_keys(job_prefix(s3_user, str(job_id)))
     # The upload is stored once: the source stage's copy stays on the worker.
@@ -317,7 +317,7 @@ def test_identical_upload_reuses_the_results(
     assert [runs[s].status for s in later] == [StageStatus.CACHED] * len(later)
     with Session(db) as session:
         score = session.scalars(select(ScoreVersion).where(ScoreVersion.job_id == second)).one()
-    for key in (score.musicxml_key, score.tab_musicxml_key, score.midi_key):
+    for key in (score.musicxml_key, score.tab_musicxml_key, score.midi_key, score.sync_key):
         assert key is not None and f"/jobs/{second}/" in key  # its own copy
         assert object_store.head(key) is not None
     assert notifier.sent[-1] == (job.user_id, second, JobStatus.SUCCEEDED)

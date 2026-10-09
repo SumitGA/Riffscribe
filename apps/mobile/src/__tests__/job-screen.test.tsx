@@ -126,6 +126,7 @@ describe('JobScreen', () => {
           musicxml: get('https://s3/score'),
           tab_musicxml: get('https://s3/tab'),
           midi: null,
+          sync: null,
         },
       }),
     );

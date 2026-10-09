@@ -155,6 +155,8 @@ class ScoreVersion(Base):
     musicxml_key: Mapped[str] = mapped_column(String(512))
     tab_musicxml_key: Mapped[str | None] = mapped_column(String(512))
     midi_key: Mapped[str | None] = mapped_column(String(512))
+    # sync.json: when each bar starts in the uploaded audio (None for scores made before it)
+    sync_key: Mapped[str | None] = mapped_column(String(512))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

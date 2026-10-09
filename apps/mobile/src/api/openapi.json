@@ -713,6 +713,16 @@
                 "type": "null"
               }
             ]
+          },
+          "sync": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresignedRequestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -720,7 +730,8 @@
           "version",
           "musicxml",
           "tab_musicxml",
-          "midi"
+          "midi",
+          "sync"
         ],
         "title": "JobOutputs",
         "description": "Presigned downloads of the job's latest score version."

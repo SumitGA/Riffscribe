@@ -148,6 +148,11 @@ def _staff_notes(
     return [list(notes)]
 
 
+def bar_lines(score: Score) -> list[Fraction]:
+    """Bar start positions in beats as written by `write_score`, plus the end of the last bar."""
+    return _bar_lines(score, [score.notes])
+
+
 def _bar_lines(score: Score, staves: Sequence[Sequence[ScoreNote]]) -> list[Fraction]:
     """Bar start positions in beats, plus the end of the last bar."""
     end = max((n.onset_beats + n.duration_beats for s in staves for n in s), default=Fraction(0))

@@ -1,3 +1,4 @@
+import json
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Sequence
 from fractions import Fraction
@@ -11,7 +12,7 @@ from pipeline.musicxml import DIVISIONS, write_score
 from pipeline.runner import run_pipeline
 from pipeline.score import ChordSymbol, KeySignature, Score, ScoreNote
 from pipeline.stages import default_stages
-from pipeline.stages.notation import Notation
+from pipeline.stages.notation import Notation, bar_starts_ms
 
 pytestmark = pytest.mark.unit
 
@@ -192,6 +193,24 @@ def test_notation_stage_through_the_whole_pipeline(tmp_path: Path) -> None:
     assert notation.measures == len(measures(xml)) > 0
     for i, measure in enumerate(measures(xml)):
         assert len(set(staff_durations(measure).values())) == 1, f"bar {i}"
+    bar_starts = json.loads((tmp_path / notation.sync.path).read_text())["bar_starts_ms"]
+    assert len(bar_starts) == notation.measures
+    assert bar_starts == sorted(bar_starts)
+
+
+def test_bars_line_up_with_the_recording_including_the_trimmed_lead_in() -> None:
+    # 120 bpm from 1 s into the trimmed audio, one beat of pickup, then a full bar and a half.
+    score = make_score([(60, 0, 1), (62, 1, 4), (64, 5, 2)], pickup=1).model_copy(
+        update={"beat_times_s": [1.0 + 0.5 * b for b in range(8)]}
+    )
+
+    assert bar_starts_ms(score, trim_start_s=0.25) == [1250, 1750, 3750]
+
+
+def test_bars_follow_the_score_tempo_without_tracked_beats() -> None:
+    score = make_score([(60, 0, 8)])  # 100 bpm, no beat times
+
+    assert bar_starts_ms(score, trim_start_s=0.0) == [0, 2400]
 
 
 def test_chord_names_are_written_as_harmony_where_they_start() -> None:
