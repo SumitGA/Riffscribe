@@ -7,6 +7,9 @@
  * Workers and AudioWorklets are off because they can't load from file:// (TD-24). The colours
  * match the app's dark theme (src/theme).
  *
+ * Sound: Sonivox (alphaTab's small General MIDI font) for everything, then MuseScore_General's
+ * guitars and metronome click on top (assets/soundfont; a later font's presets win, TD-28).
+ *
  * With a take (the user's recording, copied next to the page), playback uses it as alphaTab's
  * backing track instead of the synthesizer, with a sync point at the start of every bar so the
  * cursor follows the recording's real timing (sync.json from the pipeline).
@@ -61,7 +64,6 @@ export const VIEWER_PAGE = `<!doctype html>
           ? alphaTab.PlayerMode.EnabledBackingTrack
           : alphaTab.PlayerMode.EnabledSynthesizer,
         outputMode: alphaTab.PlayerOutputMode.WebAudioScriptProcessor,
-        soundFont: "sonivox.sf2",
         scrollMode: alphaTab.ScrollMode.Continuous,
       },
     });
@@ -82,6 +84,9 @@ export const VIEWER_PAGE = `<!doctype html>
   async function show(musicXml, profile, take, source) {
     current = { musicXml, profile, take, source };
     createApi(profile, source);
+    // Synchronous without workers, so the player is ready once, with both fonts.
+    api.loadSoundFont(new Uint8Array(await readBytes("sonivox.sf2")), false);
+    api.loadSoundFont(new Uint8Array(await readBytes("musescore-guitars.sf3")), true);
     const bytes = new TextEncoder().encode(musicXml);
     if (source !== "recording") {
       api.load(bytes);

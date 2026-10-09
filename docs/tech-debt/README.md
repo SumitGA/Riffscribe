@@ -35,6 +35,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-25](#td-25-push-notifications-through-expos-push-service) | Push notifications through Expo's push service | Backend / mobile | Many users (receipts, batching); dropping Expo |
 | [TD-26](#td-26-chord-names-by-template-matching) | Chord names by template matching | Pipeline | Chord accuracy plateaus, or users need sus/dim/inversions |
 | [TD-27](#td-27-synced-playback-from-the-phones-own-copy-of-the-take) | Synced playback from the phone's own copy of the take | Mobile / legal | Users want playback on other devices, or the retention policy changes |
+| [TD-28](#td-28-guitar-sound-from-a-trimmed-musescore_general-font) | Guitar sound from a trimmed MuseScore_General font | Mobile / legal | Before a store release (notices screen); users want a better piano |
 
 ---
 
@@ -906,3 +907,31 @@ this, in line with ADR-0009 (uploaded audio is deleted after processing).
 **Revisit when** users want playback on other devices (then keep a compressed playback copy
 on the server for the transcription's lifetime, which needs an ADR-0009 amendment), or when
 per-beat sync is needed for tight passages.
+
+## TD-28: Guitar sound from a trimmed MuseScore_General font
+
+**Concept.** Synthesized playback draws instruments from a *soundfont*: recorded samples
+plus how to play them. alphaTab ships Sonivox (1.3 MB, General MIDI); its guitar sounded
+thin. The owner compared renders of our transcriptions and preferred **MuseScore_General**
+(MIT; FluidR3 by Frank Wen and others). The full font is 40 MB, 15 MB of it piano, so
+`tools/soundfont/trim_sf3.py` keeps only its guitars (GM 24-30) and the metronome click: 2.1 MB
+(`apps/mobile/assets/soundfont/`, with its licence and attribution). The viewer loads Sonivox
+first and MuseScore's guitars on top; alphaTab uses the last font that has a preset.
+
+**Pros**
+- Better guitar sound for 2.1 MB more in the app, and no new code dependency. Samples are copied
+  as they are (Ogg Vorbis inside SF3), so the trim loses no quality and can be re-run.
+- MuseScore's guitar plays at about a quarter of Sonivox's level (peak 0.41 vs 1.6 on a strummed
+  excerpt), so guitar playback no longer clips.
+
+**Cons**
+- Piano and everything else stay on Sonivox, which can still clip on dense chords.
+- **The app has no third-party notices screen yet.** MIT (this font), Apache-2.0 (Sonivox,
+  Basic Pitch), MPL-2.0 (alphaTab) and OFL (Bravura) all ask for their notices to ship with the
+  app. The texts are in the repo, not in the app.
+- alphaTab only plays mono samples from a font; this one is mono, a stereo font would play
+  silence.
+
+**Revisit when** preparing any store release (add an Acknowledgements screen listing these
+notices), or when piano users ask for a better piano (MuseScore's is 15 MB: offer it as a
+download rather than bundle it).
