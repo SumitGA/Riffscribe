@@ -113,6 +113,18 @@ class TestJwks:
         token = jwt.encode(_claims(), key, algorithm="RS256", headers={"kid": "k1"})
         assert verifier.verify(token).id == "alice"
 
+    def test_clerk_session_token(self, key: rsa.RSAPrivateKey, verifier: TokenVerifier) -> None:
+        # The claims of a Clerk (v2) session token: no `aud` or `token_use`, a `user_...` sub.
+        clerk = _claims(
+            sub="user_2xQd8ZbLwQjVYxN1fB7kq3",
+            azp="riffscribe-app",
+            sid="sess_2xQd9",
+            nbf=int(time.time()) - 5,
+            v=2,
+        )
+        token = jwt.encode(clerk, key, algorithm="RS256", headers={"kid": "k1"})
+        assert verifier.verify(token).id == "user_2xQd8ZbLwQjVYxN1fB7kq3"
+
     def test_unknown_key(self, verifier: TokenVerifier) -> None:
         other = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         token = jwt.encode(_claims(), other, algorithm="RS256", headers={"kid": "k2"})

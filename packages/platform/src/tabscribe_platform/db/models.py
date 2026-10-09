@@ -57,6 +57,10 @@ def _enum[E: StrEnum](cls: type[E]) -> Enum:
     )
 
 
+JOB_NAME_MAX = 120
+PUSH_TOKEN_MAX = 255
+
+
 class JobStatus(StrEnum):
     PENDING_UPLOAD = "pending_upload"
     QUEUED = "queued"
@@ -95,6 +99,8 @@ class Job(Base):
     status: Mapped[JobStatus] = mapped_column(_enum(JobStatus), default=JobStatus.PENDING_UPLOAD)
     # The pipeline settings (instrument, tuning, capo, ...) as `PipelineConfig` JSON.
     config: Mapped[dict[str, Any]]
+    # What the user called it ("Blues riff in A"); None shows as the instrument and date.
+    name: Mapped[str | None] = mapped_column(String(JOB_NAME_MAX))
 
     # The upload, as declared by the client and checked on submit.
     source_key: Mapped[str] = mapped_column(String(512))
@@ -164,3 +170,18 @@ class ResultCache(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class PushToken(Base):
+    """A device that gets notifications (an Expo push token), registered by the app."""
+
+    __tablename__ = "push_tokens"
+    __table_args__ = (Index(None, "user_id"),)
+
+    # "ExponentPushToken[...]": one per app install. A device that signs in as someone else
+    # moves its token to that user.
+    token: Mapped[str] = mapped_column(String(PUSH_TOKEN_MAX), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    platform: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=utcnow)

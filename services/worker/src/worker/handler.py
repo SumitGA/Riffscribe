@@ -214,6 +214,9 @@ class StageWorker:
         with self._sessions() as session:
             job = self._load(session, message)
             if job is None or job.status not in _ACTIVE:
+                if job is None:
+                    # Deleted while this stage ran: remove the files the stage just stored.
+                    self._store.delete_prefix(job_prefix(message.user_id, str(message.job_id)))
                 self._queue.ack(delivery)
                 return "dropped"
             self._set_stage(

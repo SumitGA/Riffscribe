@@ -18,7 +18,7 @@ from tabscribe_platform.observability import configure_logging, configure_tracin
 from tabscribe_platform.settings import get_settings
 from tabscribe_platform.storage import ObjectStore
 from worker.handler import StageWorker, remove_stale_tempdirs
-from worker.notify import LogNotifier
+from worker.notify import ExpoPushNotifier, LogNotifier, Notifier, expo_sender
 from worker.settings import WorkerSettings
 
 logger = logging.getLogger("worker")
@@ -46,11 +46,18 @@ def main() -> None:
     queue = RedisJobQueue.from_url(
         str(settings.redis_url), visibility_timeout_s=settings.queue_visibility_timeout_s
     )
+    sessions = make_session_factory(make_engine(str(settings.database_url)))
+    notifier: Notifier = LogNotifier()
+    if worker_settings.notifier == "expo":
+        token = worker_settings.expo_access_token
+        notifier = ExpoPushNotifier(
+            sessions, expo_sender(token.get_secret_value() if token else None)
+        )
     worker = StageWorker(
-        make_session_factory(make_engine(str(settings.database_url))),
+        sessions,
         ObjectStore(settings),
         queue,
-        LogNotifier(),
+        notifier,
         # Three heartbeats per timeout: one can be late without losing the message.
         heartbeat_s=settings.queue_visibility_timeout_s / 3,
     )

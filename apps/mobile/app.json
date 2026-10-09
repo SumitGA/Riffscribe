@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "Riffscribe",
+    "slug": "riffscribe",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "riffscribe",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sumitga.riffscribe"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.sumitga.riffscribe",
+      "googleServicesFile": "./google-services.json"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "@clerk/expo",
+        {
+          "appleSignIn": false,
+          "theme": "./assets/clerk-theme.json"
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Riffscribe records what you play so it can transcribe it.",
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-asset",
+      "expo-font",
+      "expo-sharing",
+      [
+        "expo-notifications",
+        {
+          "color": "#FFB224"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "backgroundColor": "#0D0E11",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d0b25db2-3690-4096-9c98-fc02105deb85"
+      }
+    },
+    "owner": "sumitga"
+  }
+}

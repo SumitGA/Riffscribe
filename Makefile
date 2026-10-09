@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -12,24 +12,44 @@ ARGS ?=
 FILE_PATH = $(patsubst ~/%,$(HOME)/%,$(FILE))
 OUT_PATH = $(patsubst ~/%,$(HOME)/%,$(OUT))
 LOCAL_DATABASE_URL ?= postgresql+psycopg://tabscribe:tabscribe@localhost:5433/tabscribe
+MOBILE_DIR := apps/mobile
+# A phone reaches the backend through this Mac's LAN address (e.g. HOST_IP=192.168.1.20); the
+# iOS Simulator and Android Emulator don't need it. Set, it opens the API and S3 to the network.
+HOST_IP ?=
+PUBLIC_HOST = $(if $(HOST_IP),$(HOST_IP),localhost)
+PUBLIC_BIND = $(if $(HOST_IP),0.0.0.0,127.0.0.1)
+# Android builds: React Native needs JDK 17 (Android Studio's bundled JDK 25 breaks native builds).
+ANDROID_SDK ?= $(HOME)/Library/Android/sdk
+ANDROID_JAVA_HOME ?= $(shell /usr/libexec/java_home -v 17 2>/dev/null)
+# Where the app finds the API: a USB phone through `adb reverse` (localhost), or a phone on Wi-Fi.
+USB ?=
+MOBILE_API_ENV = $(if $(USB),EXPO_PUBLIC_API_URL=http://localhost:8000,$(if $(HOST_IP),EXPO_PUBLIC_API_URL=http://$(HOST_IP):8000))
 # Local dev auth (TD-17). Throwaway values, like the dev credentials in docker-compose.yml.
 LOCAL_JWT_ISSUER ?= http://localhost/dev-issuer
 LOCAL_JWT_DEV_SECRET ?= tabscribe-local-dev-only-not-a-real-secret
 TTL ?= 3600
+# Local testing shouldn't run out of transcriptions; production keeps the free tier's default (10).
+LOCAL_FREE_JOBS_PER_MONTH ?= 1000
 # Readable logs locally; `make worker LOG_FORMAT=json` shows what production logs.
 LOG_FORMAT ?= text
+# `make api CLERK_ISSUER=https://<instance>.clerk.accounts.dev` makes the API accept the app's
+# Clerk sign-ins instead of dev tokens (one or the other; `make token` and e2e need dev tokens).
+CLERK_ISSUER ?=
+LOCAL_AUTH = $(if $(CLERK_ISSUER),JWT_ISSUER=$(CLERK_ISSUER) \
+	JWT_JWKS_URL=$(CLERK_ISSUER)/.well-known/jwks.json,JWT_ISSUER=$(LOCAL_JWT_ISSUER) \
+	JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET))
 # Everything the API and worker read, pointing at the `make up` services (dev values only).
 LOCAL_ENV = DATABASE_URL=$(LOCAL_DATABASE_URL) REDIS_URL=redis://localhost:6379/0 \
 	S3_BUCKET=tabscribe S3_ENDPOINT_URL=http://localhost:8333 S3_REGION=us-east-1 \
 	AWS_ACCESS_KEY_ID=dev-access-key AWS_SECRET_ACCESS_KEY=dev-secret-key \
-	JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) \
-	LOG_FORMAT=$(LOG_FORMAT)
+	$(LOCAL_AUTH) FREE_JOBS_PER_MONTH=$(LOCAL_FREE_JOBS_PER_MONTH) LOG_FORMAT=$(LOG_FORMAT) $(if $(HOST_IP),S3_PUBLIC_ENDPOINT_URL=http://$(HOST_IP):8333)
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: ## Install dependencies and build the Rust extension
+setup: ## Install dependencies (Python, Rust extension, mobile app)
 	uv sync
+	cd $(MOBILE_DIR) && npm ci
 
 setup-separation: ## Also install optional Demucs source separation (~630 MB, torch)
 	uv sync --group separation
@@ -42,13 +62,14 @@ view: ## Preview OUT (default out/) as notation + tab with playback, in the brow
 	uv run python tools/preview/serve.py --out "$(OUT_PATH)"
 
 up: ## Start local Postgres, Redis (Valkey) and S3 (SeaweedFS) in Docker
-	docker compose up -d --wait
+	PUBLIC_BIND=$(PUBLIC_BIND) docker compose up -d --wait
 	docker compose run --rm seaweedfs-init
 
 stack: ## Build and run the whole backend in Docker: API on :8000, a worker (needs ports free)
 	$(MAKE) up
 	docker compose run --rm migrate
-	docker compose --profile app up -d --wait --build api worker
+	PUBLIC_HOST=$(PUBLIC_HOST) PUBLIC_BIND=$(PUBLIC_BIND) \
+		docker compose --profile app up -d --wait --build api worker
 
 e2e: ## End-to-end test against the running stack: upload, transcribe, download (`make stack` first)
 	JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) uv run python tools/e2e.py
@@ -59,8 +80,8 @@ down: ## Stop everything (data is kept; `docker compose down -v` wipes it)
 migrate: ## Apply database migrations to the local Postgres
 	DATABASE_URL=$(LOCAL_DATABASE_URL) uv run alembic -c packages/platform/alembic.ini upgrade head
 
-api: ## Run the API on http://localhost:8000 against the local services (reloads on change)
-	$(LOCAL_ENV) uv run uvicorn api.main:app --reload --port 8000
+api: ## Run the API on :8000 against the local services, reloading [CLERK_ISSUER=... for app sign-in]
+	$(LOCAL_ENV) uv run uvicorn api.main:app --reload --host $(PUBLIC_BIND) --port 8000
 
 worker: ## Run a worker (both queues) against the local services
 	$(LOCAL_ENV) uv run python -m worker
@@ -69,7 +90,29 @@ token: ## Print a local dev access token: make token [USER=alice] [TTL=3600]
 	@JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) \
 		uv run --quiet python -m api.devtoken "$(USER)" --ttl $(TTL)
 
-check: lint typecheck test rust ## Run everything CI runs
+check: lint typecheck test rust mobile-check ## Run everything CI runs (except e2e)
+
+mobile: ## Start the Expo dev server for the dev build [USB=1 after make mobile-usb, or HOST_IP=<LAN IP>]
+	cd $(MOBILE_DIR) && $(MOBILE_API_ENV) npx expo start --dev-client
+
+mobile-ios: ## Build the dev build and run it in the iOS Simulator (needs Xcode)
+	cd $(MOBILE_DIR) && npx expo run:ios
+
+mobile-android: ## Build the dev build and install it on the emulator or a USB phone (needs JDK 17, TD-23)
+	cd $(MOBILE_DIR) && JAVA_HOME="$(ANDROID_JAVA_HOME)" ANDROID_HOME="$(ANDROID_SDK)" npx expo run:android
+
+mobile-usb: ## Forward Metro, the API and S3 to a USB-connected Android phone (rerun after replugging)
+	@for port in 8081 8000 8333; do "$(ANDROID_SDK)/platform-tools/adb" reverse tcp:$$port tcp:$$port; done
+	@echo "Now: make mobile USB=1 (the phone reaches this Mac as localhost)"
+
+api-types: ## Regenerate the app's API types from the API's OpenAPI schema (after API changes)
+	uv run --quiet python -m api.openapi $(MOBILE_DIR)/src/api/openapi.json
+	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false
+
+mobile-check: ## App: API types current, TypeScript, ESLint + Prettier, Jest, iOS + Android bundle
+	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false --check \
+		&& npx tsc --noEmit && CI=1 npx expo lint && npx jest --ci \
+		&& CI=1 npx expo export --platform ios --platform android --output-dir dist >/dev/null
 
 lint: ## Ruff lint and format check
 	uv run ruff check .
@@ -79,6 +122,7 @@ fmt: ## Auto-fix lint issues and format Python and Rust
 	uv run ruff check . --fix
 	uv run ruff format .
 	cd $(PIPELINE_DIR) && cargo fmt
+	cd $(MOBILE_DIR) && npx prettier --write --log-level warn .
 
 typecheck: ## mypy --strict
 	uv run mypy

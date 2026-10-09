@@ -24,10 +24,15 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
 | [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
 | [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
-| [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | Phase 3 adds sign-in (Cognito) |
+| [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | First deployment (refuse `JWT_DEV_SECRET` outside local) |
 | [TD-18](#td-18-simple-quotas-and-rate-limits) | Simple quotas and rate limits | Backend / billing | Billing (Phase 5), or users complain about lost quota |
 | [TD-19](#td-19-dedup-cache-per-user-reused-after-normalize) | Dedup cache per user, reused after normalize | Backend / cost | Profiling shows many identical uploads across users |
 | [TD-20](#td-20-observability-prometheus-metrics-and-a-minimal-trace) | Observability: Prometheus metrics and a minimal trace | Ops | First production deploy; GPU workers |
+| [TD-21](#td-21-app-api-types-generated-from-a-committed-openapi-copy) | App API types generated from a committed OpenAPI copy | Mobile / API | openapi-typescript supports TypeScript 6; old app versions in the wild |
+| [TD-22](#td-22-clerks-native-sign-in-screen) | Clerk's native sign-in screen | Mobile / auth | Paid Apple account (Apple sign-in); branding needs beyond Clerk's theme |
+| [TD-23](#td-23-local-android-builds-jdk-17-and-a-slow-react-native-repository) | Local Android builds: JDK 17 and a slow React Native repository | Mobile / tooling | Moving builds to EAS or CI; React Native supports newer JDKs |
+| [TD-24](#td-24-score-viewer-alphatab-in-a-webview-from-local-files) | Score viewer: alphaTab in a WebView from local files | Mobile | Long scores feel slow; editing (Phase 4) needs tighter integration |
+| [TD-25](#td-25-push-notifications-through-expos-push-service) | Push notifications through Expo's push service | Backend / mobile | Many users (receipts, batching); dropping Expo |
 
 ---
 
@@ -557,7 +562,7 @@ bar at once instead of patching symptoms.
 ## TD-17: Local dev token issuer instead of a real auth provider
 
 **Concept.** The API trusts *JWTs* (signed JSON tokens saying who the user is) issued by a
-managed provider; it never sees passwords. In production the provider (Cognito by default) signs
+managed provider; it never sees passwords. In production the provider (Clerk, ADR-0008) signs
 tokens with a private RSA key and publishes the public half as a *JWKS*; the API checks the
 signature against it (RS256). Locally, `make token USER=alice` signs tokens with a shared
 throwaway secret (HS256) and the API is configured with the same secret (`JWT_DEV_SECRET`).
@@ -575,9 +580,9 @@ throwaway secret (HS256) and the API is configured with the same secret (`JWT_DE
 - Anyone with the dev secret can mint tokens for any user. Fine locally; a deployment that set
   `JWT_DEV_SECRET` by mistake would have no real auth.
 
-**Revisit when** Phase 3 adds sign-in to the mobile app: create the Cognito user pool (Terraform),
-set `JWT_JWKS_URL`, `JWT_ISSUER` and `JWT_AUDIENCE`, and add a startup check that refuses
-`JWT_DEV_SECRET` outside local environments.
+**Revisit when** the first deployment: add a startup check that refuses `JWT_DEV_SECRET` outside
+local environments. (Phase 3 wired up Clerk: `make api CLERK_ISSUER=...` runs the JWKS path
+against a real provider, which answers the first con.)
 
 ---
 
@@ -666,3 +671,139 @@ queue message. Metrics are Prometheus counters, histograms and gauges: queue dep
 
 **Revisit when** the first production deploy (dashboards, alerts, ingress rules) and when GPU
 workers arrive (DCGM, queue-depth autoscaling with KEDA).
+
+## TD-21: App API types generated from a committed OpenAPI copy
+
+**Concept.** The app's request and response types are generated from the API's OpenAPI schema,
+not written by hand. `make api-types` writes the schema to `apps/mobile/src/api/openapi.json`
+(committed) and `openapi-typescript` turns it into `schema.d.ts`; `openapi-fetch` checks every
+call's path, parameters and body against those types. An API test fails when the committed
+schema is stale, and `make mobile-check` fails when `schema.d.ts` doesn't match it.
+
+**Pros**
+- An API change that breaks the app breaks the build, not a user's phone.
+- The app needs no running API or Python to build: CI's mobile job reads the committed copy.
+- `openapi-fetch` is a few kB; its one dependency holds only types.
+
+**Cons**
+- One more step after API changes (`make api-types`), and generated files in review diffs.
+- `openapi-typescript` 7 declares a peer of TypeScript 5 while the app is on TypeScript 6
+  (Expo SDK 57). An npm `overrides` entry gives it our TypeScript; generation works, but the
+  combination isn't one its authors test.
+- Types aren't runtime checks: a deployed API that drifts from the schema (an older server)
+  isn't caught until a field is missing.
+
+**Revisit when** openapi-typescript supports TypeScript 6 (drop the override), or when old app
+versions in the wild need a versioned API (generate per API version).
+
+## TD-22: Clerk's native sign-in screen
+
+**Concept.** Sign-in and sign-up are Clerk's prebuilt native screen (`AuthView` from
+`@clerk/expo/native`, built on Clerk's iOS and Android SDKs) rather than screens we build. It
+covers email + password with email verification, password reset, Google, and Apple on iOS, as
+switched on in the Clerk dashboard. The session lives in the Keychain / Keystore
+(`expo-secure-store`), and the API client sends Clerk's short-lived session token on every call.
+
+**Pros**
+- Little code: no forms, verification-code screens, reset flows or error states of our own.
+- Native Google and Apple sign-in (system sheets, no browser), and new Clerk features (passkeys,
+  MFA) arrive with SDK updates.
+- Clerk maintains the security-sensitive parts.
+
+**Cons**
+- **Minimum iOS 17**, set by Clerk's config plugin (Expo SDK 57 otherwise allows older).
+- **No Expo Go.** The app needs a development build (`make mobile-ios`, `make mobile-android`),
+  which needs Xcode and Android Studio. Push notifications need one anyway.
+- **Look is limited** to Clerk's dashboard branding and the plugin's `theme` colours.
+- **Sign in with Apple is off** (`appleSignIn: false` in `app.json`) until there's a paid Apple
+  Developer account: the entitlement can't be signed without one. Don't enable Apple in the Clerk
+  dashboard until then; the button would appear and fail. App Store guideline 4.8 requires it
+  before an iOS release that offers Google.
+- Locally the API accepts either dev tokens or Clerk tokens, not both (`CLERK_ISSUER`, TD-17), so
+  `make e2e` and the app can't share one running API.
+- **First-time Google sign-up fails on Android phones with no Google account.** Clerk then
+  falls back to Google in a browser, and its Android SDK (1.1.11) returns from the browser
+  without turning the sign-in into a sign-up: no user is created and the screen starts over.
+  With a Google account on the phone (nearly every Android phone) the native picker is used and
+  sign-up works (tested 2026-10-08). Report to Clerk; retest when `@clerk/expo` updates its SDK.
+- Ties the app's sign-in screen to Clerk. The API side stays provider-neutral (plain JWKS).
+
+**Revisit when** the Apple Developer account exists (set `appleSignIn` to true, register the iOS
+app in Clerk, enable Apple), or when design needs more than Clerk's theming (build our own screens
+on `useSignIn`/`useSignUp`; the API doesn't change).
+
+## TD-23: Local Android builds: JDK 17 and a slow React Native repository
+
+**Concept.** `make mobile-android` compiles the development build on this Mac with Gradle. React
+Native 0.86 supports JDK 17; Android Studio ships JDK 25, whose native-access warnings make the
+Android Gradle plugin fail CMake steps (`react-native-worklets`). The Makefile picks JDK 17 with
+`/usr/libexec/java_home -v 17` (Temurin 17 in `~/Library/Java/JavaVirtualMachines`). React
+Native's own Maven repository (`repo.reactnative.dev`, which Maven Central redirects to) was very
+slow from our network (about 58 KB/s, with resets) for its 279 MB and 112 MB debug libraries;
+Gradle can't resume downloads, so they were fetched once with `curl -C -` and served through a
+one-off `--init-script`. They're in Gradle's cache now.
+
+**Pros**
+- No cloud build service or account; a rebuild takes minutes once the cache is warm, and
+  JavaScript changes reach the phone in seconds through Metro without rebuilding.
+
+**Cons**
+- Each developer machine needs Android Studio, JDK 17 and ~15 GB of SDK, NDK and caches.
+- A fresh cache on a slow network repeats the download problem.
+
+**Revisit when** builds move to EAS Build or CI (Phase 5), or React Native supports newer JDKs.
+
+## TD-24: Score viewer: alphaTab in a WebView from local files
+
+**Concept.** alphaTab (MPL-2.0) is a web library, so the app runs it in a WebView. Its script,
+music font (Bravura, SIL OFL) and soundfont (Sonivox, Apache-2.0) ship inside the app (about
+2.8 MB, copied from the npm package on install by `scripts/viewer-assets.js`) and are laid out in
+the cache on first use, so the page loads them by relative `file://` URLs. The app downloads the
+score's MusicXML (presigned GET) and hands it to the page; playback controls live in the page
+because audio may only start from a tap inside it.
+
+**Pros**
+- The same renderer and exporters as the preview page (`make view`) and, later, the editor.
+- Works offline; nothing loads from a CDN, so no third-party request sees what users open.
+
+**Cons**
+- The WebView may read local files (`allowFileAccessFromFileURLs`,
+  `allowUniversalAccessFromFileURLs`). It only ever loads our own page, but those flags must
+  never be combined with remote content.
+- Workers and AudioWorklets can't load from `file://`, so rendering runs on the page's main
+  thread and audio uses the older ScriptProcessor path: long scores render more slowly.
+- PDF export prints the off-screen, black-on-white rendering of the score as HTML. alphaTab
+  positions each system absolutely, so the printer splits pages at fixed heights: a system can
+  be cut across a page break in longer scores. Proper engraving-quality PDFs would come from a
+  layout that knows page sizes (alphaTab's print layout, or MuseScore server-side).
+
+**Revisit when** long scores feel slow (serve the page from a local HTTP origin so workers run),
+or Phase 4's editor needs tighter app/page integration.
+
+## TD-25: Push notifications through Expo's push service
+
+**Concept.** Phones receive notifications from Apple (APNs) and Google (FCM). Expo's push
+service sits in front of both: the app gets one *Expo push token* per install, registers it with
+our API (`PUT /me/push-tokens`), and the worker sends "your score is ready" to Expo, which
+forwards it (`WORKER_NOTIFIER=expo`). The app asks for permission the first time the user sends
+a transcription; Account has an on/off switch; sign-out removes the device's token.
+
+**Pros**
+- One HTTP call for iOS and Android; no APNs or FCM code on our side, and no new Python
+  dependency (standard-library HTTP).
+- Notification failures are logged and never affect the job. Devices Expo reports as gone are
+  forgotten.
+
+**Cons**
+- A third party sees notification text (the take's name). Expo's service is free; it is one
+  more service to depend on.
+- Needs setup outside the repo: an Expo project (`npx eas-cli@latest init` writes its ID to `app.json`), and
+  for Android a Firebase project with its FCM key uploaded to Expo. Until then the app hides
+  the option (push "unavailable").
+- Only Expo's *tickets* are checked. Some failures (e.g. an uninstalled app) arrive later as
+  *receipts*, which we don't fetch yet, so dead tokens can linger until a later send fails.
+- Sent from the worker, inline, after the job is acknowledged: a slow Expo call delays that
+  worker's next stage by up to its 10 s timeout.
+
+**Revisit when** users have many devices or notifications fail silently (fetch receipts in a
+small periodic task, send from a queue), or if we move off Expo (APNs/FCM directly).

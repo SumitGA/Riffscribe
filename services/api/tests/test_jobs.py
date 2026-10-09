@@ -1,6 +1,5 @@
 import urllib.request
 import uuid
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -10,59 +9,14 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from api.auth import AuthSettings, TokenVerifier, get_token_verifier, issue_dev_token
-from api.deps import (
-    get_api_settings,
-    get_job_queue,
-    get_limiter,
-    get_object_store,
-    get_redis,
-    get_session_factory,
-)
-from api.limits import Limiter
+from api.deps import get_job_queue
 from api.main import app
-from api.settings import ApiSettings
-from tabscribe_platform.db import Job, JobStatus, ScoreVersion, make_session_factory
+from tabscribe_platform.db import Job, JobStatus, ScoreVersion
 from tabscribe_platform.jobqueue import JobQueue, QueueName, RedisJobQueue
-from tabscribe_platform.storage import ObjectStore, job_key
+from tabscribe_platform.storage import ObjectStore, job_key, job_prefix
+from testsupport.api import LIMITS, NEW_JOB, auth
 
 pytestmark = pytest.mark.integration
-
-AUTH = AuthSettings(issuer="https://test", dev_secret="test-secret-that-is-at-least-32-chars")
-LIMITS = ApiSettings(max_upload_bytes=1000, free_jobs_per_month=2, job_creates_per_minute=5)
-NEW_JOB = {"instrument": "guitar", "content_type": "audio/mp4", "size_bytes": 10}
-
-
-@pytest.fixture
-def api(
-    db: Engine,
-    object_store: ObjectStore,
-    job_queue: RedisJobQueue,
-    redis_client: "redis.Redis",
-    key_prefix: str,
-) -> Iterator[TestClient]:
-    # Limiter keys share the queue's prefix, so the job_queue fixture deletes them too.
-    overrides: dict[Any, Any] = {
-        get_session_factory: lambda: make_session_factory(db),
-        get_object_store: lambda: object_store,
-        get_job_queue: lambda: job_queue,
-        get_redis: lambda: redis_client,
-        get_limiter: lambda: Limiter(redis_client, prefix=f"{key_prefix}:limits"),
-        get_api_settings: lambda: LIMITS,
-        get_token_verifier: lambda: TokenVerifier(AUTH),
-    }
-    app.dependency_overrides.update(overrides)
-    yield TestClient(app)
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def alice(s3_user: str) -> str:
-    return s3_user  # a fresh user whose objects are deleted afterwards
-
-
-def auth(user_id: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {issue_dev_token(AUTH, user_id)}"}
 
 
 def create(api: TestClient, user_id: str, **body: Any) -> dict[str, Any]:
@@ -137,11 +91,22 @@ def test_needs_a_token(api: TestClient) -> None:
         ({"instrument": "drums"}, 422),
         ({"capo": 13}, 422),
         ({"separation": True}, 422),  # not offered yet
+        ({"name": "x" * 121}, 422),
     ],
 )
 def test_create_rejects(api: TestClient, alice: str, body: dict[str, Any], code: int) -> None:
     response = api.post("/jobs", json={**NEW_JOB, **body}, headers=auth(alice))
     assert response.status_code == code, response.text
+
+
+def test_jobs_keep_their_name(api: TestClient, alice: str) -> None:
+    named = create(api, alice, name="  Blues riff in A ")["job"]
+    unnamed = create(api, alice, name="   ")["job"]
+    assert named["name"] == "Blues riff in A"  # trimmed
+    assert unnamed["name"] is None  # blank means no name
+    assert api.get(f"/jobs/{named['id']}", headers=auth(alice)).json()["name"] == "Blues riff in A"
+    listed = api.get("/jobs", headers=auth(alice)).json()["jobs"]
+    assert [j["name"] for j in listed] == [None, "Blues riff in A"]
 
 
 def test_upload_larger_than_the_limit_fails_the_job(api: TestClient, alice: str) -> None:
@@ -191,6 +156,27 @@ def test_failed_enqueue_is_undone(
     assert api.post(f"/jobs/{job_id}/submit", headers=auth(alice)).status_code == 503
     assert api.get(f"/jobs/{job_id}", headers=auth(alice)).json()["status"] == "pending_upload"
     assert api.get("/me", headers=auth(alice)).json()["jobs_this_month"] == 0
+
+
+def test_delete_job_removes_it_and_its_files(
+    api: TestClient, alice: str, object_store: ObjectStore
+) -> None:
+    created = create(api, alice)
+    upload(created)
+    job_id = created["job"]["id"]
+    kept = create(api, alice)["job"]["id"]
+    prefix = job_prefix(alice, job_id)
+    assert object_store.list_keys(prefix)
+
+    assert api.delete(f"/jobs/{job_id}", headers=auth("mallory")).status_code == 404
+    response = api.delete(f"/jobs/{job_id}", headers=auth(alice))
+    assert response.status_code == 204, response.text
+
+    assert api.get(f"/jobs/{job_id}", headers=auth(alice)).status_code == 404
+    assert api.delete(f"/jobs/{job_id}", headers=auth(alice)).status_code == 404
+    assert object_store.list_keys(prefix) == []
+    listed = api.get("/jobs", headers=auth(alice)).json()["jobs"]
+    assert [j["id"] for j in listed] == [kept]
 
 
 def test_list_jobs_pages_newest_first(api: TestClient, alice: str) -> None:

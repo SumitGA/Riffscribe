@@ -4,6 +4,9 @@
 #   make up     start the backing services (for tests, `make api` and `make worker`)
 #   make stack  also build and run the API and a worker in containers (profile "app")
 #   make down   stop everything (data volumes are kept; `docker compose down -v` wipes them)
+#
+# Ports listen on 127.0.0.1 only. `make stack HOST_IP=<LAN IP>` opens the API and S3 (what a
+# phone needs) to the local network; Postgres, Redis and metrics always stay local.
 
 name: tabscribe
 
@@ -32,7 +35,7 @@ services:
       POSTGRES_PASSWORD: tabscribe
       POSTGRES_DB: tabscribe
     # 5433 on the host: a developer's own Postgres often already has 5432.
-    ports: ["${POSTGRES_HOST_PORT:-5433}:5432"]
+    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"]
     volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tabscribe -d tabscribe"]
@@ -43,7 +46,7 @@ services:
   # Valkey: the BSD-licensed fork of Redis 7.2, same protocol and Streams API (ADR-0007).
   redis:
     image: valkey/valkey:8-alpine
-    ports: ["${REDIS_HOST_PORT:-6379}:6379"]
+    ports: ["127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"]
     volumes: [redis-data:/data]
     command: ["valkey-server", "--appendonly", "yes"]
     healthcheck:
@@ -58,7 +61,7 @@ services:
     command: >
       server -dir=/data -ip.bind=0.0.0.0 -volume.max=0
       -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
-    ports: ["${S3_HOST_PORT:-8333}:8333"]
+    ports: ["${PUBLIC_BIND:-127.0.0.1}:${S3_HOST_PORT:-8333}:8333"]
     volumes:
       - seaweedfs-data:/data
       - ./infra/local/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
@@ -99,12 +102,12 @@ services:
     profiles: ["app"]
     environment:
       <<: *app-env
-      # Presigned URLs are for the host, which reaches SeaweedFS on localhost.
-      S3_PUBLIC_ENDPOINT_URL: http://localhost:${S3_HOST_PORT:-8333}
+      # Presigned URLs are for the client: the host (localhost) or a phone (HOST_IP).
+      S3_PUBLIC_ENDPOINT_URL: http://${PUBLIC_HOST:-localhost}:${S3_HOST_PORT:-8333}
       JWT_ISSUER: http://localhost/dev-issuer
       JWT_DEV_SECRET: tabscribe-local-dev-only-not-a-real-secret
     depends_on: *app-depends
-    ports: ["${API_HOST_PORT:-8000}:8000"]
+    ports: ["${PUBLIC_BIND:-127.0.0.1}:${API_HOST_PORT:-8000}:8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
       interval: 2s
@@ -117,7 +120,7 @@ services:
     profiles: ["app"]
     environment: *app-env
     depends_on: *app-depends
-    ports: ["${WORKER_METRICS_HOST_PORT:-9100}:9100"]
+    ports: ["127.0.0.1:${WORKER_METRICS_HOST_PORT:-9100}:9100"]
     # SIGTERM lets the current stage finish; a 5-minute clip's transcription fits in this.
     stop_grace_period: 5m
     healthcheck:

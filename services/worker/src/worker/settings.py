@@ -1,8 +1,8 @@
 import os
 import socket
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from tabscribe_platform.jobqueue import QueueName
@@ -28,6 +28,11 @@ class WorkerSettings(BaseSettings):
     poll_s: float = Field(default=2.0, gt=0)
     # Prometheus metrics on http://<host>:<port>/metrics; 0 turns the server off.
     metrics_port: int = Field(default=9100, ge=0, le=65535)
+
+    # How finished jobs are announced: `log` (local runs, tests) or `expo` push notifications.
+    notifier: Literal["log", "expo"] = "log"
+    # Only needed if push security is turned on for the Expo project.
+    expo_access_token: SecretStr | None = None
 
     @field_validator("queues", mode="before")
     @classmethod

@@ -1,7 +1,8 @@
 """JWT authentication. The API only validates tokens; the auth provider issues them.
 
-Production: RS256 tokens from a managed provider (AWS Cognito by default), checked against its
-JWKS. Local dev and tests: HS256 tokens signed with a throwaway shared secret by `issue_dev_token`
+Production: RS256 session tokens from Clerk (ADR-0008), checked against its JWKS. Nothing here
+is Clerk-specific, so another OIDC provider (Cognito, Auth0) only needs different settings.
+Local dev and tests: HS256 tokens signed with a throwaway shared secret by `issue_dev_token`
 (`make token`), so no provider account is needed (TD-17). Exactly one mode is configured, and
 each accepts only its own algorithm, so an HS256 token can't pass in production.
 """
@@ -25,11 +26,11 @@ class AuthSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="JWT_", frozen=True, extra="ignore")
 
-    issuer: str = Field(min_length=1)  # Cognito: https://cognito-idp.{region}.amazonaws.com/{pool}
-    # Cognito access tokens carry the app client ID in `client_id` rather than `aud`; either
-    # matches. Unset: not checked.
+    issuer: str = Field(min_length=1)  # Clerk: https://{instance}.clerk.accounts.dev (dev)
+    # Clerk session tokens have no `aud`, so it stays unset for Clerk. Cognito access tokens carry
+    # the app client ID in `client_id` rather than `aud`; either matches. Unset: not checked.
     audience: str | None = None
-    jwks_url: str | None = None  # production: the provider's public signing keys
+    jwks_url: str | None = None  # production: {issuer}/.well-known/jwks.json for Clerk
     dev_secret: SecretStr | None = Field(default=None, min_length=32)  # local dev and tests only
     leeway_s: int = Field(default=30, ge=0)  # clock skew allowed on exp/iat
 
