@@ -1,7 +1,7 @@
 # Staging runbook
 
 Staging (ADR-0010) is one VM in the home-lab OpenStack running the backend with docker compose,
-reachable from the internet at `https://api-staging.riffscribe.sumitgautam.tech` through a
+reachable from the internet at `https://riffscribe-staging.sumitgautam.tech` through a
 Cloudflare Tunnel, with Cloudflare R2 for audio and scores and an installable Android APK built
 by EAS. This page goes from nothing to a working phone, then covers deploys, backups and
 restores. Terraform and deploys run from a machine on the home LAN.
@@ -59,15 +59,21 @@ ssh ubuntu@<lan ip> 'cloud-init status --wait && docker --version'
 
 ### Cloudflare Tunnel (public HTTPS)
 
-1. Cloudflare dashboard > **Zero Trust > Networks > Tunnels > Create a tunnel**, type
-   *Cloudflared*, name `riffscribe-staging`.
-2. On the install step, copy the token: the long string after `--token` in the shown command.
-   It goes in the VM's `.env` as `TUNNEL_TOKEN`. Don't run the install command; the stack
-   runs `cloudflared` itself.
-3. **Public hostname:** subdomain `api-staging.riffscribe`, domain `sumitgautam.tech`; service
-   type **HTTP**, URL **`caddy:80`**. Cloudflare creates the DNS record itself.
+The hostname is one level under the domain (`riffscribe-staging.sumitgautam.tech`), because
+Cloudflare's free certificate covers `*.sumitgautam.tech` only; a name like
+`api.riffscribe.sumitgautam.tech` would need Advanced Certificate Manager (paid).
 
-The tunnel shows *Healthy* once the first deploy starts `cloudflared`.
+1. Cloudflare dashboard (account level) > **Networking > Tunnels > Create a tunnel**, type
+   *Cloudflared*, name `riffscribe-staging`. (First time: Zero Trust asks for a team name and
+   plan; the Free plan is enough.)
+2. On the install step, choose **Docker** and use the **copy button**: the token is masked on
+   screen but copied in full. Keep only the string after `--token` (it starts with `eyJ`); it
+   goes in the VM's `.env` as `TUNNEL_TOKEN`. Don't run the command: the stack runs
+   `cloudflared` itself.
+3. The wizard waits for a connector before *Continue* works. Leave it open, fill in the VM's
+   `.env`, deploy (section 2), and it sees the stack's `cloudflared` connect.
+4. **Routes > Add route > Published application:** subdomain `riffscribe-staging`, domain
+   `sumitgautam.tech`, service URL **`http://caddy:80`**. Cloudflare creates the DNS record.
 
 ### The VM's `.env`
 
@@ -125,7 +131,7 @@ know. The debug key you use locally is already registered; the EAS key needs the
 ```sh
 cd apps/mobile
 npx eas-cli@latest env:create --environment preview --visibility plaintext \
-  --name EXPO_PUBLIC_API_URL --value https://api-staging.<your domain>
+  --name EXPO_PUBLIC_API_URL --value https://riffscribe-staging.sumitgautam.tech
 npx eas-cli@latest env:create --environment preview --visibility plaintext \
   --name EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY --value <pk_test_... from apps/mobile/.env.local>
 ```
@@ -173,12 +179,23 @@ different test users, valid long enough for the run (session tokens last 60 seco
 3. Run it:
 
    ```sh
-   make e2e-staging STAGING_URL=https://api-staging.<your domain> \
+   make e2e-staging STAGING_URL=https://riffscribe-staging.sumitgautam.tech \
      E2E_TOKEN=<first user's jwt> E2E_OTHER_TOKEN=<second user's jwt>
    ```
 
 The real acceptance test is the phone: sign in, record a take, get the push notification,
 open the score, play your recording and the guitar sound, export a PDF.
+
+## Troubleshooting
+
+- **Outbound HTTPS from containers hangs at random** (push notifications failing with "The
+  handshake operation timed out", while the VM itself is fine): the Docker network's MTU is
+  larger than the VM's. `ip link` on the VM shows the right value (1442 in the lab); set
+  `NETWORK_MTU` in `.env` to it, then `docker compose down` and deploy (an existing network
+  keeps its MTU).
+- **No push notifications at all:** `select count(*) from push_tokens` in Postgres. Zero
+  means the phone never registered: Account > notifications shows why. Tokens but no
+  notification: the worker logs `could not send push notifications` with the reason.
 
 ## 5. Backups and restore
 

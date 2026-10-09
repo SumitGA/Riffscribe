@@ -5,6 +5,13 @@ package_update: true
 package_upgrade: true
 packages: [ca-certificates, curl, unattended-upgrades]
 
+write_files:
+  # The lab's tenant network carries 1442-byte packets; Docker's default 1500 makes large ones
+  # (TLS handshakes) vanish. The staging stack sets its own network's MTU too (compose.yml).
+  - path: /etc/docker/daemon.json
+    content: |
+      {"mtu": 1442}
+
 runcmd:
   - mkdir -p /srv/riffscribe/postgres /srv/riffscribe/stack
   - chown ubuntu:ubuntu /srv/riffscribe/stack

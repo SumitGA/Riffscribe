@@ -28,7 +28,7 @@ The OpenStack cloud is the owner's home lab (Kolla), behind the home router:
 - **docker compose on the VM** (`infra/staging/compose.yml`): `cloudflared`, Caddy, the API, one
   worker, Postgres 16 and Valkey. Nothing publishes a port.
 - **Public access through a Cloudflare Tunnel:** `cloudflared` connects out to Cloudflare, which
-  serves `api-staging.riffscribe.sumitgautam.tech` with HTTPS and forwards requests down the
+  serves `riffscribe-staging.sumitgautam.tech` with HTTPS and forwards requests down the
   tunnel to Caddy (plain HTTP, internal), which hides `/metrics` and proxies to the API. No
   router changes, works behind CGNAT, and the home IP stays private.
 - **Postgres on the VM's root disk** (the lab has no block storage); the nightly backup to R2 is

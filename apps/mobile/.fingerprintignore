@@ -1,0 +1,4 @@
+# React Native's Gradle plugin rewrites dependencies' AndroidManifest.xml in node_modules during
+# local native builds (make mobile-android), so hashing them makes local and EAS fingerprints
+# disagree. EAS fingerprints a clean install.
+node_modules/**/android/src/main/AndroidManifest.xml

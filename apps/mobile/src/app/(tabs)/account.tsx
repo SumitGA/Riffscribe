@@ -1,7 +1,7 @@
 import { useClerk, useUser } from '@clerk/expo';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApi } from '@/api/provider';
@@ -28,6 +28,15 @@ export default function Account() {
   const setPush = useMutation({
     mutationFn: async (on: boolean) =>
       on ? enablePush(api) : disablePush(api).then(() => 'off' as const),
+    onSuccess: (state) => {
+      if (state === 'denied') {
+        Alert.alert(
+          'Notifications are off',
+          "Android is blocking notifications for Riffscribe. Turn them on in the phone's Settings > Apps > Riffscribe > Notifications.",
+        );
+      }
+    },
+    onError: (error) => Alert.alert("Couldn't turn on notifications", error.message),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['push'] }),
   });
 
