@@ -356,6 +356,22 @@ a model's licence and the licences of its training data are separate questions.
   datasets licensed for research only (e.g. MedleyDB, iKala). Whether that affects commercial use
   of the weights is a legal question, not a technical one. Same grey area as Demucs (ADR-0004).
 
+**Alternatives measured (Step A5 spike, 2026-10-09).** No released model with commercially
+usable weights beats Basic Pitch on guitar on CPU today:
+- *Kong et al. high-resolution piano model* (code Apache-2.0, weights CC BY 4.0, 172 MB), zero-shot
+  on our GuitarSet clips: note F1 0.39-0.57 vs Basic Pitch 0.74-0.89, and 7.5 s vs 0.22 s of CPU
+  per 20 s clip. A piano model needs adapting to guitar first.
+- *Riley et al. guitar models* (ICASSP 2024; GAPS, ISMIR 2024: 88 % zero-shot / 91 % supervised
+  note F1 on GuitarSet) are fine-tuned from Kong's model; their weights are not released.
+- *MuScriptor* weights are CC BY-NC (no commercial use); *YourMT3* is GPL-3.0 and takes minutes
+  of CPU per 30 s; *SynthTab* data is CC BY-NC; *FretNet / TabCNN* are research code trained on
+  GuitarSet with no maintained weights.
+
+**Our GuitarSet numbers flatter Basic Pitch.** Its paper trained on 648 of GuitarSet's 720
+recordings (Table 1), so our test and tuning excerpts were very likely in its training data.
+A fair comparison, and an honest accuracy number, needs guitar audio no candidate trained on:
+Guitar-TECHS (electric guitar, CC BY 4.0, 2025) is one; the owner's own recordings are another.
+
 **Revisit when**
 - **Before launch:** get a legal opinion on the training-data question. A fallback is a model
   trained on commercially licensed data (ours or a vendor's).
