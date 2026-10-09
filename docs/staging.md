@@ -186,6 +186,17 @@ different test users, valid long enough for the run (session tokens last 60 seco
 The real acceptance test is the phone: sign in, record a take, get the push notification,
 open the score, play your recording and the guitar sound, export a PDF.
 
+## Troubleshooting
+
+- **Outbound HTTPS from containers hangs at random** (push notifications failing with "The
+  handshake operation timed out", while the VM itself is fine): the Docker network's MTU is
+  larger than the VM's. `ip link` on the VM shows the right value (1442 in the lab); set
+  `NETWORK_MTU` in `.env` to it, then `docker compose down` and deploy (an existing network
+  keeps its MTU).
+- **No push notifications at all:** `select count(*) from push_tokens` in Postgres. Zero
+  means the phone never registered: Account > notifications shows why. Tokens but no
+  notification: the worker logs `could not send push notifications` with the reason.
+
 ## 5. Backups and restore
 
 Every night at 03:17 (VM time) `backup.sh` dumps Postgres in custom format to the VM's disk

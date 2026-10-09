@@ -107,3 +107,11 @@ services:
 
 volumes:
   valkey-data:
+
+# The stack's network must use the VM's MTU. OpenStack's tenant network carries 1442-byte
+# packets (`ip link` on the VM); Docker's default 1500 makes large packets, like TLS
+# handshakes, vanish, so some outbound HTTPS calls (Expo push, Google) hang at random.
+networks:
+  default:
+    driver_opts:
+      com.docker.network.driver.mtu: ${NETWORK_MTU:-1442}
