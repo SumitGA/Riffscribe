@@ -15,7 +15,7 @@ export type ViewerFiles = {
 
 /**
  * Lays out the score viewer in the app's cache: the page, alphaTab's script, its music font
- * and its soundfont, under their real names so the page can load them by relative URL. The
+ * and its soundfonts, under their real names so the page can load them by relative URL. The
  * bundled assets (scripts/viewer-assets.js) are copied once per alphaTab version; the page is
  * rewritten every time, as it's tiny and changes with the app.
  */
@@ -29,6 +29,7 @@ export async function prepareViewer(): Promise<ViewerFiles> {
     new File(folder, 'alphaTab.min.js'),
     new File(fontFolder, 'Bravura.woff2'),
     new File(folder, 'sonivox.sf2'),
+    new File(folder, 'musescore-guitars.sf3'),
   ];
   if (targets.some((target) => !target.exists)) {
     // Bundled files (not code) are referenced with require(); Metro turns them into assets.
@@ -37,6 +38,7 @@ export async function prepareViewer(): Promise<ViewerFiles> {
       require('../../assets/viewer/alphaTab.txt'),
       require('../../assets/viewer/Bravura.woff2'),
       require('../../assets/viewer/sonivox.sf2'),
+      require('../../assets/soundfont/musescore-guitars.sf3'),
     ]);
     /* eslint-enable @typescript-eslint/no-require-imports */
     await Promise.all(
