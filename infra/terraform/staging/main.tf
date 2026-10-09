@@ -1,15 +1,51 @@
-# The staging VM (ADR-0010): one instance with a floating IP, a firewall that allows SSH only
-# from the owner's address and HTTP(S) from anywhere, and a separate data volume for Postgres
-# so the instance can be rebuilt without losing data.
+# The staging VM in the home lab (ADR-0010): its own flavor, network and router (SNAT to the
+# LAN), and a floating IP that is a LAN address. The internet never connects in: the VM's
+# cloudflared opens an outbound Cloudflare Tunnel, so the security group only allows SSH from
+# the LAN. The lab has no block storage, so Postgres lives on the root disk and the nightly
+# R2 backup is the safety net.
+
+resource "openstack_compute_flavor_v2" "staging" {
+  name      = "${var.name}.vm"
+  vcpus     = var.vcpus
+  ram       = var.ram_mb
+  disk      = var.disk_gb
+  is_public = true
+}
 
 resource "openstack_compute_keypair_v2" "admin" {
   name       = "${var.name}-admin"
   public_key = file(pathexpand(var.ssh_public_key_path))
 }
 
+data "openstack_networking_network_v2" "external" {
+  name     = var.external_network_name
+  external = true
+}
+
+resource "openstack_networking_network_v2" "staging" {
+  name = "${var.name}-net"
+}
+
+resource "openstack_networking_subnet_v2" "staging" {
+  name            = "${var.name}-subnet"
+  network_id      = openstack_networking_network_v2.staging.id
+  cidr            = var.network_cidr
+  dns_nameservers = var.dns_nameservers
+}
+
+resource "openstack_networking_router_v2" "staging" {
+  name                = "${var.name}-router"
+  external_network_id = data.openstack_networking_network_v2.external.id
+}
+
+resource "openstack_networking_router_interface_v2" "staging" {
+  router_id = openstack_networking_router_v2.staging.id
+  subnet_id = openstack_networking_subnet_v2.staging.id
+}
+
 resource "openstack_networking_secgroup_v2" "staging" {
   name                 = var.name
-  description          = "Riffscribe staging: SSH from the owner, HTTP(S) from anywhere"
+  description          = "Riffscribe staging: SSH from the LAN; everything else leaves via the tunnel"
   delete_default_rules = true
 }
 
@@ -30,62 +66,35 @@ resource "openstack_networking_secgroup_rule_v2" "ssh" {
   remote_ip_prefix  = var.admin_cidr
 }
 
-resource "openstack_networking_secgroup_rule_v2" "web" {
-  for_each = {
-    http      = { protocol = "tcp", port = 80 }
-    https     = { protocol = "tcp", port = 443 }
-    https_udp = { protocol = "udp", port = 443 } # HTTP/3
-  }
-  security_group_id = openstack_networking_secgroup_v2.staging.id
-  direction         = "ingress"
-  ethertype         = "IPv4"
-  protocol          = each.value.protocol
-  port_range_min    = each.value.port
-  port_range_max    = each.value.port
-  remote_ip_prefix  = "0.0.0.0/0"
-}
-
-resource "openstack_blockstorage_volume_v3" "data" {
-  name        = "${var.name}-data"
-  size        = var.data_volume_gb
-  volume_type = var.volume_type
-  lifecycle {
-    prevent_destroy = true # Postgres lives here; destroying it needs a deliberate code change
-  }
-}
-
 resource "openstack_compute_instance_v2" "vm" {
   name            = var.name
   image_name      = var.image_name
-  flavor_name     = var.flavor_name
+  flavor_id       = openstack_compute_flavor_v2.staging.id
   key_pair        = openstack_compute_keypair_v2.admin.name
   security_groups = [openstack_networking_secgroup_v2.staging.name]
   user_data       = file("${path.module}/cloud-init.yaml")
 
   network {
-    name = var.network_name
+    uuid = openstack_networking_network_v2.staging.id
   }
+
+  depends_on = [openstack_networking_router_interface_v2.staging] # outbound access at first boot
 
   lifecycle {
-    ignore_changes = [user_data, image_name] # rebuilds are deliberate (taint), not drift
+    ignore_changes = [user_data, image_name] # rebuilds are deliberate (-replace), not drift
   }
 }
 
-resource "openstack_compute_volume_attach_v2" "data" {
-  instance_id = openstack_compute_instance_v2.vm.id
-  volume_id   = openstack_blockstorage_volume_v3.data.id
-}
-
-resource "openstack_networking_floatingip_v2" "public" {
+resource "openstack_networking_floatingip_v2" "lan" {
   pool = var.external_network_name
 }
 
 data "openstack_networking_port_v2" "vm" {
   device_id  = openstack_compute_instance_v2.vm.id
-  network_id = openstack_compute_instance_v2.vm.network[0].uuid
+  network_id = openstack_networking_network_v2.staging.id
 }
 
-resource "openstack_networking_floatingip_associate_v2" "public" {
-  floating_ip = openstack_networking_floatingip_v2.public.address
+resource "openstack_networking_floatingip_associate_v2" "lan" {
+  floating_ip = openstack_networking_floatingip_v2.lan.address
   port_id     = data.openstack_networking_port_v2.vm.id
 }

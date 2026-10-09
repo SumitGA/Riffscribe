@@ -944,17 +944,22 @@ download rather than bundle it).
 least two of everything plus a load balancer. *Observability* is being able to see what the
 system does: metrics, dashboards, alerts.
 
-**What we did (ADR-0010).** Staging runs every service on one OpenStack VM with docker compose.
-Postgres data sits on a separate volume and is dumped to R2 nightly. The API (`/metrics`) and
+**What we did (ADR-0010).** Staging runs every service on one VM in the owner's home-lab
+OpenStack, with docker compose, reachable from the internet only through a Cloudflare Tunnel.
+The lab has no block storage, so Postgres lives on the VM's disk and is dumped to R2 nightly.
+The API (`/metrics`) and
 worker (`:9100`) still expose Prometheus metrics, but only inside the VM; nothing collects them.
 Logs are JSON in `docker compose logs`.
 
 **Pros**
 - Cheap, quick to set up and easy to understand; the same images and settings as production.
-- Replacing the VM loses nothing: the data volume and R2 hold all state.
+- Audio and scores live in R2, so a lost VM loses no files.
 
 **Cons**
 - Any VM problem takes staging down until it is fixed or replaced.
+- Losing the VM's disk loses database changes since the last nightly backup (up to a day):
+  jobs, score versions and push tokens made since then.
+- It depends on the home lab's power and internet connection, and on Cloudflare's tunnel.
 - Nobody is alerted when something breaks; queue depth and failure rate are only visible by
   asking the VM.
 - One worker: two long transcriptions queue behind each other.

@@ -1,9 +1,9 @@
-output "public_ip" {
-  description = "Point the DNS A record for api-staging.<your domain> here."
-  value       = openstack_networking_floatingip_v2.public.address
+output "lan_ip" {
+  description = "The VM's address on the home LAN (SSH and deploys)."
+  value       = openstack_networking_floatingip_v2.lan.address
 }
 
 output "ssh" {
-  description = "Log in to the VM."
-  value       = "ssh ubuntu@${openstack_networking_floatingip_v2.public.address}"
+  description = "Log in to the VM (from the LAN)."
+  value       = "ssh ubuntu@${openstack_networking_floatingip_v2.lan.address}"
 }

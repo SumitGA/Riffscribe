@@ -1,35 +1,13 @@
 #cloud-config
 # First boot of the staging VM (ADR-0010): Docker with the compose plugin, automatic security
-# updates, and the data volume mounted at /srv/riffscribe (Postgres keeps its files there).
+# updates, and /srv/riffscribe for the stack and Postgres's files (on the root disk).
 package_update: true
 package_upgrade: true
 packages: [ca-certificates, curl, unattended-upgrades]
 
-write_files:
-  - path: /usr/local/sbin/mount-data-volume
-    permissions: "0755"
-    content: |
-      #!/bin/bash
-      # Formats the attached data volume the first time (only if it has no filesystem) and
-      # mounts it by UUID at /srv/riffscribe. Safe to run again.
-      set -euo pipefail
-      root_disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /)")
-      for i in $(seq 1 60); do  # the volume is attached shortly after boot
-        disk=$(lsblk -dpno NAME,TYPE | awk '$2 == "disk" {print $1}' | grep -v "/dev/${root_disk}$" | head -1 || true)
-        [ -n "${disk}" ] && break
-        sleep 5
-      done
-      [ -n "${disk:-}" ] || { echo "no data volume attached" >&2; exit 1; }
-      blkid "${disk}" >/dev/null || mkfs.ext4 -L riffscribe-data "${disk}"
-      uuid=$(blkid -s UUID -o value "${disk}")
-      mkdir -p /srv/riffscribe
-      grep -q "${uuid}" /etc/fstab || echo "UUID=${uuid} /srv/riffscribe ext4 defaults,nofail 0 2" >> /etc/fstab
-      mountpoint -q /srv/riffscribe || mount /srv/riffscribe
-      mkdir -p /srv/riffscribe/postgres /srv/riffscribe/stack
-      chown ubuntu:ubuntu /srv/riffscribe/stack
-
 runcmd:
-  - [/usr/local/sbin/mount-data-volume]
+  - mkdir -p /srv/riffscribe/postgres /srv/riffscribe/stack
+  - chown ubuntu:ubuntu /srv/riffscribe/stack
   # Docker's own packages (the compose plugin isn't in Ubuntu's): https://docs.docker.com/engine/install/ubuntu/
   - install -m 0755 -d /etc/apt/keyrings
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
