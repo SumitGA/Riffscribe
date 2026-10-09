@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up stack e2e down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e deploy-staging down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -73,6 +73,9 @@ stack: ## Build and run the whole backend in Docker: API on :8000, a worker (nee
 
 e2e: ## End-to-end test against the running stack: upload, transcribe, download (`make stack` first)
 	JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) uv run python tools/e2e.py
+
+deploy-staging: ## Deploy a commit to staging: STAGING_SSH=ubuntu@<VM IP> [TAG=<sha>] (ADR-0010)
+	STAGING_SSH=$(STAGING_SSH) TAG=$(TAG) tools/deploy_staging.sh
 
 down: ## Stop everything (data is kept; `docker compose down -v` wipes it)
 	docker compose --profile app --profile init down
