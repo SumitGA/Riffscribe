@@ -19,5 +19,16 @@ def decode_notes(
     energy_tolerance: int,
 ) -> list[tuple[int, int, int, float]]: ...
 def tab_positions(
-    chords: list[list[int]], open_strings: list[int], max_fret: int
+    chords: list[list[int]],
+    open_strings: list[int],
+    max_fret: int,
+    *,
+    fret_height: float | None = None,
+    span: float | None = None,
+    stretch: float | None = None,
+    open_string: float | None = None,
+    movement: float | None = None,
+    shift: float | None = None,
+    drop: float | None = None,
+    position_cost: list[list[float]] | None = None,
 ) -> list[list[tuple[int, int] | None]]: ...

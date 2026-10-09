@@ -6,6 +6,10 @@
  *
  * Workers and AudioWorklets are off because they can't load from file:// (TD-24). The colours
  * match the app's dark theme (src/theme).
+ *
+ * With a take (the user's recording, copied next to the page), playback uses it as alphaTab's
+ * backing track instead of the synthesizer, with a sync point at the start of every bar so the
+ * cursor follows the recording's real timing (sync.json from the pipeline).
  */
 export const VIEWER_PAGE = `<!doctype html>
 <html>
@@ -34,8 +38,10 @@ export const VIEWER_PAGE = `<!doctype html>
   };
   let api = null;
   let lastPosition = 0;
+  let current = null; // { musicXml, profile, take, source } of the score on screen
 
-  function createApi(profile) {
+  function createApi(profile, source) {
+    if (api) api.destroy();
     api = new alphaTab.AlphaTabApi(document.getElementById("score"), {
       core: { fontDirectory: "font/", useWorkers: false },
       display: {
@@ -51,7 +57,9 @@ export const VIEWER_PAGE = `<!doctype html>
         },
       },
       player: {
-        playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
+        playerMode: source === "recording"
+          ? alphaTab.PlayerMode.EnabledBackingTrack
+          : alphaTab.PlayerMode.EnabledSynthesizer,
         outputMode: alphaTab.PlayerOutputMode.WebAudioScriptProcessor,
         soundFont: "sonivox.sf2",
         scrollMode: alphaTab.ScrollMode.Continuous,
@@ -70,12 +78,45 @@ export const VIEWER_PAGE = `<!doctype html>
     });
   }
 
+  // take: null, or { file: "take.m4a", barStartsMs: [...] } with the file in this folder.
+  async function show(musicXml, profile, take, source) {
+    current = { musicXml, profile, take, source };
+    createApi(profile, source);
+    const bytes = new TextEncoder().encode(musicXml);
+    if (source !== "recording") {
+      api.load(bytes);
+      return;
+    }
+    const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, api.settings);
+    score.backingTrack = new alphaTab.model.BackingTrack();
+    score.backingTrack.rawAudioFile = new Uint8Array(await readBytes(take.file));
+    score.masterBars.forEach((bar, i) => {
+      const ms = take.barStartsMs[i];
+      if (ms === undefined) return; // bars past the timings play at the last bar's pace
+      const sync = new alphaTab.model.Automation();
+      sync.type = alphaTab.model.AutomationType.SyncPoint;
+      sync.ratioPosition = 0;
+      sync.syncPointValue = new alphaTab.model.SyncPointData();
+      sync.syncPointValue.barOccurence = 0;
+      sync.syncPointValue.millisecondOffset = Math.max(0, ms);
+      bar.addSyncPoint(sync);
+    });
+    api.renderScore(score);
+  }
+
   window.riff = {
-    load(musicXml, profile) {
-      if (!api) createApi(profile);
-      api.load(new TextEncoder().encode(musicXml));
+    load(musicXml, profile, take) {
+      show(musicXml, profile, take, take ? "recording" : "synth")
+        .catch((error) => post({ type: "error", message: String(error?.message ?? error) }));
+    },
+    // "recording" (the take as backing track) or "synth"; needs a take for "recording".
+    setSource(source) {
+      if (!current || source === current.source) return;
+      show(current.musicXml, current.profile, current.take, source)
+        .catch((error) => post({ type: "error", message: String(error?.message ?? error) }));
     },
     setProfile(profile) {
+      if (current) current.profile = profile;
       api.settings.display.staveProfile = PROFILES[profile];
       api.updateSettings();
       api.render();
@@ -113,15 +154,19 @@ export const VIEWER_PAGE = `<!doctype html>
   }
 
   // fetch() can't read file:// URLs; XHR can (the WebView allows file access from file URLs).
-  function readBase64(path) {
+  function readBytes(path) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("GET", path);
       xhr.responseType = "arraybuffer";
-      xhr.onload = () => resolve(toBase64(new Uint8Array(xhr.response)));
+      xhr.onload = () => resolve(xhr.response);
       xhr.onerror = () => reject(new Error("couldn't read " + path));
       xhr.send();
     });
+  }
+
+  async function readBase64(path) {
+    return toBase64(new Uint8Array(await readBytes(path)));
   }
 
   function printable() {
@@ -168,6 +213,12 @@ export const VIEWER_PAGE = `<!doctype html>
 `;
 
 export type StaveProfile = 'both' | 'score' | 'tab';
+
+/** What playback sounds like: the user's own recording, or alphaTab's synthesized guitar. */
+export type PlaybackSource = 'recording' | 'synth';
+
+/** The user's recording for the page: a file in the viewer's folder and the bar timings. */
+export type ViewerTake = { file: string; barStartsMs: number[] };
 
 /** What the page tells the app. */
 export type ViewerMessage =

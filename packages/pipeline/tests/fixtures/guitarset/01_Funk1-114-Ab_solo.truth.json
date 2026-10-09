@@ -730,5 +730,32 @@
   14.7368,
   16.8421,
   18.9474
+ ],
+ "chords": [
+  {
+   "onset_s": 0.0,
+   "offset_s": 8.4211,
+   "label": "G#:min/b3"
+  },
+  {
+   "onset_s": 8.4211,
+   "offset_s": 12.6316,
+   "label": "C#:min/5"
+  },
+  {
+   "onset_s": 12.6316,
+   "offset_s": 16.8421,
+   "label": "G#:min/b3"
+  },
+  {
+   "onset_s": 16.8421,
+   "offset_s": 18.9474,
+   "label": "D#:maj/5"
+  },
+  {
+   "onset_s": 18.9474,
+   "offset_s": 20.0,
+   "label": "C#:maj/5"
+  }
  ]
 }

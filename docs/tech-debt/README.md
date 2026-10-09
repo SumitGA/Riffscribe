@@ -15,14 +15,14 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-5](#td-5-two-languages-python--rust) | Two languages (Python + Rust) | Code | Adding contributors or more Rust modules |
 | [TD-6](#td-6-cache-key-hashes-the-whole-config) | Cache key hashes the whole config | Pipeline | Config grows or re-runs get expensive |
 | [TD-7](#td-7-stage-versions-are-bumped-by-hand) | Stage versions are bumped by hand | Pipeline | A stale-result bug slips past golden tests |
-| [TD-8](#td-8-small-partly-synthetic-test-fixtures) | Small, partly synthetic test fixtures | Testing | Before claiming accuracy numbers publicly |
+| [TD-8](#td-8-small-partly-synthetic-test-fixtures) | Small, partly synthetic test fixtures (Guitar-TECHS is the held-out guitar) | Testing | Before claiming accuracy numbers publicly |
 | [TD-9](#td-9-ffmpeg-as-an-external-program) | ffmpeg as an external program | Pipeline | Building the production worker image |
 | [TD-10](#td-10-our-own-loudness-meter-instead-of-pyloudnorm) | Our own loudness meter instead of pyloudnorm | Pipeline | If a standards-compliance issue is reported |
 | [TD-11](#td-11-vendored-basic-pitch-model-and-ported-code) | Vendored Basic Pitch model and ported code | Pipeline / legal | Before launch (legal review); when upstream releases |
 | [TD-12](#td-12-our-own-beat-tracker-port) | Our own beat tracker port | Pipeline | Tempo errors show up in the accuracy suite |
 | [TD-13](#td-13-simple-rhythm-and-key-heuristics) | Simple rhythm and key heuristics | Pipeline | Users correct bar lines, triplets or keys often |
 | [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
-| [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
+| [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules and a learned position prior | Pipeline | Guitarists often move notes to other strings |
 | [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
 | [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | First deployment (refuse `JWT_DEV_SECRET` outside local) |
 | [TD-18](#td-18-simple-quotas-and-rate-limits) | Simple quotas and rate limits | Backend / billing | Billing (Phase 5), or users complain about lost quota |
@@ -33,6 +33,8 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-23](#td-23-local-android-builds-jdk-17-and-a-slow-react-native-repository) | Local Android builds: JDK 17 and a slow React Native repository | Mobile / tooling | Moving builds to EAS or CI; React Native supports newer JDKs |
 | [TD-24](#td-24-score-viewer-alphatab-in-a-webview-from-local-files) | Score viewer: alphaTab in a WebView from local files | Mobile | Long scores feel slow; editing (Phase 4) needs tighter integration |
 | [TD-25](#td-25-push-notifications-through-expos-push-service) | Push notifications through Expo's push service | Backend / mobile | Many users (receipts, batching); dropping Expo |
+| [TD-26](#td-26-chord-names-by-template-matching) | Chord names by template matching | Pipeline | Chord accuracy plateaus, or users need sus/dim/inversions |
+| [TD-27](#td-27-synced-playback-from-the-phones-own-copy-of-the-take) | Synced playback from the phone's own copy of the take | Mobile / legal | Users want playback on other devices, or the retention policy changes |
 
 ---
 
@@ -248,8 +250,17 @@ styles, comp and solo; 4.1 MB, fetched by HTTP range requests from the Zenodo zi
 synthesized piano clips. Baselines in `tests/accuracy_baseline.json`; CI fails if a metric drops
 more than 0.02. Mean guitar note F1 is 0.76; piano (synthetic) 0.83, which flatters it.
 
+**Held-out guitar (Step A5).** Basic Pitch trained on most of GuitarSet (TD-11), so GuitarSet
+flatters it. 8 Guitar-TECHS excerpts (CC BY 4.0; electric guitar through a miked amp, 3 players;
+4 solos and 4 chord recordings; 3.5 MB) are scored as their own suite (`mean guitar_techs` in
+the report): note F1 0.74 and tab string accuracy 0.53 there, vs 0.82 and 0.82 on GuitarSet.
+These are the numbers to quote. Their MIDI comes from a hexaphonic pickup whose offset from the
+audio differs per recording (+30 or -35 ms), so `make_fixtures.py` measures it per file without
+a transcription model. No beat or chord annotations, so those metrics stay GuitarSet-only, and
+tuning scripts never use these clips.
+
 **Revisit before** publishing accuracy claims. Grow a held-out set of real phone recordings that
-is never used for tuning.
+is never used for tuning; add acoustic-guitar audio no model trained on.
 
 ---
 
@@ -353,6 +364,22 @@ a model's licence and the licences of its training data are separate questions.
 - **Training-data caveat.** The weights are Apache-2.0, but Basic Pitch was trained partly on
   datasets licensed for research only (e.g. MedleyDB, iKala). Whether that affects commercial use
   of the weights is a legal question, not a technical one. Same grey area as Demucs (ADR-0004).
+
+**Alternatives measured (Step A5 spike, 2026-10-09).** No released model with commercially
+usable weights beats Basic Pitch on guitar on CPU today:
+- *Kong et al. high-resolution piano model* (code Apache-2.0, weights CC BY 4.0, 172 MB), zero-shot
+  on our GuitarSet clips: note F1 0.39-0.57 vs Basic Pitch 0.74-0.89, and 7.5 s vs 0.22 s of CPU
+  per 20 s clip. A piano model needs adapting to guitar first.
+- *Riley et al. guitar models* (ICASSP 2024; GAPS, ISMIR 2024: 88 % zero-shot / 91 % supervised
+  note F1 on GuitarSet) are fine-tuned from Kong's model; their weights are not released.
+- *MuScriptor* weights are CC BY-NC (no commercial use); *YourMT3* is GPL-3.0 and takes minutes
+  of CPU per 30 s; *SynthTab* data is CC BY-NC; *FretNet / TabCNN* are research code trained on
+  GuitarSet with no maintained weights.
+
+**Our GuitarSet numbers flatter Basic Pitch.** Its paper trained on 648 of GuitarSet's 720
+recordings (Table 1), so our test and tuning excerpts were very likely in its training data.
+A fair comparison, and an honest accuracy number, needs guitar audio no candidate trained on:
+Guitar-TECHS (electric guitar, CC BY 4.0, 2025) is one; the owner's own recordings are another.
 
 **Revisit when**
 - **Before launch:** get a legal opinion on the training-data question. A fallback is a model
@@ -494,30 +521,37 @@ the best sequence of choices for the whole piece at once, instead of greedily no
 each chord gets candidate fingerings with a comfort cost, moving the hand between chords has a
 cost, and Viterbi finds the cheapest path through all of them.
 
-**What we did.** `rust/tab.rs`: costs for hand height, finger span (heavy penalty beyond 4
-frets), a bonus for open strings and a cost per fret of hand movement; at most 64 candidate
-fingerings per chord (a *beam*) so 5 minutes take ~0.2 s. Notes that can't be played (below
-the lowest string, or more notes than strings) are left out of the tab but stay in the
-notation, and the stage reports how many. Tunings: standard and drop D; capo 0-12.
+**What we did.** `rust/tab.rs` models the fretting hand: a *hand position* is the fret under
+the index finger, which reaches that fret and the next 4 without moving. Viterbi runs over
+(fingering, hand position) pairs, so a melody inside one box costs nothing and only shifting
+the hand is charged (a fixed cost per shift plus a cost per fret). Fingerings also pay for
+finger span (heavily beyond 4 frets) and for each note's *position prior*: `-log P(string |
+pitch)`, counted from the fingerings GuitarSet players used (`pipeline/models/tab_prior`, from
+the tuning excerpts only). At most 64 candidate fingerings per chord (a *beam*), so 5 minutes
+take well under a second. Notes that can't be played (below the lowest string, or more notes
+than strings) are left out of the tab but stay in the notation, and the stage reports how many.
+Tunings: standard and drop D; capo 0-12. Weights were grid-searched on the pipeline's own
+transcriptions of 48 GuitarSet tuning excerpts (`tests/tuning/tune_tab.py`).
 
 **Pros**
-- Produces the shapes a guitarist expects in common cases (open E chord as 0-2-2-1-0-0, a
-  C major scale in open position, high melodies in one hand position); tests pin these.
-- Fast, deterministic, and every rule is a named weight that can be tuned.
+- Matches how guitarists play: solos stay in one box, chords use common shapes, and a stray
+  transcribed note can't drag the whole solo up the neck (it did before the prior).
+- Fast, deterministic, and every rule is a named weight, tuned against data.
+- No new dependency or model: the prior is a 50-row table of counts.
 
 **Cons**
-- The weights are hand-picked, not learned from real tabs.
-- It doesn't know techniques or style: slides, hammer-ons and bends are out of scope for v1,
-  and some players prefer higher positions for tone.
+- The prior comes from GuitarSet's six players, and the test clips are by the same six, so
+  the held-out numbers are somewhat optimistic for other players and styles.
+- It doesn't know techniques or style: slides, hammer-ons and bends are out of scope for v1.
 - Hand movement ignores time: a jump across the neck costs the same with a whole bar to move
   as with a sixteenth note.
+- Drop D and capo reuse the standard-tuning prior by string and fret (approximate).
 - Only six-string guitar, two tunings.
 
-**Measured (commit 10).** On notes we transcribe correctly, our string matches the GuitarSet
-player's string 38 % of the time on average: 100 % on a jazz comping excerpt, 66 % on
-singer-songwriter strumming, but 7-18 % on bossa nova and rock/funk solos, where players use
-higher positions than our low-position preference. The tab is still playable; it just isn't
-the player's fingering.
+**Measured (Step A3).** Of the notes we transcribe correctly, our string matches the player's
+on 82 % of the test clips' notes on average (was 35 % with the earlier hand-free, low-position
+costs): 80-98 % on comping, 55-88 % on solos. On annotated (perfect) notes the hand-free model
+reached only 27 % on solos, so the fingering model, not just transcription, was the problem.
 
 **Revisit when** users often move notes to other strings in the editor (Phase 4): those edits
 are exactly the data to fit the weights to, or to train a model.
@@ -554,6 +588,14 @@ bar at once instead of patching symptoms.
   phones may want different values; level normalization covers loudness, not tone.
 - Piano still uses Basic Pitch's defaults: there is no commercially usable real piano set yet.
 - Tab string accuracy moved from 0.38 to 0.35 (a different set of notes is now found and scored).
+
+**Tried and rejected (Step A5, 2026-10-09): chord-guided strum completion.** Adding chord tones
+of the recognized chord (TD-26) where Basic Pitch's activations show them at a strum, but too
+weakly to decode, raised recall on comp clips by up to 0.10 but cost more precision: F1 fell
+everywhere when the tone only had to be present (ringing notes from the previous strum count),
+and when it had to rise at the strum, the best setting gained 0.005 on the tuning clips and lost
+0.08 on the held-out Guitar-TECHS chords. Where Basic Pitch misses a strummed note there is
+little evidence of it left to recover; a better note model is the fix (TD-11).
 
 **Revisit when** user recordings with corrections exist (Phase 4): they are the right tuning set.
 
@@ -807,3 +849,60 @@ a transcription; Account has an on/off switch; sign-out removes the device's tok
 
 **Revisit when** users have many devices or notifications fail silently (fetch receipts in a
 small periodic task, send from a queue), or if we move off Expo (APNs/FCM directly).
+
+## TD-26: Chord names by template matching
+
+**Concept.** Chord names (shown above the staff) come from the note model's frame activations,
+not from a dedicated chord model. Per half beat, the activations are folded onto the 12 pitch
+classes; each of 60 chords (12 roots x major, minor, 7, maj7, m7) is scored by how well its
+notes match, plus a bonus when its root is in the bass, and a Viterbi pass picks the sequence
+with a penalty for changing chord (`pipeline/chords.py`). It runs in the quantize stage, which
+already has the beats. Settings were grid-searched on 24 GuitarSet comp excerpts that are not
+test clips (`tests/tuning/tune_chords.py`).
+
+**Pros**
+- No new model, dependency or licence; a few milliseconds per song, on CPU.
+- Works from what Basic Pitch hears even when it drops notes from a strum (a weak note still
+  adds to the chroma), which is where note-level transcription fails on strummed chords.
+- Measured: major/minor accuracy 0.76 on the tuning clips and 0.89 on the held-out test clips
+  (`chord_majmin` in `make test-accuracy`).
+
+**Cons**
+- Small vocabulary: no sus, dim, aug, 6, 9 or slash chords; a sus2 is named as its nearest
+  triad or seventh. No inversions (the bass only helps pick the root).
+- Chord changes only on half beats, so it depends on the beat tracker (TD-12).
+- Tuned on GuitarSet's clean mic recordings of six players; phone recordings and other styles
+  may score lower. Piano uses the same settings untuned.
+
+**Revisit when** chord accuracy plateaus or users ask for richer chords: try a learned chord
+model (licence-checked, CPU cost measured) or a bigger vocabulary with inversions, scored by
+the same metric.
+
+## TD-27: Synced playback from the phone's own copy of the take
+
+**Concept.** The score can play the user's own recording instead of the synthesized guitar,
+with the cursor following the real timing. The pipeline writes `sync.json` (when each bar
+starts in the uploaded audio); the app keeps its own copy of every take it sends
+(`src/audio/takes.ts`, in the app's documents, deleted with the job) and hands both to
+alphaTab as a *backing track* with one *sync point* per bar. The server keeps no audio for
+this, in line with ADR-0009 (uploaded audio is deleted after processing).
+
+**Pros**
+- No new storage, bandwidth or retention questions on the server; nothing changes legally.
+- Real sound with no new model or soundfont; the cursor stays on the bar being played even
+  when the player speeds up or slows down (checked in Chrome: seeking to 5 points of a GuitarSet
+  take lands the cursor in the bar sync.json predicts, 5 of 5).
+
+**Cons**
+- Only on the phone that sent the take. Another phone, a reinstall, or takes sent before
+  this change play the synthesized sound.
+- The takes use space on the phone (about 1 MB per minute) until the job is deleted.
+- One sync point per bar: within a bar, timing is interpolated linearly.
+- A bar that starts before the recording does (a pickup extrapolated before the first beat)
+  is clamped to 0 ms, so that bar is slightly squeezed.
+- Speed changes and the metronome are reset when switching between recording and synth (the
+  page starts a fresh player).
+
+**Revisit when** users want playback on other devices (then keep a compressed playback copy
+on the server for the transcription's lifetime, which needs an ADR-0009 amendment), or when
+per-beat sync is needed for tight passages.

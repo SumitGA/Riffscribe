@@ -76,6 +76,7 @@ class _Outputs:
     musicxml_key: str
     tab_musicxml_key: str | None
     midi_key: str | None
+    sync_key: str | None
 
 
 @dataclass(frozen=True)
@@ -284,6 +285,7 @@ class StageWorker:
             musicxml_key=prefix + result.output(Notation).musicxml.path,
             tab_musicxml_key=prefix + tab.musicxml.path if isinstance(tab, Tablature) else None,
             midi_key=prefix + result.output(QuantizedScore).midi.path,
+            sync_key=prefix + result.output(Notation).sync.path,
         )
 
     def _finish(self, session: Session, job: Job, outputs: _Outputs) -> None:
@@ -296,6 +298,7 @@ class StageWorker:
                 musicxml_key=outputs.musicxml_key,
                 tab_musicxml_key=outputs.tab_musicxml_key,
                 midi_key=outputs.midi_key,
+                sync_key=outputs.sync_key,
             )
             .on_conflict_do_nothing(index_elements=["job_id", "version"])
         )
@@ -345,7 +348,12 @@ class StageWorker:
         later = set(STAGES[STAGES.index(StageName.NORMALIZE) + 1 :])
         try:
             keys = [k for k in self._store.list_keys(old) if k[len(old) :].split("/")[0] in later]
-            needed = {score.musicxml_key, score.midi_key, score.tab_musicxml_key} - {None}
+            needed = {
+                score.musicxml_key,
+                score.midi_key,
+                score.tab_musicxml_key,
+                score.sync_key,
+            } - {None}
             if not needed <= set(keys):
                 logger.info("cached job %s has lost files; running the stages", cached.id)
                 return None
@@ -364,6 +372,7 @@ class StageWorker:
             musicxml_key=moved(score.musicxml_key),
             tab_musicxml_key=moved(score.tab_musicxml_key) if score.tab_musicxml_key else None,
             midi_key=moved(score.midi_key) if score.midi_key else None,
+            sync_key=moved(score.sync_key) if score.sync_key else None,
         )
 
     def _fail(

@@ -1,6 +1,7 @@
 import { Pause, Play, Repeat, SkipBack, Timer } from 'lucide-react-native';
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Directory, File } from 'expo-file-system';
 import WebView, { type WebViewMessageEvent } from 'react-native-webview';
 
 import { formatDuration } from '@/audio/clip';
@@ -8,14 +9,27 @@ import { colors, fonts, radius, space } from '@/theme';
 import { IconButton, ProgressBar, Segmented, Text } from '@/ui';
 
 import { prepareViewer, type ViewerFiles } from './prepareViewer';
-import { command, type StaveProfile, type ViewerMessage } from './viewerPage';
+import {
+  command,
+  type PlaybackSource,
+  type StaveProfile,
+  type ViewerMessage,
+  type ViewerTake,
+} from './viewerPage';
 
 const PROFILES: { value: StaveProfile; label: string }[] = [
   { value: 'score', label: 'Notation' },
   { value: 'tab', label: 'Tab' },
   { value: 'both', label: 'Both' },
 ];
+const SOURCES: { value: PlaybackSource; label: string }[] = [
+  { value: 'recording', label: 'Your recording' },
+  { value: 'synth', label: 'Guitar sound' },
+];
 const SPEEDS = [1, 0.75, 0.5];
+
+/** The user's recording on this phone, and when each bar starts in it (sync.json). */
+export type Take = { uri: string; barStartsMs: number[] };
 
 /**
  * Sheet music and tab rendered by alphaTab from a MusicXML document, with native playback
@@ -33,10 +47,13 @@ export type ScoreHandle = {
 export function ScoreView({
   musicXml,
   hasTab,
+  take = null,
   ref,
 }: {
   musicXml: string;
   hasTab: boolean;
+  /** Plays this recording in step with the score instead of the synthesized sound. */
+  take?: Take | null;
   ref?: Ref<ScoreHandle>;
 }) {
   const webView = useRef<WebView>(null);
@@ -55,6 +72,8 @@ export function ScoreView({
   const [speed, setSpeed] = useState(1);
   const [metronome, setMetronome] = useState(false);
   const [loop, setLoop] = useState(false);
+  const [source, setSource] = useState<PlaybackSource>(take ? 'recording' : 'synth');
+  const [pageTake, setPageTake] = useState<ViewerTake | null>(null);
 
   const run = (name: string, ...args: unknown[]) =>
     webView.current?.injectJavaScript(command(name, ...args));
@@ -69,14 +88,30 @@ export function ScoreView({
     return { guitarPro: () => ask('exportGuitarPro'), printable: () => ask('exportPrintable') };
   }, []);
 
+  // Lay out the viewer's files; a take is copied next to the page, the only folder the WebView
+  // may read. The take is fixed for the life of the view (the screen waits for it).
   useEffect(() => {
-    prepareViewer().then(setFiles, (e: unknown) => setError(String(e)));
+    const prepare = async () => {
+      const prepared = await prepareViewer();
+      if (take) {
+        try {
+          const file = await copyTake(take.uri, prepared.folder);
+          setPageTake({ file, barStartsMs: take.barStartsMs });
+        } catch (e) {
+          console.warn("couldn't use the recording; playing the guitar sound", e);
+          setSource('synth');
+        }
+      }
+      setFiles(prepared);
+    };
+    prepare().catch((e: unknown) => setError(String(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Send the score once the page is up, and again if it changes.
   useEffect(() => {
     if (ready) {
-      webView.current?.injectJavaScript(command('load', musicXml, profile));
+      webView.current?.injectJavaScript(command('load', musicXml, profile, pageTake));
     }
     // The profile is applied separately (changeProfile); reloading the score isn't needed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,6 +153,17 @@ export function ScoreView({
     setProfile(value);
     run('setProfile', value);
   };
+  const changeSource = (value: PlaybackSource) => {
+    // The page starts a fresh player, so playback settings start over too.
+    setSource(value);
+    setPlayerReady(false);
+    setPlaying(false);
+    setPosition({ currentMs: 0, endMs: 0 });
+    setSpeed(1);
+    setMetronome(false);
+    setLoop(false);
+    run('setSource', value);
+  };
   const nextSpeed = () => {
     const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] ?? 1;
     setSpeed(next);
@@ -136,6 +182,17 @@ export function ScoreView({
             options={PROFILES}
             value={profile}
             onChange={changeProfile}
+            emphasis="subtle"
+          />
+        </View>
+      )}
+      {pageTake && (
+        <View style={styles.profiles}>
+          <Segmented
+            label="Sound"
+            options={SOURCES}
+            value={source}
+            onChange={changeSource}
             emphasis="subtle"
           />
         </View>
@@ -223,6 +280,18 @@ export function ScoreView({
       </View>
     </View>
   );
+}
+
+/** Copies the take into the viewer's folder as `take.<ext>` and returns that name. */
+async function copyTake(uri: string, folder: string): Promise<string> {
+  const source = new File(uri);
+  const name = `take${source.extension || '.m4a'}`;
+  const target = new File(new Directory(folder), name);
+  if (target.exists) {
+    target.delete();
+  }
+  await source.copy(target);
+  return name;
 }
 
 const styles = StyleSheet.create({

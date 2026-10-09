@@ -204,6 +204,7 @@ def test_succeeded_job_has_download_links(api: TestClient, alice: str, db: Engin
                 version=0,
                 musicxml_key=job_key(alice, str(job_id), "notation", "score.musicxml"),
                 midi_key=job_key(alice, str(job_id), "transcribe", "notes.mid"),
+                sync_key=job_key(alice, str(job_id), "notation", "sync.json"),
             )
         )
         session.commit()
@@ -211,6 +212,7 @@ def test_succeeded_job_has_download_links(api: TestClient, alice: str, db: Engin
     assert outputs["version"] == 0
     assert "/notation/score.musicxml" in outputs["musicxml"]["url"]
     assert outputs["midi"]["method"] == "GET"
+    assert "/notation/sync.json" in outputs["sync"]["url"]
     assert outputs["tab_musicxml"] is None
 
 

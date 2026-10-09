@@ -82,6 +82,9 @@ def _job_out(session: Session, store: ObjectStore, job: Job) -> JobOut:
                 midi=_presigned(store.presign_get(score.midi_key, "score.mid"))
                 if score.midi_key
                 else None,
+                sync=_presigned(store.presign_get(score.sync_key, "sync.json"))
+                if score.sync_key
+                else None,
             )
     return JobOut(
         id=job.id,

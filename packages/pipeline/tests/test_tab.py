@@ -102,3 +102,21 @@ def test_tab_stage_is_skipped_for_piano(tmp_path: Path) -> None:
     result = run_pipeline(FIXTURES / "piano_like.wav", tmp_path, cfg, default_stages())
 
     assert {r.stage: r.status for r in result.stages}[StageName.TAB] == "skipped"
+
+
+def test_position_prior_keeps_a_scale_in_a_low_position() -> None:
+    scale = make_score([(p, i, 1) for i, p in enumerate([48, 50, 52, 53, 55, 57, 59, 60])])
+    positions = assign_tab(scale.notes, Tuning.STANDARD, 0)
+
+    assert all(p.fret <= 5 for p in positions.values()), positions
+
+
+def test_a_stray_high_note_does_not_drag_a_solo_up_the_neck() -> None:
+    # A box-position lick around fret 8 on the G and B strings, with one stray C6 (fret 20).
+    lick = [63, 60, 65, 62, 67, 65, 68, 67, 84, 70, 72, 70, 68, 67, 65, 63]
+    positions = assign_tab(
+        make_score([(p, i, 1) for i, p in enumerate(lick)]).notes, Tuning.STANDARD, 0
+    )
+
+    lows = [p.fret for (_, pitch), p in positions.items() if pitch != 84]
+    assert max(lows) <= 13, sorted(positions.items())

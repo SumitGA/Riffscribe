@@ -7,10 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Job } from '@/api/client';
 import { useApi } from '@/api/provider';
+import { findTake, forgetTake } from '@/audio/takes';
 import { formatWhen, isFinished, type StageState, stageStates } from '@/jobs/status';
 import { ExportSheet } from '@/score/ExportSheet';
 import { type ExportFormat, fileName, shareBase64, shareDownload, sharePdf } from '@/score/exports';
-import { type ScoreHandle, ScoreView } from '@/score/ScoreView';
+import { type ScoreHandle, ScoreView, type Take } from '@/score/ScoreView';
 import { colors, fonts, space } from '@/theme';
 import { Card, IconButton, Text } from '@/ui';
 import { ProgressRing } from '@/ui/ProgressRing';
@@ -24,6 +25,7 @@ export default function JobScreen() {
   const remove = useMutation({
     mutationFn: () => api.deleteJob(id),
     onSuccess: () => {
+      forgetTake(id);
       queryClient.removeQueries({ queryKey: ['job', id] });
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
       router.back();
@@ -231,6 +233,25 @@ function Score({
     },
     staleTime: Infinity,
   });
+  // This phone's copy of the recording, played in step with the score (sync.json). Without
+  // either, playback uses the synthesized sound.
+  const sync = outputs.sync;
+  const take = useQuery({
+    queryKey: ['take', job.id, outputs.version],
+    queryFn: async (): Promise<Take | null> => {
+      const file = findTake(job.id);
+      if (!file || !sync) {
+        return null;
+      }
+      const response = await fetch(sync.url, { headers: sync.headers });
+      if (!response.ok) {
+        return null;
+      }
+      const { bar_starts_ms } = (await response.json()) as { bar_starts_ms: number[] };
+      return { uri: file.uri, barStartsMs: bar_starts_ms };
+    },
+    staleTime: Infinity,
+  });
 
   return (
     <View style={styles.score}>
@@ -243,7 +264,7 @@ function Score({
       <Text variant="muted" style={styles.subtitle}>
         {subtitle}
       </Text>
-      {musicXml.isPending ? (
+      {musicXml.isPending || take.isPending ? (
         <ActivityIndicator color={colors.accent} style={styles.loading} />
       ) : musicXml.isError ? (
         <Text style={styles.error}>{musicXml.error.message}</Text>
@@ -252,6 +273,7 @@ function Score({
           ref={scoreView}
           musicXml={musicXml.data}
           hasTab={outputs.tab_musicxml !== null}
+          take={take.data ?? null}
         />
       )}
     </View>

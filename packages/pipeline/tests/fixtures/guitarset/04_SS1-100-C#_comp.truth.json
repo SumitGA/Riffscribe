@@ -886,5 +886,27 @@
   14.4,
   16.8,
   19.2
+ ],
+ "chords": [
+  {
+   "onset_s": 0.0,
+   "offset_s": 9.6,
+   "label": "C#:maj/1"
+  },
+  {
+   "onset_s": 9.6,
+   "offset_s": 14.4,
+   "label": "F#:maj/1"
+  },
+  {
+   "onset_s": 14.4,
+   "offset_s": 19.2,
+   "label": "C#:maj/1"
+  },
+  {
+   "onset_s": 19.2,
+   "offset_s": 20.0,
+   "label": "G#:maj/1"
+  }
  ]
 }

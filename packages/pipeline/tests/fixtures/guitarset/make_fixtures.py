@@ -4,12 +4,14 @@
 
 Reads only the needed files straight out of the Zenodo zips with HTTP range requests (a few MB
 instead of ~700 MB). Writes, per track, `<track>.flac` (mic audio, mono, 44.1 kHz) and
-`<track>.truth.json` (notes with string/fret, beats), plus ATTRIBUTION.md.
+`<track>.truth.json` (notes with string/fret, beats, performed chords), plus ATTRIBUTION.md.
 """
 
 import io
 import json
 import math
+import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -38,8 +40,7 @@ class HttpRangeFile(io.RawIOBase):
 
     def __init__(self, url: str) -> None:
         self.url, self.pos = url, 0
-        with urllib.request.urlopen(urllib.request.Request(url, method="HEAD")) as response:
-            self.size = int(response.headers["Content-Length"])
+        self.size = int(self._fetch(urllib.request.Request(url, method="HEAD"))[1])
 
     def readable(self) -> bool:
         return True
@@ -59,19 +60,32 @@ class HttpRangeFile(io.RawIOBase):
             return 0
         end = min(self.pos + len(buffer), self.size) - 1
         request = urllib.request.Request(self.url, headers={"Range": f"bytes={self.pos}-{end}"})
-        with urllib.request.urlopen(request) as response:
-            data = response.read()
+        data = self._fetch(request)[0]
         buffer[: len(data)] = data
         self.pos += len(data)
         return len(data)
 
+    @staticmethod
+    def _fetch(request: urllib.request.Request, attempts: int = 6) -> tuple[bytes, str]:
+        """Body and Content-Length, retrying Zenodo's occasional 5xx and timeouts with backoff."""
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    return response.read(), response.headers.get("Content-Length", "0")
+            except (urllib.error.URLError, TimeoutError) as error:
+                status = getattr(error, "code", None)
+                if (status is not None and status < 500) or attempt == attempts - 1:
+                    raise
+                time.sleep(2**attempt)
+        raise AssertionError("unreachable")
+
 
 def remote_zip(name: str) -> zipfile.ZipFile:
-    return zipfile.ZipFile(io.BufferedReader(HttpRangeFile(f"{ZENODO}{name}?download=1"), 1 << 16))
+    return zipfile.ZipFile(io.BufferedReader(HttpRangeFile(f"{ZENODO}{name}?download=1"), 1 << 20))
 
 
 def truth_from_jams(jams: dict[str, Any], start: float) -> dict[str, Any]:
-    notes, beats, downbeats, tempo = [], [], [], None
+    notes, beats, downbeats, chords, tempo = [], [], [], [], None
     for annotation in jams["annotations"]:
         namespace = annotation["namespace"]
         if namespace == "note_midi":
@@ -96,10 +110,29 @@ def truth_from_jams(jams: dict[str, Any], start: float) -> dict[str, Any]:
                     beats.append(round(t, 4))
                     if obs["value"]["position"] == 1:
                         downbeats.append(round(t, 4))
+        elif namespace == "chord" and annotation["annotation_metadata"]["data_source"]:
+            # Two chord annotations: the lead sheet's (no data_source) and the chords actually
+            # played, transcribed from the notes. Keep the played ones.
+            for obs in annotation["data"]:
+                on, off = obs["time"] - start, obs["time"] + obs["duration"] - start
+                if off > 0 and on < EXCERPT_S:
+                    chords.append(
+                        {
+                            "onset_s": round(max(on, 0.0), 4),
+                            "offset_s": round(min(off, EXCERPT_S), 4),
+                            "label": obs["value"],
+                        }
+                    )
         elif namespace == "tempo" and tempo is None:
             tempo = float(annotation["data"][0]["value"])
     notes.sort(key=lambda n: (n["onset_s"], n["pitch"]))
-    return {"tempo_bpm": tempo, "notes": notes, "beats_s": beats, "downbeats_s": downbeats}
+    return {
+        "tempo_bpm": tempo,
+        "notes": notes,
+        "beats_s": beats,
+        "downbeats_s": downbeats,
+        "chords": chords,
+    }
 
 
 def main() -> None:

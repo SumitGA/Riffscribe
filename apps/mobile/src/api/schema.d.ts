@@ -293,6 +293,7 @@ export interface components {
             musicxml: components["schemas"]["PresignedRequestOut"];
             tab_musicxml: components["schemas"]["PresignedRequestOut"] | null;
             midi: components["schemas"]["PresignedRequestOut"] | null;
+            sync: components["schemas"]["PresignedRequestOut"] | null;
         };
         /**
          * JobStatus

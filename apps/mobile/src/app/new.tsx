@@ -19,6 +19,7 @@ import { type AudioClip, formatDuration, formatSize } from '@/audio/clip';
 import { LevelBars } from '@/audio/LevelBars';
 import { pickAudioFile } from '@/audio/pickAudioFile';
 import { Recorder } from '@/audio/Recorder';
+import { keepTake } from '@/audio/takes';
 import { type Step, startTranscription, uploadFile } from '@/jobs/transcribe';
 import { askForPushOnce } from '@/push';
 import { colors, fonts, radius, space } from '@/theme';
@@ -161,6 +162,7 @@ function Review({
         setStep,
       ),
     onSuccess: (job) => {
+      void keepTake(job.id, clip.uri); // so the score can play the real recording on this phone
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
       void queryClient.invalidateQueries({ queryKey: ['me'] });
       router.replace({ pathname: '/jobs/[id]', params: { id: job.id } });

@@ -1,0 +1,129 @@
+{
+ "track": "chords_P1_Set1_maj",
+ "source": "Guitar-TECHS, P1_chords/audio/micamp/micamp_Set1_maj.wav, https://zenodo.org/records/14963133",
+ "license": "CC BY 4.0",
+ "start_s": 0.0,
+ "duration_s": 20.0,
+ "midi_latency_s": 0.034,
+ "notes": [
+  {
+   "onset_s": 0.0066,
+   "offset_s": 3.6952,
+   "pitch": 58,
+   "string": 3,
+   "fret": 3
+  },
+  {
+   "onset_s": 0.0368,
+   "offset_s": 3.6962,
+   "pitch": 62,
+   "string": 2,
+   "fret": 3
+  },
+  {
+   "onset_s": 0.0785,
+   "offset_s": 3.6952,
+   "pitch": 65,
+   "string": 1,
+   "fret": 1
+  },
+  {
+   "onset_s": 3.9535,
+   "offset_s": 7.615,
+   "pitch": 66,
+   "string": 1,
+   "fret": 2
+  },
+  {
+   "onset_s": 4.0389,
+   "offset_s": 7.6441,
+   "pitch": 63,
+   "string": 2,
+   "fret": 4
+  },
+  {
+   "onset_s": 4.1577,
+   "offset_s": 7.6868,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 7.9858,
+   "offset_s": 8.0045,
+   "pitch": 63,
+   "string": 2,
+   "fret": 4
+  },
+  {
+   "onset_s": 8.0108,
+   "offset_s": 11.7066,
+   "pitch": 64,
+   "string": 2,
+   "fret": 5
+  },
+  {
+   "onset_s": 8.0285,
+   "offset_s": 11.7066,
+   "pitch": 67,
+   "string": 1,
+   "fret": 3
+  },
+  {
+   "onset_s": 11.991,
+   "offset_s": 14.9587,
+   "pitch": 68,
+   "string": 1,
+   "fret": 4
+  },
+  {
+   "onset_s": 12.0566,
+   "offset_s": 15.7566,
+   "pitch": 65,
+   "string": 2,
+   "fret": 6
+  },
+  {
+   "onset_s": 12.1389,
+   "offset_s": 15.7566,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 15.9712,
+   "offset_s": 19.7191,
+   "pitch": 62,
+   "string": 3,
+   "fret": 7
+  },
+  {
+   "onset_s": 15.9795,
+   "offset_s": 16.0223,
+   "pitch": 70,
+   "string": 2,
+   "fret": 11
+  },
+  {
+   "onset_s": 16.0264,
+   "offset_s": 19.691,
+   "pitch": 66,
+   "string": 2,
+   "fret": 7
+  },
+  {
+   "onset_s": 16.0837,
+   "offset_s": 18.7181,
+   "pitch": 69,
+   "string": 1,
+   "fret": 5
+  },
+  {
+   "onset_s": 19.9723,
+   "offset_s": 20.0,
+   "pitch": 70,
+   "string": 1,
+   "fret": 6
+  }
+ ]
+}

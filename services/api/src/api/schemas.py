@@ -87,6 +87,9 @@ class JobOutputs(BaseModel):
     musicxml: PresignedRequestOut
     tab_musicxml: PresignedRequestOut | None
     midi: PresignedRequestOut | None
+    # sync.json ({"bar_starts_ms": [...]}): when each bar starts in the uploaded audio, for
+    # playing the user's own copy of the recording in step with the score
+    sync: PresignedRequestOut | None
 
 
 class JobOut(BaseModel):
