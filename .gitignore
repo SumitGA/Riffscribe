@@ -37,3 +37,13 @@ work/
 !tools/e2e_fixtures/**
 # ...but never caches, even inside fixtures (the line above would re-include them).
 **/__pycache__/
+
+# Secrets and infrastructure state (ADR-0010): real values live only on the VM and the
+# owner's machine.
+.env
+!.env.example
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+!*.tfvars.example

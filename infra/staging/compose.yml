@@ -1,0 +1,108 @@
+# Staging stack (ADR-0010): everything on one VM, behind Caddy. Deployed by
+# `make deploy-staging`, which copies this folder to the VM and runs it with the VM's `.env`
+# (see .env.example; secrets never live in the repo). Images come from GHCR, pinned by TAG.
+#
+# Only Caddy publishes ports. Postgres, Valkey and the metrics endpoints are reachable only on
+# the stack's internal network.
+
+name: riffscribe-staging
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg://riffscribe:${POSTGRES_PASSWORD:?set in .env}@postgres:5432/riffscribe
+  REDIS_URL: redis://valkey:6379/0
+  S3_BUCKET: ${S3_BUCKET:?set in .env}
+  S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:?set in .env}
+  S3_REGION: auto
+  AWS_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set in .env}
+  AWS_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set in .env}
+  LOG_FORMAT: json
+
+x-app-depends: &app-depends
+  postgres: {condition: service_healthy}
+  valkey: {condition: service_healthy}
+
+x-api-image: &api-image ghcr.io/${IMAGE_OWNER:-sumitga}/riffscribe-api:${TAG:?set TAG to a commit SHA}
+x-worker-image: &worker-image ghcr.io/${IMAGE_OWNER:-sumitga}/riffscribe-worker:${TAG:?set TAG to a commit SHA}
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      STAGING_HOST: ${STAGING_HOST:?set in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data  # certificates: keep them, or Let's Encrypt rate limits apply
+      - caddy-config:/config
+    depends_on:
+      api: {condition: service_healthy}
+
+  api:
+    image: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      JWT_ISSUER: ${JWT_ISSUER:?set in .env}
+      JWT_JWKS_URL: ${JWT_ISSUER}/.well-known/jwks.json
+      FREE_JOBS_PER_MONTH: ${FREE_JOBS_PER_MONTH:-10}
+      # Trust X-Forwarded-For from Caddy, the only thing that can reach the API.
+      FORWARDED_ALLOW_IPS: "*"
+    depends_on: *app-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  worker:
+    image: *worker-image
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      WORKER_NOTIFIER: expo
+      WORKER_EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+    depends_on: *app-depends
+    # SIGTERM lets the current stage finish; a 5-minute clip's transcription fits in this.
+    stop_grace_period: 5m
+
+  migrate:
+    image: *api-image
+    profiles: ["init"]
+    environment: *app-env
+    depends_on: *app-depends
+    command: ["python", "-m", "tabscribe_platform.migrate"]
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: riffscribe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: riffscribe
+    # The VM's separate data volume (mounted by cloud-init), so the VM can be replaced.
+    volumes: ["${POSTGRES_DATA_DIR:-/srv/riffscribe/postgres}:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U riffscribe -d riffscribe"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Valkey: the queue (Redis Streams, ADR-0007) and the quota and rate-limit counters.
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes"]
+    volumes: [valkey-data:/data]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  caddy-data:
+  caddy-config:
+  valkey-data:
