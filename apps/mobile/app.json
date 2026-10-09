@@ -59,6 +59,12 @@
         "projectId": "d0b25db2-3690-4096-9c98-fc02105deb85"
       }
     },
-    "owner": "sumitga"
+    "owner": "sumitga",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d0b25db2-3690-4096-9c98-fc02105deb85"
+    }
   }
 }

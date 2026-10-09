@@ -2,7 +2,9 @@
 
 Talks HTTP to the API (API_URL, default http://localhost:8000) and uploads straight to object
 storage with the presigned URLs, like a phone would. Needs JWT_ISSUER and JWT_DEV_SECRET to
-mint dev tokens (the Makefile passes them). Exits non-zero on the first failed check.
+mint dev tokens (the Makefile passes them), or, against staging, which only accepts real
+Clerk tokens, E2E_TOKEN and E2E_OTHER_TOKEN for two different users (`make e2e-staging`,
+docs/staging.md). Exits non-zero on the first failed check.
 """
 
 import json
@@ -88,9 +90,11 @@ def step(name: str) -> None:
 
 
 def main() -> int:
-    auth = AuthSettings()
-    alice = issue_dev_token(auth, f"e2e-{uuid.uuid4().hex[:8]}")
-    mallory = issue_dev_token(auth, f"e2e-{uuid.uuid4().hex[:8]}")
+    alice, mallory = os.environ.get("E2E_TOKEN"), os.environ.get("E2E_OTHER_TOKEN")
+    if not (alice and mallory):
+        auth = AuthSettings()
+        alice = issue_dev_token(auth, f"e2e-{uuid.uuid4().hex[:8]}")
+        mallory = issue_dev_token(auth, f"e2e-{uuid.uuid4().hex[:8]}")
     print(f"e2e against {API}")
     try:
         status, _ = api("GET", "/readyz")
@@ -98,6 +102,9 @@ def main() -> int:
         step("API ready (Postgres, Redis)")
         check(api("GET", "/me")[0] == 401, "/me without a token should be 401")
         step("requests without a token are refused")
+        status, me = api("GET", "/me", alice)
+        check(status == 200, f"/me: {status}")
+        used_before = me["jobs_this_month"]  # nonzero for a reused staging user
 
         start = time.monotonic()
         job = transcribe(alice, FIXTURES / "piano.m4a", "audio/mp4", "guitar")
@@ -138,7 +145,7 @@ def main() -> int:
         step("another user's job is a 404")
 
         status, me = api("GET", "/me", alice)
-        check(status == 200 and me["jobs_this_month"] == 4, f"/me: {me}")
+        check(status == 200 and me["jobs_this_month"] - used_before == 4, f"/me: {me}")
         step("quota counted 4 submitted jobs")
     except CheckFailedError as exc:
         print(f"  FAIL {exc}", file=sys.stderr)

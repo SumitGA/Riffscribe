@@ -1,0 +1,13 @@
+# HTTPS for the staging API (ADR-0010). Caddy gets and renews a Let's Encrypt certificate for
+# STAGING_HOST by itself; the DNS A record must point at the VM first.
+{
+	email {$ACME_EMAIL}
+}
+
+{$STAGING_HOST} {
+	encode zstd gzip
+	# Metrics are for whoever operates the VM, not the internet (TD-29).
+	@internal path /metrics
+	respond @internal 404
+	reverse_proxy api:8000
+}

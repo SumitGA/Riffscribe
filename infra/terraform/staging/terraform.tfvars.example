@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars (git-ignored) and fill in from your cloud:
+#   openstack image list / flavor list / network list
+cloud                 = "openstack"
+image_name            = "Ubuntu 24.04"
+flavor_name           = "m1.large"
+network_name          = "private"
+external_network_name = "public"
+admin_cidr            = "203.0.113.7/32" # your public IP: curl -s https://ifconfig.me
