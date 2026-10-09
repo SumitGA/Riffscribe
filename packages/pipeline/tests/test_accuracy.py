@@ -25,12 +25,12 @@ TOLERANCE = 0.02  # absorbs tiny numeric differences between machines (e.g. macO
 CLIPS = clips()
 
 
-def mean_by_instrument(results: dict[str, dict[str, float]]) -> dict[str, dict[str, float]]:
+def mean_by_suite(results: dict[str, dict[str, float]]) -> dict[str, dict[str, float]]:
     means: dict[str, dict[str, float]] = {}
-    for instrument in sorted({c.instrument for c in CLIPS}):
-        rows = [results[c.name] for c in CLIPS if c.instrument is instrument]
+    for suite in sorted({c.suite for c in CLIPS}):
+        rows = [results[c.name] for c in CLIPS if c.suite == suite]
         metrics = sorted({m for row in rows for m in row})
-        means[str(instrument)] = {  # over the clips that have the metric (chords: comp only)
+        means[suite] = {  # over the clips that have the metric (chords: comp only)
             m: round(float(np.mean([row[m] for row in rows if m in row])), 4) for m in metrics
         }
     return means
@@ -42,9 +42,9 @@ def report(results: dict[str, dict[str, float]]) -> str:
     for name, row in results.items():
         cells = " | ".join(f"{row[m]:.3f}" if m in row else "" for m in metrics)
         lines.append(f"| {name} | {cells} |")
-    for instrument, row in mean_by_instrument(results).items():
+    for suite, row in mean_by_suite(results).items():
         cells = " | ".join(f"**{row[m]:.3f}**" if m in row else "" for m in metrics)
-        lines.append(f"| **mean {instrument}** | {cells} |")
+        lines.append(f"| **mean {suite}** | {cells} |")
     return "\n".join(lines)
 
 
@@ -58,7 +58,7 @@ def results(tmp_path_factory: pytest.TempPathFactory) -> dict[str, dict[str, flo
             "pipeline_version": version,
             "tolerance": TOLERANCE,
             "clips": scored,
-            "mean": mean_by_instrument(scored),
+            "mean": mean_by_suite(scored),
         }
         BASELINE.write_text(json.dumps(baseline, indent=1, sort_keys=True) + "\n")
     return scored

@@ -10,6 +10,8 @@ instead of ~700 MB). Writes, per track, `<track>.flac` (mic audio, mono, 44.1 kH
 import io
 import json
 import math
+import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -38,8 +40,7 @@ class HttpRangeFile(io.RawIOBase):
 
     def __init__(self, url: str) -> None:
         self.url, self.pos = url, 0
-        with urllib.request.urlopen(urllib.request.Request(url, method="HEAD")) as response:
-            self.size = int(response.headers["Content-Length"])
+        self.size = int(self._fetch(urllib.request.Request(url, method="HEAD"))[1])
 
     def readable(self) -> bool:
         return True
@@ -59,15 +60,28 @@ class HttpRangeFile(io.RawIOBase):
             return 0
         end = min(self.pos + len(buffer), self.size) - 1
         request = urllib.request.Request(self.url, headers={"Range": f"bytes={self.pos}-{end}"})
-        with urllib.request.urlopen(request) as response:
-            data = response.read()
+        data = self._fetch(request)[0]
         buffer[: len(data)] = data
         self.pos += len(data)
         return len(data)
 
+    @staticmethod
+    def _fetch(request: urllib.request.Request, attempts: int = 6) -> tuple[bytes, str]:
+        """Body and Content-Length, retrying Zenodo's occasional 5xx and timeouts with backoff."""
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    return response.read(), response.headers.get("Content-Length", "0")
+            except (urllib.error.URLError, TimeoutError) as error:
+                status = getattr(error, "code", None)
+                if (status is not None and status < 500) or attempt == attempts - 1:
+                    raise
+                time.sleep(2**attempt)
+        raise AssertionError("unreachable")
+
 
 def remote_zip(name: str) -> zipfile.ZipFile:
-    return zipfile.ZipFile(io.BufferedReader(HttpRangeFile(f"{ZENODO}{name}?download=1"), 1 << 16))
+    return zipfile.ZipFile(io.BufferedReader(HttpRangeFile(f"{ZENODO}{name}?download=1"), 1 << 20))
 
 
 def truth_from_jams(jams: dict[str, Any], start: float) -> dict[str, Any]:

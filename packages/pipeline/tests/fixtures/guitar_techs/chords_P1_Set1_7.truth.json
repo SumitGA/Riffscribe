@@ -1,0 +1,171 @@
+{
+ "track": "chords_P1_Set1_7",
+ "source": "Guitar-TECHS, P1_chords/audio/micamp/micamp_Set1_7.wav, https://zenodo.org/records/14963133",
+ "license": "CC BY 4.0",
+ "start_s": 0.0,
+ "duration_s": 20.0,
+ "midi_latency_s": -0.03,
+ "notes": [
+  {
+   "onset_s": 0.0571,
+   "offset_s": 3.8446,
+   "pitch": 51,
+   "string": 4,
+   "fret": 1
+  },
+  {
+   "onset_s": 0.1165,
+   "offset_s": 3.831,
+   "pitch": 58,
+   "string": 3,
+   "fret": 3
+  },
+  {
+   "onset_s": 0.1904,
+   "offset_s": 3.8019,
+   "pitch": 61,
+   "string": 2,
+   "fret": 2
+  },
+  {
+   "onset_s": 0.2727,
+   "offset_s": 3.7862,
+   "pitch": 67,
+   "string": 1,
+   "fret": 3
+  },
+  {
+   "onset_s": 4.0404,
+   "offset_s": 6.7633,
+   "pitch": 68,
+   "string": 1,
+   "fret": 4
+  },
+  {
+   "onset_s": 4.1029,
+   "offset_s": 7.8665,
+   "pitch": 62,
+   "string": 2,
+   "fret": 3
+  },
+  {
+   "onset_s": 4.1883,
+   "offset_s": 7.8665,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 4.331,
+   "offset_s": 7.954,
+   "pitch": 52,
+   "string": 4,
+   "fret": 2
+  },
+  {
+   "onset_s": 8.0956,
+   "offset_s": 11.6102,
+   "pitch": 53,
+   "string": 4,
+   "fret": 3
+  },
+  {
+   "onset_s": 8.104,
+   "offset_s": 8.1435,
+   "pitch": 63,
+   "string": 3,
+   "fret": 8
+  },
+  {
+   "onset_s": 8.1477,
+   "offset_s": 11.7123,
+   "pitch": 60,
+   "string": 3,
+   "fret": 5
+  },
+  {
+   "onset_s": 8.2154,
+   "offset_s": 11.7425,
+   "pitch": 63,
+   "string": 2,
+   "fret": 4
+  },
+  {
+   "onset_s": 8.2956,
+   "offset_s": 10.4217,
+   "pitch": 69,
+   "string": 1,
+   "fret": 5
+  },
+  {
+   "onset_s": 12.0665,
+   "offset_s": 14.7019,
+   "pitch": 70,
+   "string": 1,
+   "fret": 6
+  },
+  {
+   "onset_s": 12.1446,
+   "offset_s": 15.7467,
+   "pitch": 64,
+   "string": 2,
+   "fret": 5
+  },
+  {
+   "onset_s": 12.2435,
+   "offset_s": 15.7467,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 12.3612,
+   "offset_s": 15.7331,
+   "pitch": 54,
+   "string": 4,
+   "fret": 4
+  },
+  {
+   "onset_s": 15.9873,
+   "offset_s": 19.1581,
+   "pitch": 55,
+   "string": 4,
+   "fret": 5
+  },
+  {
+   "onset_s": 16.0279,
+   "offset_s": 19.6529,
+   "pitch": 62,
+   "string": 3,
+   "fret": 7
+  },
+  {
+   "onset_s": 16.0415,
+   "offset_s": 16.08,
+   "pitch": 68,
+   "string": 2,
+   "fret": 9
+  },
+  {
+   "onset_s": 16.0769,
+   "offset_s": 19.6644,
+   "pitch": 65,
+   "string": 2,
+   "fret": 6
+  },
+  {
+   "onset_s": 16.1519,
+   "offset_s": 18.9112,
+   "pitch": 71,
+   "string": 1,
+   "fret": 7
+  },
+  {
+   "onset_s": 19.9758,
+   "offset_s": 20.0,
+   "pitch": 72,
+   "string": 1,
+   "fret": 8
+  }
+ ]
+}

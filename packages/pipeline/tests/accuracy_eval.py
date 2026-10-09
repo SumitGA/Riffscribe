@@ -19,7 +19,13 @@ from pipeline.stages.tab import TabFile, Tablature
 from pipeline.stages.transcribe import NoteEvents, NoteList
 
 FIXTURES = Path(__file__).parent / "fixtures"
-SUITES = {"guitarset": Instrument.GUITAR, "piano_synth": Instrument.PIANO}
+# guitar_techs: guitar no model we use trained on (Basic Pitch trained on most of GuitarSet,
+# TD-11), so its numbers are the honest ones; it has no beat or chord annotations.
+SUITES = {
+    "guitarset": Instrument.GUITAR,
+    "guitar_techs": Instrument.GUITAR,
+    "piano_synth": Instrument.PIANO,
+}
 TEMPO_TOLERANCE = 0.04  # a tempo within 4 % counts as right
 
 
@@ -29,6 +35,7 @@ class Clip:
     audio: Path
     truth: dict[str, Any]
     instrument: Instrument
+    suite: str
 
 
 def clips() -> list[Clip]:
@@ -37,7 +44,7 @@ def clips() -> list[Clip]:
         for truth_path in sorted((FIXTURES / suite).glob("*.truth.json")):
             audio = truth_path.with_name(truth_path.name.replace(".truth.json", ".flac"))
             truth = json.loads(truth_path.read_text())
-            found.append(Clip(truth["track"], audio, truth, instrument))
+            found.append(Clip(truth["track"], audio, truth, instrument, suite))
     return found
 
 
@@ -65,23 +72,23 @@ def evaluate(clip: Clip, workdir: Path) -> dict[str, float]:
     _, _, f1_offset, _ = mir_eval.transcription.precision_recall_f1_overlap(
         ref_intervals, ref_hz, est_intervals, est_hz
     )
-    ref_beats = mir_eval.beat.trim_beats(np.asarray(clip.truth["beats_s"], dtype=float))
-    est_beats = mir_eval.beat.trim_beats(np.asarray(score.beat_times_s, dtype=float) + shift)
-    tempo_error = abs(score.tempo_bpm / clip.truth["tempo_bpm"] - 1)
-
     metrics = {
         "note_f1": f1,
         "note_precision": precision,
         "note_recall": recall,
         "note_f1_with_offsets": f1_offset,
-        "beat_f": mir_eval.beat.f_measure(ref_beats, est_beats),
-        "tempo_correct": float(tempo_error <= TEMPO_TOLERANCE),
     }
+    if clip.truth.get("beats_s"):
+        ref_beats = mir_eval.beat.trim_beats(np.asarray(clip.truth["beats_s"], dtype=float))
+        est_beats = mir_eval.beat.trim_beats(np.asarray(score.beat_times_s, dtype=float) + shift)
+        tempo_error = abs(score.tempo_bpm / clip.truth["tempo_bpm"] - 1)
+        metrics["beat_f"] = mir_eval.beat.f_measure(ref_beats, est_beats)
+        metrics["tempo_correct"] = float(tempo_error <= TEMPO_TOLERANCE)
     if clip.instrument is Instrument.GUITAR:
         tab_path = workdir / result.output(Tablature).tab.path
         tab = TabFile.model_validate_json(tab_path.read_text())
         metrics["tab_string_accuracy"] = _string_accuracy(clip, score, tab, shift)
-    if clip.name.endswith("_comp"):  # in solos the chords are the band's, not the guitar's
+    if "chords" in clip.truth and clip.name.endswith("_comp"):  # solos: the band's chords
         estimated = [(c.onset_s + shift, c.offset_s + shift, c.harte()) for c in score.chords]
         metrics.update(chord_accuracy(clip.truth["chords"], estimated))
     return {name: round(float(value), 4) for name, value in metrics.items()}

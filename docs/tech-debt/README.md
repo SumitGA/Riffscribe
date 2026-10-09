@@ -15,7 +15,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-5](#td-5-two-languages-python--rust) | Two languages (Python + Rust) | Code | Adding contributors or more Rust modules |
 | [TD-6](#td-6-cache-key-hashes-the-whole-config) | Cache key hashes the whole config | Pipeline | Config grows or re-runs get expensive |
 | [TD-7](#td-7-stage-versions-are-bumped-by-hand) | Stage versions are bumped by hand | Pipeline | A stale-result bug slips past golden tests |
-| [TD-8](#td-8-small-partly-synthetic-test-fixtures) | Small, partly synthetic test fixtures | Testing | Before claiming accuracy numbers publicly |
+| [TD-8](#td-8-small-partly-synthetic-test-fixtures) | Small, partly synthetic test fixtures (Guitar-TECHS is the held-out guitar) | Testing | Before claiming accuracy numbers publicly |
 | [TD-9](#td-9-ffmpeg-as-an-external-program) | ffmpeg as an external program | Pipeline | Building the production worker image |
 | [TD-10](#td-10-our-own-loudness-meter-instead-of-pyloudnorm) | Our own loudness meter instead of pyloudnorm | Pipeline | If a standards-compliance issue is reported |
 | [TD-11](#td-11-vendored-basic-pitch-model-and-ported-code) | Vendored Basic Pitch model and ported code | Pipeline / legal | Before launch (legal review); when upstream releases |
@@ -250,8 +250,17 @@ styles, comp and solo; 4.1 MB, fetched by HTTP range requests from the Zenodo zi
 synthesized piano clips. Baselines in `tests/accuracy_baseline.json`; CI fails if a metric drops
 more than 0.02. Mean guitar note F1 is 0.76; piano (synthetic) 0.83, which flatters it.
 
+**Held-out guitar (Step A5).** Basic Pitch trained on most of GuitarSet (TD-11), so GuitarSet
+flatters it. 8 Guitar-TECHS excerpts (CC BY 4.0; electric guitar through a miked amp, 3 players;
+4 solos and 4 chord recordings; 3.5 MB) are scored as their own suite (`mean guitar_techs` in
+the report): note F1 0.74 and tab string accuracy 0.53 there, vs 0.82 and 0.82 on GuitarSet.
+These are the numbers to quote. Their MIDI comes from a hexaphonic pickup whose offset from the
+audio differs per recording (+30 or -35 ms), so `make_fixtures.py` measures it per file without
+a transcription model. No beat or chord annotations, so those metrics stay GuitarSet-only, and
+tuning scripts never use these clips.
+
 **Revisit before** publishing accuracy claims. Grow a held-out set of real phone recordings that
-is never used for tuning.
+is never used for tuning; add acoustic-guitar audio no model trained on.
 
 ---
 

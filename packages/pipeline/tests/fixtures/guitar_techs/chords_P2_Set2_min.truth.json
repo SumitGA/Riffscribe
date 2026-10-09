@@ -1,0 +1,115 @@
+{
+ "track": "chords_P2_Set2_min",
+ "source": "Guitar-TECHS, P2_chords/audio/micamp/micamp_Set2_min.wav, https://zenodo.org/records/14963133",
+ "license": "CC BY 4.0",
+ "start_s": 0.0,
+ "duration_s": 20.0,
+ "midi_latency_s": 0.028,
+ "notes": [
+  {
+   "onset_s": 0.0053,
+   "offset_s": 3.5512,
+   "pitch": 60,
+   "string": 2,
+   "fret": 1
+  },
+  {
+   "onset_s": 3.8199,
+   "offset_s": 7.5272,
+   "pitch": 61,
+   "string": 2,
+   "fret": 2
+  },
+  {
+   "onset_s": 3.896,
+   "offset_s": 6.0189,
+   "pitch": 57,
+   "string": 3,
+   "fret": 2
+  },
+  {
+   "onset_s": 3.9772,
+   "offset_s": 7.6293,
+   "pitch": 54,
+   "string": 4,
+   "fret": 4
+  },
+  {
+   "onset_s": 7.8574,
+   "offset_s": 11.5043,
+   "pitch": 55,
+   "string": 4,
+   "fret": 5
+  },
+  {
+   "onset_s": 7.9251,
+   "offset_s": 9.6314,
+   "pitch": 58,
+   "string": 3,
+   "fret": 3
+  },
+  {
+   "onset_s": 7.9897,
+   "offset_s": 11.5335,
+   "pitch": 62,
+   "string": 2,
+   "fret": 3
+  },
+  {
+   "onset_s": 11.8022,
+   "offset_s": 15.5814,
+   "pitch": 63,
+   "string": 2,
+   "fret": 4
+  },
+  {
+   "onset_s": 11.8939,
+   "offset_s": 15.5512,
+   "pitch": 59,
+   "string": 3,
+   "fret": 4
+  },
+  {
+   "onset_s": 15.8939,
+   "offset_s": 18.773,
+   "pitch": 57,
+   "string": 4,
+   "fret": 7
+  },
+  {
+   "onset_s": 15.9616,
+   "offset_s": 19.5137,
+   "pitch": 60,
+   "string": 3,
+   "fret": 5
+  },
+  {
+   "onset_s": 16.0355,
+   "offset_s": 19.5283,
+   "pitch": 64,
+   "string": 2,
+   "fret": 5
+  },
+  {
+   "onset_s": 19.7491,
+   "offset_s": 20.0,
+   "pitch": 65,
+   "string": 2,
+   "fret": 6
+  },
+  {
+   "onset_s": 19.848,
+   "offset_s": 20.0,
+   "pitch": 61,
+   "string": 3,
+   "fret": 6
+  },
+  {
+   "onset_s": 19.9512,
+   "offset_s": 20.0,
+   "pitch": 58,
+   "string": 4,
+   "fret": 8
+  }
+ ]
+}
