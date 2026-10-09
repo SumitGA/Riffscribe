@@ -589,6 +589,14 @@ bar at once instead of patching symptoms.
 - Piano still uses Basic Pitch's defaults: there is no commercially usable real piano set yet.
 - Tab string accuracy moved from 0.38 to 0.35 (a different set of notes is now found and scored).
 
+**Tried and rejected (Step A5, 2026-10-09): chord-guided strum completion.** Adding chord tones
+of the recognized chord (TD-26) where Basic Pitch's activations show them at a strum, but too
+weakly to decode, raised recall on comp clips by up to 0.10 but cost more precision: F1 fell
+everywhere when the tone only had to be present (ringing notes from the previous strum count),
+and when it had to rise at the strum, the best setting gained 0.005 on the tuning clips and lost
+0.08 on the held-out Guitar-TECHS chords. Where Basic Pitch misses a strummed note there is
+little evidence of it left to recover; a better note model is the fix (TD-11).
+
 **Revisit when** user recordings with corrections exist (Phase 4): they are the right tuning set.
 
 ---
