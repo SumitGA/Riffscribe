@@ -911,5 +911,37 @@
   14.8837,
   16.7442,
   18.6047
+ ],
+ "chords": [
+  {
+   "onset_s": 0.0,
+   "offset_s": 7.4419,
+   "label": "D#:sus2(7)/1"
+  },
+  {
+   "onset_s": 7.4419,
+   "offset_s": 11.1628,
+   "label": "G#:maj6(*5)/1"
+  },
+  {
+   "onset_s": 11.1628,
+   "offset_s": 14.8837,
+   "label": "D#:maj7/1"
+  },
+  {
+   "onset_s": 14.8837,
+   "offset_s": 16.7442,
+   "label": "A#:maj/1"
+  },
+  {
+   "onset_s": 16.7442,
+   "offset_s": 18.6047,
+   "label": "G#:maj6(2,b5,*5)/1"
+  },
+  {
+   "onset_s": 18.6047,
+   "offset_s": 20.0,
+   "label": "D#:maj7/1"
+  }
  ]
 }

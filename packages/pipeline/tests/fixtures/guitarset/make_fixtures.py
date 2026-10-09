@@ -4,7 +4,7 @@
 
 Reads only the needed files straight out of the Zenodo zips with HTTP range requests (a few MB
 instead of ~700 MB). Writes, per track, `<track>.flac` (mic audio, mono, 44.1 kHz) and
-`<track>.truth.json` (notes with string/fret, beats), plus ATTRIBUTION.md.
+`<track>.truth.json` (notes with string/fret, beats, performed chords), plus ATTRIBUTION.md.
 """
 
 import io
@@ -71,7 +71,7 @@ def remote_zip(name: str) -> zipfile.ZipFile:
 
 
 def truth_from_jams(jams: dict[str, Any], start: float) -> dict[str, Any]:
-    notes, beats, downbeats, tempo = [], [], [], None
+    notes, beats, downbeats, chords, tempo = [], [], [], [], None
     for annotation in jams["annotations"]:
         namespace = annotation["namespace"]
         if namespace == "note_midi":
@@ -96,10 +96,29 @@ def truth_from_jams(jams: dict[str, Any], start: float) -> dict[str, Any]:
                     beats.append(round(t, 4))
                     if obs["value"]["position"] == 1:
                         downbeats.append(round(t, 4))
+        elif namespace == "chord" and annotation["annotation_metadata"]["data_source"]:
+            # Two chord annotations: the lead sheet's (no data_source) and the chords actually
+            # played, transcribed from the notes. Keep the played ones.
+            for obs in annotation["data"]:
+                on, off = obs["time"] - start, obs["time"] + obs["duration"] - start
+                if off > 0 and on < EXCERPT_S:
+                    chords.append(
+                        {
+                            "onset_s": round(max(on, 0.0), 4),
+                            "offset_s": round(min(off, EXCERPT_S), 4),
+                            "label": obs["value"],
+                        }
+                    )
         elif namespace == "tempo" and tempo is None:
             tempo = float(annotation["data"][0]["value"])
     notes.sort(key=lambda n: (n["onset_s"], n["pitch"]))
-    return {"tempo_bpm": tempo, "notes": notes, "beats_s": beats, "downbeats_s": downbeats}
+    return {
+        "tempo_bpm": tempo,
+        "notes": notes,
+        "beats_s": beats,
+        "downbeats_s": downbeats,
+        "chords": chords,
+    }
 
 
 def main() -> None:

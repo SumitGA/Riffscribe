@@ -10,5 +10,5 @@ licensed under [Creative Commons Attribution 4.0 International (CC BY 4.0)](http
 **Changes made:** each file is a 20-second excerpt of the `audio_mono-mic` recording, starting
 0.5 s before the first annotated note (rounded down to 0.1 s), re-encoded as 16-bit FLAC. The
 ground truth is converted from the track's JAMS annotations (`note_midi` per string, `beat_position`,
-`tempo`) into a simpler JSON, with times shifted to the excerpt and pitches rounded to the nearest
+`tempo`, and the performed `chord` annotation, cut to the excerpt) into a simpler JSON, with times shifted to the excerpt and pitches rounded to the nearest
 semitone. `make_fixtures.py` reproduces everything.
