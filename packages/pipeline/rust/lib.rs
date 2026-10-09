@@ -60,12 +60,28 @@ fn decode_notes(
 }
 
 /// Tab fingering for chords of MIDI pitches: per chord, per note, `(string_index, fret)` with
-/// string 0 = lowest, or `None` when the note can't be placed. See `rust/tab.rs`.
+/// string 0 = lowest, or `None` when the note can't be placed. See `rust/tab.rs`. Cost weights
+/// left as `None` keep their defaults (`tab::Weights::default`); the tuning script sets them.
+/// `position_cost[string][fret]` (string 0 = lowest) adds a cost per note placed there.
 #[pyfunction]
+#[pyo3(signature = (
+    chords, open_strings, max_fret, *,
+    fret_height=None, span=None, stretch=None, open_string=None, movement=None, shift=None,
+    drop=None, position_cost=None
+))]
+#[allow(clippy::too_many_arguments)]
 fn tab_positions(
     chords: Vec<Vec<i32>>,
     open_strings: Vec<i32>,
     max_fret: i32,
+    fret_height: Option<f64>,
+    span: Option<f64>,
+    stretch: Option<f64>,
+    open_string: Option<f64>,
+    movement: Option<f64>,
+    shift: Option<f64>,
+    drop: Option<f64>,
+    position_cost: Option<Vec<Vec<f64>>>,
 ) -> PyResult<Vec<Vec<tab::Position>>> {
     if open_strings.is_empty() || open_strings.len() > 32 {
         return Err(PyValueError::new_err(
@@ -75,8 +91,19 @@ fn tab_positions(
     let board = tab::Fretboard {
         open: open_strings,
         max_fret,
+        position_cost: position_cost.unwrap_or_default(),
     };
-    Ok(tab::assign(&chords, &board, &tab::Weights::default()))
+    let default = tab::Weights::default();
+    let weights = tab::Weights {
+        fret_height: fret_height.unwrap_or(default.fret_height),
+        span: span.unwrap_or(default.span),
+        stretch: stretch.unwrap_or(default.stretch),
+        open_string: open_string.unwrap_or(default.open_string),
+        movement: movement.unwrap_or(default.movement),
+        shift: shift.unwrap_or(default.shift),
+        drop: drop.unwrap_or(default.drop),
+    };
+    Ok(tab::assign(&chords, &board, &weights))
 }
 
 #[pymodule]

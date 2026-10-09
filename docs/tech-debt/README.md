@@ -22,7 +22,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-12](#td-12-our-own-beat-tracker-port) | Our own beat tracker port | Pipeline | Tempo errors show up in the accuracy suite |
 | [TD-13](#td-13-simple-rhythm-and-key-heuristics) | Simple rhythm and key heuristics | Pipeline | Users correct bar lines, triplets or keys often |
 | [TD-14](#td-14-our-own-musicxml-writer) | Our own MusicXML writer | Pipeline | Notation needs grow (voices, meters) or renderers complain |
-| [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules | Pipeline | Guitarists often move notes to other strings |
+| [TD-15](#td-15-tab-fingering-by-cost-rules) | Tab fingering by cost rules and a learned position prior | Pipeline | Guitarists often move notes to other strings |
 | [TD-16](#td-16-decoding-thresholds-tuned-on-guitarset) | Decoding thresholds tuned on GuitarSet | Pipeline | Real recordings disagree with the tuning set; piano data appears |
 | [TD-17](#td-17-local-dev-token-issuer-instead-of-a-real-auth-provider) | Local dev token issuer instead of a real auth provider | Backend / security | First deployment (refuse `JWT_DEV_SECRET` outside local) |
 | [TD-18](#td-18-simple-quotas-and-rate-limits) | Simple quotas and rate limits | Backend / billing | Billing (Phase 5), or users complain about lost quota |
@@ -495,30 +495,37 @@ the best sequence of choices for the whole piece at once, instead of greedily no
 each chord gets candidate fingerings with a comfort cost, moving the hand between chords has a
 cost, and Viterbi finds the cheapest path through all of them.
 
-**What we did.** `rust/tab.rs`: costs for hand height, finger span (heavy penalty beyond 4
-frets), a bonus for open strings and a cost per fret of hand movement; at most 64 candidate
-fingerings per chord (a *beam*) so 5 minutes take ~0.2 s. Notes that can't be played (below
-the lowest string, or more notes than strings) are left out of the tab but stay in the
-notation, and the stage reports how many. Tunings: standard and drop D; capo 0-12.
+**What we did.** `rust/tab.rs` models the fretting hand: a *hand position* is the fret under
+the index finger, which reaches that fret and the next 4 without moving. Viterbi runs over
+(fingering, hand position) pairs, so a melody inside one box costs nothing and only shifting
+the hand is charged (a fixed cost per shift plus a cost per fret). Fingerings also pay for
+finger span (heavily beyond 4 frets) and for each note's *position prior*: `-log P(string |
+pitch)`, counted from the fingerings GuitarSet players used (`pipeline/models/tab_prior`, from
+the tuning excerpts only). At most 64 candidate fingerings per chord (a *beam*), so 5 minutes
+take well under a second. Notes that can't be played (below the lowest string, or more notes
+than strings) are left out of the tab but stay in the notation, and the stage reports how many.
+Tunings: standard and drop D; capo 0-12. Weights were grid-searched on the pipeline's own
+transcriptions of 48 GuitarSet tuning excerpts (`tests/tuning/tune_tab.py`).
 
 **Pros**
-- Produces the shapes a guitarist expects in common cases (open E chord as 0-2-2-1-0-0, a
-  C major scale in open position, high melodies in one hand position); tests pin these.
-- Fast, deterministic, and every rule is a named weight that can be tuned.
+- Matches how guitarists play: solos stay in one box, chords use common shapes, and a stray
+  transcribed note can't drag the whole solo up the neck (it did before the prior).
+- Fast, deterministic, and every rule is a named weight, tuned against data.
+- No new dependency or model: the prior is a 50-row table of counts.
 
 **Cons**
-- The weights are hand-picked, not learned from real tabs.
-- It doesn't know techniques or style: slides, hammer-ons and bends are out of scope for v1,
-  and some players prefer higher positions for tone.
+- The prior comes from GuitarSet's six players, and the test clips are by the same six, so
+  the held-out numbers are somewhat optimistic for other players and styles.
+- It doesn't know techniques or style: slides, hammer-ons and bends are out of scope for v1.
 - Hand movement ignores time: a jump across the neck costs the same with a whole bar to move
   as with a sixteenth note.
+- Drop D and capo reuse the standard-tuning prior by string and fret (approximate).
 - Only six-string guitar, two tunings.
 
-**Measured (commit 10).** On notes we transcribe correctly, our string matches the GuitarSet
-player's string 38 % of the time on average: 100 % on a jazz comping excerpt, 66 % on
-singer-songwriter strumming, but 7-18 % on bossa nova and rock/funk solos, where players use
-higher positions than our low-position preference. The tab is still playable; it just isn't
-the player's fingering.
+**Measured (Step A3).** Of the notes we transcribe correctly, our string matches the player's
+on 82 % of the test clips' notes on average (was 35 % with the earlier hand-free, low-position
+costs): 80-98 % on comping, 55-88 % on solos. On annotated (perfect) notes the hand-free model
+reached only 27 % on solos, so the fingering model, not just transcription, was the problem.
 
 **Revisit when** users often move notes to other strings in the editor (Phase 4): those edits
 are exactly the data to fit the weights to, or to train a model.

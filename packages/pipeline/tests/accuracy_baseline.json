@@ -8,7 +8,7 @@
    "note_f1_with_offsets": 0.4,
    "note_precision": 0.7731,
    "note_recall": 0.7603,
-   "tab_string_accuracy": 0.2935,
+   "tab_string_accuracy": 0.8043,
    "tempo_correct": 1.0
   },
   "01_Funk1-114-Ab_solo": {
@@ -17,7 +17,7 @@
    "note_f1_with_offsets": 0.6569,
    "note_precision": 0.787,
    "note_recall": 0.8854,
-   "tab_string_accuracy": 0.1882,
+   "tab_string_accuracy": 0.8824,
    "tempo_correct": 0.0
   },
   "02_Jazz1-130-D_comp": {
@@ -28,7 +28,7 @@
    "note_f1_with_offsets": 0.2524,
    "note_precision": 0.791,
    "note_recall": 0.5792,
-   "tab_string_accuracy": 1.0,
+   "tab_string_accuracy": 0.9717,
    "tempo_correct": 1.0
   },
   "03_Rock1-130-A_solo": {
@@ -37,7 +37,7 @@
    "note_f1_with_offsets": 0.8448,
    "note_precision": 0.8983,
    "note_recall": 0.9298,
-   "tab_string_accuracy": 0.1321,
+   "tab_string_accuracy": 0.5472,
    "tempo_correct": 1.0
   },
   "04_SS1-100-C#_comp": {
@@ -48,7 +48,7 @@
    "note_f1_with_offsets": 0.3004,
    "note_precision": 0.7013,
    "note_recall": 0.9076,
-   "tab_string_accuracy": 0.4352,
+   "tab_string_accuracy": 0.9815,
    "tempo_correct": 0.0
   },
   "05_BN1-129-Eb_solo": {
@@ -57,7 +57,7 @@
    "note_f1_with_offsets": 0.766,
    "note_precision": 0.88,
    "note_recall": 1.0,
-   "tab_string_accuracy": 0.0227,
+   "tab_string_accuracy": 0.7273,
    "tempo_correct": 1.0
   },
   "arpeggios_72bpm": {
@@ -86,7 +86,7 @@
    "note_f1_with_offsets": 0.5368,
    "note_precision": 0.8051,
    "note_recall": 0.8437,
-   "tab_string_accuracy": 0.3453,
+   "tab_string_accuracy": 0.8191,
    "tempo_correct": 0.6667
   },
   "piano": {
@@ -98,6 +98,6 @@
    "tempo_correct": 0.5
   }
  },
- "pipeline_version": "0.1.0+d6b0f959",
+ "pipeline_version": "0.1.0+3196c9ab",
  "tolerance": 0.02
 }
