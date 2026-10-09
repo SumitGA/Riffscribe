@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up stack e2e deploy-staging down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e e2e-staging deploy-staging down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -67,12 +67,15 @@ up: ## Start local Postgres, Redis (Valkey) and S3 (SeaweedFS) in Docker
 
 stack: ## Build and run the whole backend in Docker: API on :8000, a worker (needs ports free)
 	$(MAKE) up
-	docker compose run --rm migrate
+	docker compose run --rm --build migrate  # --build: never migrate with a stale image
 	PUBLIC_HOST=$(PUBLIC_HOST) PUBLIC_BIND=$(PUBLIC_BIND) \
 		docker compose --profile app up -d --wait --build api worker
 
 e2e: ## End-to-end test against the running stack: upload, transcribe, download (`make stack` first)
 	JWT_ISSUER=$(LOCAL_JWT_ISSUER) JWT_DEV_SECRET=$(LOCAL_JWT_DEV_SECRET) uv run python tools/e2e.py
+
+e2e-staging: ## The e2e check against staging: STAGING_URL=https://... E2E_TOKEN=... E2E_OTHER_TOKEN=... (docs/staging.md)
+	API_URL=$(STAGING_URL) uv run python tools/e2e.py
 
 deploy-staging: ## Deploy a commit to staging: STAGING_SSH=ubuntu@<VM IP> [TAG=<sha>] (ADR-0010)
 	STAGING_SSH=$(STAGING_SSH) TAG=$(TAG) tools/deploy_staging.sh
