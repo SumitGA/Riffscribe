@@ -5,7 +5,7 @@ cut short where the next chord starts), 4/4 with an optional pickup bar, sixteen
 eighth-triplet grids, ties across bar lines and beats, guitar on a treble-8vb staff, piano on a
 grand staff split at middle C. With a TabLayout, guitar gets a second, 6-line TAB staff with
 string/fret numbers (the layout MuseScore and Guitar Pro use). No beaming hints; renderers beam
-automatically.
+automatically. Chord names (`Score.chords`) are written as <harmony> on the first staff.
 """
 
 import math
@@ -16,7 +16,7 @@ from fractions import Fraction
 from itertools import pairwise
 
 from pipeline.config import Instrument
-from pipeline.score import Score, ScoreNote
+from pipeline.score import ChordSymbol, Score, ScoreNote
 
 DIVISIONS = 12  # per quarter note: multiples of both 1/4 (sixteenths) and 1/3 (triplets)
 PIANO_SPLIT = 60  # middle C and above on the treble staff
@@ -36,6 +36,14 @@ _STRAIGHT = {
     48: ("whole", 0),
 }
 _TRIPLET = {4: ("eighth", 0), 8: ("quarter", 0)}
+# Chord quality -> MusicXML <kind> value and the suffix shown after the root (C, Cm, C7...).
+_HARMONY_KIND = {
+    "maj": ("major", ""),
+    "min": ("minor", "m"),
+    "7": ("dominant", "7"),
+    "maj7": ("major-seventh", "maj7"),
+    "min7": ("minor-seventh", "m7"),
+}
 _WHOLE_BEATS = (48, 36, 24, 12)  # longest first, for splitting whole-beat spans
 
 
@@ -106,8 +114,15 @@ def write_score(
                 backup = ET.SubElement(measure, "backup")
                 ET.SubElement(backup, "duration").text = _divisions(bar_end - bar_start)
             pieces = _pieces(staff_events, bar_start, bar_end)
+            chords = [c for c in score.chords if bar_start <= c.onset_beats < bar_end]
             _write_pieces(
-                measure, pieces, staff, len(staves), bar_end - bar_start, score.key.fifths
+                measure,
+                pieces,
+                staff,
+                len(staves),
+                bar_end - bar_start,
+                score.key.fifths,
+                chords if staff == 1 else (),
             )
 
     ET.indent(root, space="  ")
@@ -269,6 +284,7 @@ def _write_pieces(
     n_staves: int,
     bar_length: Fraction,
     fifths: int,
+    chords: Sequence[ChordSymbol] = (),
 ) -> None:
     triplet_beats = {
         math.floor(p.start)
@@ -284,6 +300,9 @@ def _write_pieces(
             i == len(pieces) - 1 or math.floor(pieces[i + 1].start) != beat
         )
         whole_bar_rest = not piece.pitches and piece.length == bar_length
+        for chord in chords:  # before the note or rest sounding when the chord starts
+            if piece.start <= chord.onset_beats < piece.start + piece.length:
+                _harmony(measure, chord, chord.onset_beats - piece.start, staff, n_staves, fifths)
         for chord_index, pitch in enumerate(piece.pitches or (None,)):
             note = ET.SubElement(measure, "note")
             if chord_index > 0:
@@ -329,6 +348,28 @@ def _write_pieces(
                     technical = ET.SubElement(element, "technical")
                     ET.SubElement(technical, "string").text = str(string)
                     ET.SubElement(technical, "fret").text = str(fret)
+
+
+def _harmony(
+    measure: ET.Element,
+    chord: ChordSymbol,
+    offset: Fraction,
+    staff: int,
+    n_staves: int,
+    fifths: int,
+) -> None:
+    harmony = ET.SubElement(measure, "harmony")
+    root = ET.SubElement(harmony, "root")
+    name = (_FLAT_NAMES if fifths < 0 else _SHARP_NAMES)[chord.root]
+    ET.SubElement(root, "root-step").text = name[0]
+    if len(name) > 1:
+        ET.SubElement(root, "root-alter").text = "1" if name[1] == "#" else "-1"
+    kind, text = _HARMONY_KIND[chord.quality]
+    ET.SubElement(harmony, "kind", text=text).text = kind
+    if offset:
+        ET.SubElement(harmony, "offset").text = _divisions(offset)
+    if n_staves > 1:
+        ET.SubElement(harmony, "staff").text = str(staff)
 
 
 def _pitch(note: ET.Element, midi: int, fifths: int) -> None:

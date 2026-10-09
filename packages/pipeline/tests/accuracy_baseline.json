@@ -2,6 +2,8 @@
  "clips": {
   "00_BN1-129-Eb_comp": {
    "beat_f": 0.0,
+   "chord_majmin": 0.7376,
+   "chord_root": 0.7658,
    "note_f1": 0.7667,
    "note_f1_with_offsets": 0.4,
    "note_precision": 0.7731,
@@ -20,6 +22,8 @@
   },
   "02_Jazz1-130-D_comp": {
    "beat_f": 0.3692,
+   "chord_majmin": 0.9504,
+   "chord_root": 0.943,
    "note_f1": 0.6688,
    "note_f1_with_offsets": 0.2524,
    "note_precision": 0.791,
@@ -38,6 +42,8 @@
   },
   "04_SS1-100-C#_comp": {
    "beat_f": 0.3279,
+   "chord_majmin": 0.9786,
+   "chord_root": 0.9786,
    "note_f1": 0.7912,
    "note_f1_with_offsets": 0.3004,
    "note_precision": 0.7013,
@@ -74,8 +80,10 @@
  "mean": {
   "guitar": {
    "beat_f": 0.2484,
+   "chord_majmin": 0.8889,
+   "chord_root": 0.8958,
    "note_f1": 0.8183,
-   "note_f1_with_offsets": 0.5367,
+   "note_f1_with_offsets": 0.5368,
    "note_precision": 0.8051,
    "note_recall": 0.8437,
    "tab_string_accuracy": 0.3453,
@@ -90,6 +98,6 @@
    "tempo_correct": 0.5
   }
  },
- "pipeline_version": "0.1.0+9372c642",
+ "pipeline_version": "0.1.0+d6b0f959",
  "tolerance": 0.02
 }

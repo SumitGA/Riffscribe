@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 
+import numpy as np
 import pytest
 from accuracy_eval import Clip, clips, evaluate
 
@@ -29,8 +30,8 @@ def mean_by_instrument(results: dict[str, dict[str, float]]) -> dict[str, dict[s
     for instrument in sorted({c.instrument for c in CLIPS}):
         rows = [results[c.name] for c in CLIPS if c.instrument is instrument]
         metrics = sorted({m for row in rows for m in row})
-        means[str(instrument)] = {
-            m: round(sum(row[m] for row in rows) / len(rows), 4) for m in metrics
+        means[str(instrument)] = {  # over the clips that have the metric (chords: comp only)
+            m: round(float(np.mean([row[m] for row in rows if m in row])), 4) for m in metrics
         }
     return means
 

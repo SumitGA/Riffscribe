@@ -66,14 +66,17 @@ class NoteEvents(StageOutput):
     midi: ArtifactRef  # raw.mid, unquantized, fixed 120 bpm grid
     onset_envelope: ArtifactRef  # onset_envelope.npy, float32, for beat tracking
     envelope_fps: float
+    # frames.npy: float16 (n_frames, 88) raw note activations for chord recognition; bin 0 is
+    # A0, frame i is at basic_pitch.frame_times(n_frames)[i]
+    frames: ArtifactRef
     note_count: int
 
 
 class TranscribeStage(Stage[NoteEvents]):
     name = StageName.TRANSCRIBE
     # 2: note decoding moved to Rust; 3: onset envelope output; 4: reads the separate stage;
-    # 5-6: tuned guitar decoding, relative to the recording's level
-    version = "6"
+    # 5-6: tuned guitar decoding, relative to the recording's level; 7: frames output
+    version = "7"
     requires = (NormalizedAudio, SeparatedAudio)
     output_type = NoteEvents
 
@@ -98,6 +101,7 @@ class TranscribeStage(Stage[NoteEvents]):
             for n in decode_notes(frames * gain, onsets * gain, params)
         ]
         np.save(ctx.path("onset_envelope.npy"), onset_envelope(onsets, low, high))
+        np.save(ctx.path("frames.npy"), frames.astype(np.float16))
         notes = [_to_note(n) for n in raw]
 
         ctx.path("notes.json").write_text(NoteList(notes=notes).model_dump_json(indent=1))
@@ -111,6 +115,7 @@ class TranscribeStage(Stage[NoteEvents]):
             midi=ctx.ref("raw.mid"),
             onset_envelope=ctx.ref("onset_envelope.npy"),
             envelope_fps=ENVELOPE_FPS,
+            frames=ctx.ref("frames.npy"),
             note_count=len(notes),
         )
 

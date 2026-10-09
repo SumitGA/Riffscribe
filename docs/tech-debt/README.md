@@ -33,6 +33,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-23](#td-23-local-android-builds-jdk-17-and-a-slow-react-native-repository) | Local Android builds: JDK 17 and a slow React Native repository | Mobile / tooling | Moving builds to EAS or CI; React Native supports newer JDKs |
 | [TD-24](#td-24-score-viewer-alphatab-in-a-webview-from-local-files) | Score viewer: alphaTab in a WebView from local files | Mobile | Long scores feel slow; editing (Phase 4) needs tighter integration |
 | [TD-25](#td-25-push-notifications-through-expos-push-service) | Push notifications through Expo's push service | Backend / mobile | Many users (receipts, batching); dropping Expo |
+| [TD-26](#td-26-chord-names-by-template-matching) | Chord names by template matching | Pipeline | Chord accuracy plateaus, or users need sus/dim/inversions |
 
 ---
 
@@ -807,3 +808,31 @@ a transcription; Account has an on/off switch; sign-out removes the device's tok
 
 **Revisit when** users have many devices or notifications fail silently (fetch receipts in a
 small periodic task, send from a queue), or if we move off Expo (APNs/FCM directly).
+
+## TD-26: Chord names by template matching
+
+**Concept.** Chord names (shown above the staff) come from the note model's frame activations,
+not from a dedicated chord model. Per half beat, the activations are folded onto the 12 pitch
+classes; each of 60 chords (12 roots x major, minor, 7, maj7, m7) is scored by how well its
+notes match, plus a bonus when its root is in the bass, and a Viterbi pass picks the sequence
+with a penalty for changing chord (`pipeline/chords.py`). It runs in the quantize stage, which
+already has the beats. Settings were grid-searched on 24 GuitarSet comp excerpts that are not
+test clips (`tests/tuning/tune_chords.py`).
+
+**Pros**
+- No new model, dependency or licence; a few milliseconds per song, on CPU.
+- Works from what Basic Pitch hears even when it drops notes from a strum (a weak note still
+  adds to the chroma), which is where note-level transcription fails on strummed chords.
+- Measured: major/minor accuracy 0.76 on the tuning clips and 0.89 on the held-out test clips
+  (`chord_majmin` in `make test-accuracy`).
+
+**Cons**
+- Small vocabulary: no sus, dim, aug, 6, 9 or slash chords; a sus2 is named as its nearest
+  triad or seventh. No inversions (the bass only helps pick the root).
+- Chord changes only on half beats, so it depends on the beat tracker (TD-12).
+- Tuned on GuitarSet's clean mic recordings of six players; phone recordings and other styles
+  may score lower. Piano uses the same settings untuned.
+
+**Revisit when** chord accuracy plateaus or users ask for richer chords: try a learned chord
+model (licence-checked, CPU cost measured) or a bigger vocabulary with inversions, scored by
+the same metric.

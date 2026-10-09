@@ -81,6 +81,9 @@ def evaluate(clip: Clip, workdir: Path) -> dict[str, float]:
         tab_path = workdir / result.output(Tablature).tab.path
         tab = TabFile.model_validate_json(tab_path.read_text())
         metrics["tab_string_accuracy"] = _string_accuracy(clip, score, tab, shift)
+    if clip.name.endswith("_comp"):  # in solos the chords are the band's, not the guitar's
+        estimated = [(c.onset_s + shift, c.offset_s + shift, c.harte()) for c in score.chords]
+        metrics.update(chord_accuracy(clip.truth["chords"], estimated))
     return {name: round(float(value), 4) for name, value in metrics.items()}
 
 
@@ -106,6 +109,40 @@ def _string_accuracy(clip: Clip, score: Score, tab: TabFile, shift: float) -> fl
         return 0.0
     correct = sum(1 for r, e in pairs if ref[r]["string"] == placed[e][1])
     return correct / len(pairs)
+
+
+def chord_accuracy(
+    truth: list[dict[str, Any]], estimated: list[tuple[float, float, str]]
+) -> dict[str, float]:
+    """Share of the annotated time with the right chord: root only, and major/minor triad.
+
+    `estimated` is (onset_s, offset_s, Harte label) in the truth's time base; a gap between
+    chords counts as "no chord" (N).
+    """
+    ref_intervals = _intervals([(c["onset_s"], c["offset_s"]) for c in truth])
+    ref_labels = [c["label"] for c in truth]
+    spans: list[tuple[float, float]] = []
+    est_labels: list[str] = []
+    for on, off, label in estimated:
+        if spans and on > spans[-1][1]:
+            spans.append((spans[-1][1], on))
+            est_labels.append("N")
+        spans.append((on, off))
+        est_labels.append(label)
+    est_intervals = _intervals(spans) if spans else ref_intervals[:1]
+    est_intervals, est_labels = mir_eval.util.adjust_intervals(
+        est_intervals, est_labels or ["N"], ref_intervals.min(), ref_intervals.max(), "N", "N"
+    )
+    merged, ref, est = mir_eval.util.merge_labeled_intervals(
+        ref_intervals, ref_labels, est_intervals, est_labels
+    )
+    durations = mir_eval.util.intervals_to_durations(merged)
+    return {
+        "chord_root": mir_eval.chord.weighted_accuracy(mir_eval.chord.root(ref, est), durations),
+        "chord_majmin": mir_eval.chord.weighted_accuracy(
+            mir_eval.chord.majmin(ref, est), durations
+        ),
+    }
 
 
 def _intervals(pairs: list[tuple[float, float]]) -> npt.NDArray[np.float64]:

@@ -9,7 +9,7 @@ import pytest
 from pipeline.config import Instrument, PipelineConfig
 from pipeline.musicxml import DIVISIONS, write_score
 from pipeline.runner import run_pipeline
-from pipeline.score import KeySignature, Score, ScoreNote
+from pipeline.score import ChordSymbol, KeySignature, Score, ScoreNote
 from pipeline.stages import default_stages
 from pipeline.stages.notation import Notation
 
@@ -192,3 +192,25 @@ def test_notation_stage_through_the_whole_pipeline(tmp_path: Path) -> None:
     assert notation.measures == len(measures(xml)) > 0
     for i, measure in enumerate(measures(xml)):
         assert len(set(staff_durations(measure).values())) == 1, f"bar {i}"
+
+
+def test_chord_names_are_written_as_harmony_where_they_start() -> None:
+    chords = [
+        ChordSymbol(root=3, quality="maj", onset_beats=Fraction(0), duration_beats=Fraction(2),
+                    onset_s=0.0, offset_s=1.0),
+        ChordSymbol(root=8, quality="min7", onset_beats=Fraction(3), duration_beats=Fraction(1),
+                    onset_s=1.5, offset_s=2.0),
+    ]  # fmt: skip
+    score = make_score([(63, 0, 2), (68, 2, 2)], fifths=-3).model_copy(update={"chords": chords})
+    measure = measures(write_score(score, GUITAR))[0]
+    children = [child.tag for child in measure if child.tag in {"harmony", "note"}]
+    harmonies = measure.findall("harmony")
+
+    assert children == ["harmony", "note", "harmony", "note"]
+    assert [h.findtext("root/root-step") for h in harmonies] == ["E", "A"]
+    assert [h.findtext("root/root-alter") for h in harmonies] == ["-1", "-1"]
+    assert [(h.findtext("kind"), h.find("kind").get("text")) for h in harmonies] == [  # type: ignore[union-attr]
+        ("major", ""),
+        ("minor-seventh", "m7"),
+    ]
+    assert [h.findtext("offset") for h in harmonies] == [None, str(DIVISIONS)]  # beat 3 = 1 in

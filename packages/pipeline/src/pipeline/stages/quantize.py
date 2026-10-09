@@ -1,8 +1,15 @@
-"""quantize: beat tracking + snapping notes to a rhythmic grid -> quantized.json and .mid."""
+"""quantize: beat tracking, snapping notes to a rhythmic grid and chord names.
+
+Writes quantized.json (the Score) and quantized.mid.
+"""
+
+from fractions import Fraction
 
 import numpy as np
 
+from pipeline.basic_pitch import frame_times
 from pipeline.beats import beat_track
+from pipeline.chords import ChordSpan, recognize_chords
 from pipeline.midi import write_notes
 from pipeline.rhythm import (
     BEATS_PER_BAR,
@@ -12,7 +19,7 @@ from pipeline.rhythm import (
     quantize,
     tempo_from_beats,
 )
-from pipeline.score import KeySignature, Score, ScoreNote
+from pipeline.score import ChordSymbol, KeySignature, Score, ScoreNote
 from pipeline.stage import Stage, StageContext, StageInputs
 from pipeline.stages.transcribe import GM_PROGRAM, NoteEvents, NoteList
 from pipeline.types import ArtifactRef, StageName, StageOutput
@@ -30,8 +37,9 @@ class QuantizedScore(StageOutput):
 
 class QuantizeStage(Stage[QuantizedScore]):
     name = StageName.QUANTIZE
-    # 2: simplest grid that fits (quarters, eighths) before sixteenths; 3: strums as chords
-    version = "3"
+    # 2: simplest grid that fits (quarters, eighths) before sixteenths; 3: strums as chords;
+    # 4: chord names
+    version = "4"
     requires = (NoteEvents,)
     output_type = QuantizedScore
 
@@ -51,6 +59,8 @@ class QuantizeStage(Stage[QuantizedScore]):
             [TimedNote(n.onset_s, n.offset_s, n.pitch, n.velocity) for n in notes], beat_times
         )
         key = estimate_key(rhythm.notes)
+        frames = np.load(inputs.path(events.frames))
+        spans = recognize_chords(frames, frame_times(len(frames)), rhythm.beat_times_s)
         score = Score(
             tempo_bpm=tempo,
             beats_per_bar=BEATS_PER_BAR,
@@ -69,6 +79,7 @@ class QuantizeStage(Stage[QuantizedScore]):
                 )
                 for n in rhythm.notes
             ],
+            chords=chord_symbols(spans),
         )
         ctx.path("quantized.json").write_text(score.model_dump_json(indent=1))
 
@@ -93,3 +104,38 @@ class QuantizeStage(Stage[QuantizedScore]):
             tempo_bpm=tempo,
             note_count=len(score.notes),
         )
+
+
+def chord_symbols(spans: list[list[ChordSpan | None]]) -> list[ChordSymbol]:
+    """Per-beat chord spans -> one symbol per run of the same chord (beat 0 = first span)."""
+    symbols: list[ChordSymbol] = []
+    for beat, parts in enumerate(spans):
+        for index, span in enumerate(parts):
+            if span is None:
+                continue
+            onset = beat + Fraction(index, len(parts))
+            length = Fraction(1, len(parts))
+            last = symbols[-1] if symbols else None
+            if (
+                last is not None
+                and (last.root, last.quality) == (span.root, span.quality)
+                and last.onset_beats + last.duration_beats == onset
+            ):
+                symbols[-1] = last.model_copy(
+                    update={
+                        "duration_beats": last.duration_beats + length,
+                        "offset_s": round(span.end_s, 4),
+                    }
+                )
+            else:
+                symbols.append(
+                    ChordSymbol(
+                        root=span.root,
+                        quality=span.quality,
+                        onset_beats=onset,
+                        duration_beats=length,
+                        onset_s=round(span.start_s, 4),
+                        offset_s=round(span.end_s, 4),
+                    )
+                )
+    return symbols
