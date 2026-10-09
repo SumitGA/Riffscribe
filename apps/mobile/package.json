@@ -25,6 +25,7 @@
     "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.22",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.25",
     "lucide-react-native": "^1.53.0",
     "openapi-fetch": "^0.17.0",
     "react": "19.2.3",
