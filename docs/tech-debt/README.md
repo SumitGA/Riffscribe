@@ -34,6 +34,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-24](#td-24-score-viewer-alphatab-in-a-webview-from-local-files) | Score viewer: alphaTab in a WebView from local files | Mobile | Long scores feel slow; editing (Phase 4) needs tighter integration |
 | [TD-25](#td-25-push-notifications-through-expos-push-service) | Push notifications through Expo's push service | Backend / mobile | Many users (receipts, batching); dropping Expo |
 | [TD-26](#td-26-chord-names-by-template-matching) | Chord names by template matching | Pipeline | Chord accuracy plateaus, or users need sus/dim/inversions |
+| [TD-27](#td-27-synced-playback-from-the-phones-own-copy-of-the-take) | Synced playback from the phone's own copy of the take | Mobile / legal | Users want playback on other devices, or the retention policy changes |
 
 ---
 
@@ -843,3 +844,32 @@ test clips (`tests/tuning/tune_chords.py`).
 **Revisit when** chord accuracy plateaus or users ask for richer chords: try a learned chord
 model (licence-checked, CPU cost measured) or a bigger vocabulary with inversions, scored by
 the same metric.
+
+## TD-27: Synced playback from the phone's own copy of the take
+
+**Concept.** The score can play the user's own recording instead of the synthesized guitar,
+with the cursor following the real timing. The pipeline writes `sync.json` (when each bar
+starts in the uploaded audio); the app keeps its own copy of every take it sends
+(`src/audio/takes.ts`, in the app's documents, deleted with the job) and hands both to
+alphaTab as a *backing track* with one *sync point* per bar. The server keeps no audio for
+this, in line with ADR-0009 (uploaded audio is deleted after processing).
+
+**Pros**
+- No new storage, bandwidth or retention questions on the server; nothing changes legally.
+- Real sound with no new model or soundfont; the cursor stays on the bar being played even
+  when the player speeds up or slows down (checked in Chrome: seeking to 5 points of a GuitarSet
+  take lands the cursor in the bar sync.json predicts, 5 of 5).
+
+**Cons**
+- Only on the phone that sent the take. Another phone, a reinstall, or takes sent before
+  this change play the synthesized sound.
+- The takes use space on the phone (about 1 MB per minute) until the job is deleted.
+- One sync point per bar: within a bar, timing is interpolated linearly.
+- A bar that starts before the recording does (a pickup extrapolated before the first beat)
+  is clamped to 0 ms, so that bar is slightly squeezed.
+- Speed changes and the metronome are reset when switching between recording and synth (the
+  page starts a fresh player).
+
+**Revisit when** users want playback on other devices (then keep a compressed playback copy
+on the server for the transcription's lifetime, which needs an ADR-0009 amendment), or when
+per-beat sync is needed for tight passages.

@@ -1,3 +1,4 @@
+import { Directory, File, Paths } from 'expo-file-system';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
@@ -24,8 +25,11 @@ jest.mock('@/score/ExportSheet', () => ({ ExportSheet: () => null }));
 jest.mock('@/score/ScoreView', () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    ScoreView: ({ musicXml }: { musicXml: string; hasTab: boolean }) => (
-      <Text testID="score">{musicXml}</Text>
+    ScoreView: ({ musicXml, take }: { musicXml: string; take: unknown }) => (
+      <Text testID="score">
+        {musicXml}
+        {take ? ` take=${JSON.stringify(take)}` : ''}
+      </Text>
     ),
   };
 });
@@ -134,6 +138,35 @@ describe('JobScreen', () => {
       '<score-partwise from="https://s3/tab"/>',
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("plays this phone's copy of the recording in step with the score", async () => {
+    const dir = new Directory(Paths.document, 'takes');
+    dir.create({ idempotent: true, intermediates: true });
+    new File(dir, 'job-1.m4a').write('audio');
+    const get = (url: string) => ({ method: 'GET', url, headers: {}, expires_in_s: 900 });
+    globalThis.fetch = jest.fn(async (url: string) =>
+      url === 'https://s3/sync'
+        ? new Response(JSON.stringify({ bar_starts_ms: [0, 1860] }))
+        : new Response('<score-partwise/>'),
+    ) as unknown as typeof globalThis.fetch;
+    await renderJob(
+      job({
+        id: 'job-1',
+        status: 'succeeded',
+        outputs: {
+          version: 0,
+          musicxml: get('https://s3/score'),
+          tab_musicxml: null,
+          midi: null,
+          sync: get('https://s3/sync'),
+        },
+      }),
+    );
+
+    expect(await screen.findByTestId('score')).toHaveTextContent(
+      `<score-partwise/> take={"uri":"${new File(dir, 'job-1.m4a').uri}","barStartsMs":[0,1860]}`,
+    );
   });
 
   it('shows why a job failed', async () => {

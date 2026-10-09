@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Directory, File, Paths } from 'expo-file-system';
 import { createRef, type ReactNode } from 'react';
 
 import { prepareViewer } from '@/score/prepareViewer';
@@ -49,7 +50,34 @@ describe('ScoreView', () => {
     expect(mockInjectJavaScript).not.toHaveBeenCalled();
 
     await send({ type: 'ready' });
-    expect(mockInjectJavaScript).toHaveBeenCalledWith(command('load', '<score-partwise/>', 'both'));
+    expect(mockInjectJavaScript).toHaveBeenCalledWith(
+      command('load', '<score-partwise/>', 'both', null),
+    );
+  });
+
+  it("plays the user's recording, with a switch back to the guitar sound", async () => {
+    const dir = new Directory(Paths.document, 'takes');
+    dir.create({ idempotent: true, intermediates: true });
+    const take = new File(dir, 'job.m4a');
+    take.write('audio');
+    new Directory('file:///cache/score-viewer/').create({ idempotent: true, intermediates: true });
+
+    await render(
+      <ScoreView
+        musicXml="<score-partwise/>"
+        hasTab
+        take={{ uri: take.uri, barStartsMs: [0, 2000] }}
+      />,
+    );
+    await screen.findByTestId('score-view');
+    await send({ type: 'ready' });
+    expect(mockInjectJavaScript).toHaveBeenCalledWith(
+      command('load', '<score-partwise/>', 'both', { file: 'take.m4a', barStartsMs: [0, 2000] }),
+    );
+    expect(new File('file:///cache/score-viewer/take.m4a').exists).toBe(true);
+
+    await fireEvent.press(screen.getByText('Guitar sound'));
+    expect(mockInjectJavaScript).toHaveBeenLastCalledWith(command('setSource', 'synth'));
   });
 
   it('drives playback, speed and the view from native controls', async () => {
@@ -79,7 +107,7 @@ describe('ScoreView', () => {
     await send({ type: 'ready' });
     expect(screen.queryByRole('radio', { name: 'Tab' })).toBeNull();
     expect(mockInjectJavaScript).toHaveBeenCalledWith(
-      command('load', '<score-partwise/>', 'score'),
+      command('load', '<score-partwise/>', 'score', null),
     );
   });
 
