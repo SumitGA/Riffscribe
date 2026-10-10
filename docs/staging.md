@@ -40,7 +40,7 @@ openstack --os-cloud homelab-lan token issue    # works only from the LAN
 ### The VM (Terraform)
 
 The defaults in `infra/terraform/staging/variables.tf` match the lab (image `ubuntu-24.04`,
-4 vCPU / 6 GB / 40 GB, floating IPs from `public1`, SSH from `192.168.0.0/24`); copy
+2 vCPU / 3 GB / 40 GB, floating IPs from `public1`, SSH from `192.168.0.0/24`); copy
 `terraform.tfvars.example` to `terraform.tfvars` only to change one.
 
 ```sh
