@@ -19,13 +19,13 @@ variable "image_name" {
 variable "vcpus" {
   description = "VM size: vCPUs."
   type        = number
-  default     = 4
+  default     = 2
 }
 
 variable "ram_mb" {
-  description = "VM size: RAM in MB (the lab host also runs OpenStack; leave it headroom)."
+  description = "VM size: RAM in MB. Staging idles at ~1 GB and a transcription adds ~0.4 GB; production gets the lab's room (ADR-0012)."
   type        = number
-  default     = 6144
+  default     = 3072
 }
 
 variable "disk_gb" {
