@@ -67,6 +67,7 @@ function Screens() {
           options={{ headerTitle: 'New take', presentation: 'fullScreenModal' }}
         />
         <Stack.Screen name="jobs/[id]" options={{ headerTitle: '' }} />
+        <Stack.Screen name="acknowledgements" options={{ headerTitle: 'Acknowledgements' }} />
       </Stack.Protected>
       <Stack.Protected guard={!isSignedIn}>
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />

@@ -50,6 +50,8 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:?set in .env}
       JWT_JWKS_URL: ${JWT_ISSUER}/.well-known/jwks.json
       FREE_JOBS_PER_MONTH: ${FREE_JOBS_PER_MONTH:-10}
+      # Deletes a user's Clerk sign-in with their account (DELETE /me); empty skips that step.
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
       # Trust X-Forwarded-For from Caddy, the only thing that can reach the API.
       FORWARDED_ALLOW_IPS: "*"
     depends_on: *app-depends

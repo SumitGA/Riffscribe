@@ -42,3 +42,15 @@ export function forgetTake(jobId: string): void {
     console.warn(`couldn't remove the take for job ${jobId}`, error);
   }
 }
+
+/** Removes every take kept on this phone (the account was deleted). */
+export function forgetAllTakes(): void {
+  try {
+    const dir = folder();
+    if (dir.exists) {
+      dir.delete();
+    }
+  } catch (error) {
+    console.warn("couldn't remove the kept takes", error);
+  }
+}

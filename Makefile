@@ -115,8 +115,9 @@ api-types: ## Regenerate the app's API types from the API's OpenAPI schema (afte
 	uv run --quiet python -m api.openapi $(MOBILE_DIR)/src/api/openapi.json
 	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false
 
-mobile-check: ## App: API types current, TypeScript, ESLint + Prettier, Jest, iOS + Android bundle
+mobile-check: ## App: API types and licence notices current, TypeScript, ESLint + Prettier, Jest, iOS + Android bundle
 	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false --check \
+		&& node scripts/licenses.js --check \
 		&& npx tsc --noEmit && CI=1 npx expo lint && npx jest --ci \
 		&& CI=1 npx expo export --platform ios --platform android --output-dir dist >/dev/null
 
