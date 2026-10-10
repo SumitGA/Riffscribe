@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Check, History, Pencil, Share2, Trash2, Undo2, X } from 'lucide-react-native';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -208,6 +208,14 @@ function Score({
   const [tapped, setTapped] = useState<TappedNote | null>(null);
   const [emptySpot, setEmptySpot] = useState<TappedBeat | null>(null);
   const [history, setHistory] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hint) {
+      return;
+    }
+    const timer = setTimeout(() => setHint(null), 3000);
+    return () => clearTimeout(timer);
+  }, [hint]);
   // Save (ADR-0011): a new version, rendered by the worker; wait for it, then show it.
   // Restoring is a save too: no edits, starting from the chosen version's content.
   const save = useMutation({
@@ -311,7 +319,10 @@ function Score({
           tuning={job.options.tuning ?? 'standard'}
           capo={job.options.capo ?? 0}
           onEdit={(edit) => setEdits((current) => upsertEdit(current, edit))}
-          onClose={() => setTapped(null)}
+          onClose={() => {
+            setTapped(null);
+            scoreView.current?.clearSelection();
+          }}
         />
       )}
       {history && (
@@ -334,9 +345,10 @@ function Score({
       <View style={styles.editBar}>
         <Text variant="muted" style={styles.editInfo}>
           {editing
-            ? edits.length
-              ? `${edits.length} change${edits.length === 1 ? '' : 's'} · tap a note to fix it`
-              : 'Tap a note to fix it, or a gap to add one'
+            ? (hint ??
+              (edits.length
+                ? `${edits.length} change${edits.length === 1 ? '' : 's'}, marked on the score · Save to apply`
+                : 'Tap a note to change it, or a gap to add one'))
             : outputs.version > 0
               ? `${subtitle} · edited (version ${outputs.version})`
               : subtitle}
@@ -392,6 +404,8 @@ function Score({
           editing={editing}
           onNoteTap={setTapped}
           onBeatTap={setEmptySpot}
+          onTapMissed={() => setHint('Tap right on a note, or on the staff to add one')}
+          marks={edits}
         />
       )}
     </View>
