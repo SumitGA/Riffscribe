@@ -276,6 +276,7 @@ class StageWorker:
             )
         self._queue.ack(delivery)
         if finished:
+            self._delete_audio(message.user_id, str(message.job_id))
             JOBS_FINISHED.labels(JobStatus.SUCCEEDED).inc()
             logger.info("job succeeded")
             self._notifier.job_finished(message.user_id, message.job_id, JobStatus.SUCCEEDED)
@@ -415,10 +416,24 @@ class StageWorker:
         self._queue.fail(delivery, failure.detail, retry=failure.retryable)
         if not dead:
             return "retried"
+        self._delete_audio(message.user_id, str(message.job_id))
         JOBS_FINISHED.labels(JobStatus.FAILED).inc()
         logger.warning("job failed", extra={"error_code": job.error_code})
         self._notifier.job_finished(message.user_id, message.job_id, JobStatus.FAILED)
         return "failed"
+
+    def _delete_audio(self, user_id: str, job_id: str) -> None:
+        """ADR-0009: once a job is over, its audio goes (the upload, the normalized copy and a
+        separated stem). Scores, tab, MIDI and sync.json stay; the dedup cache keys on the
+        audio's hash in the database, and the app plays its own copy of the recording.
+        Best effort: a storage error is logged, never turned into a job failure."""
+        prefix = job_prefix(user_id, job_id)
+        try:
+            keys = [k for k in self._store.list_keys(prefix) if _is_audio(k[len(prefix) :])]
+            self._store.delete_keys(keys)
+            logger.info("audio deleted", extra={"objects": len(keys)})
+        except Exception:
+            logger.exception("could not delete the job's audio")
 
     @staticmethod
     def _load(session: Session, message: StageMessage) -> Job | None:
@@ -472,3 +487,13 @@ def remove_stale_tempdirs(max_age_s: float = 24 * 3600) -> None:
     for path in Path(tempfile.gettempdir()).glob("tabscribe-*"):
         if path.is_dir() and path.stat().st_mtime < cutoff:
             shutil.rmtree(path, ignore_errors=True)
+
+
+def _is_audio(relative_key: str) -> bool:
+    """The upload (source/), the normalized audio and a separated stem: what ADR-0009 deletes."""
+    stage, _, name = relative_key.partition("/")
+    return (
+        stage == StageName.SOURCE
+        or (stage == StageName.NORMALIZE and name.endswith((".flac", ".wav")))
+        or (stage == StageName.SEPARATE and name.endswith((".flac", ".wav")))
+    )

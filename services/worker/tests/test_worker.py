@@ -184,8 +184,10 @@ def test_guitar_job_runs_every_stage(
     for key in (score.musicxml_key, score.tab_musicxml_key, score.midi_key, score.sync_key):
         assert key is not None and object_store.head(key) is not None
     keys = object_store.list_keys(job_prefix(s3_user, str(job_id)))
-    # The upload is stored once: the source stage's copy stays on the worker.
-    assert [k for k in keys if "/source/" in k] == [job.source_key]
+    # ADR-0009: the audio is gone once the job is over (the upload and the normalized copy);
+    # the scores and the stages' other files stay.
+    assert not [k for k in keys if "/source/" in k or k.endswith("/normalize/audio.flac")]
+    assert any(k.endswith("/quantize/quantized.json") for k in keys)
     assert notifier.sent == [(s3_user, job_id, JobStatus.SUCCEEDED)]
 
 
@@ -200,6 +202,19 @@ def test_piano_job_skips_tab(
     with Session(db) as session:
         score = session.scalars(select(ScoreVersion).where(ScoreVersion.job_id == job_id)).one()
     assert score.tab_musicxml_key is None
+
+
+def test_a_failed_job_deletes_its_audio_too(
+    stage_worker: StageWorker,
+    queue: RedisJobQueue,
+    submit_job: SubmitJob,
+    object_store: ObjectStore,
+    s3_user: str,
+) -> None:
+    job_id = submit_job(b"not audio")
+    drain(stage_worker, queue)
+
+    assert object_store.list_keys(job_prefix(s3_user, str(job_id)) + "source/") == []
 
 
 def test_bad_input_fails_the_job_without_retrying(

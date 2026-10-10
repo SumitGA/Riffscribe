@@ -146,15 +146,19 @@ class ObjectStore:
             keys.extend(obj["Key"] for obj in page.get("Contents", []))
         return keys
 
-    def delete_prefix(self, prefix: str) -> int:
-        """Delete every object under `prefix`; returns how many there were."""
-        if not prefix.endswith("/"):
-            raise ValueError("prefix must end with '/' so it can't match a sibling's keys")
-        keys = self.list_keys(prefix)
+    def delete_keys(self, keys: list[str]) -> None:
+        """Delete these objects; keys that don't exist are ignored."""
         for start in range(0, len(keys), 1000):  # DeleteObjects takes at most 1000 keys
             batch = keys[start : start + 1000]
             self._s3.delete_objects(
                 Bucket=self.bucket,
                 Delete={"Objects": [{"Key": k} for k in batch], "Quiet": True},
             )
+
+    def delete_prefix(self, prefix: str) -> int:
+        """Delete every object under `prefix`; returns how many there were."""
+        if not prefix.endswith("/"):
+            raise ValueError("prefix must end with '/' so it can't match a sibling's keys")
+        keys = self.list_keys(prefix)
+        self.delete_keys(keys)
         return len(keys)
