@@ -4,12 +4,18 @@
 # the LAN. The lab has no block storage, so Postgres lives on the root disk and the nightly
 # R2 backup is the safety net.
 
+# Flavors can't change, so a new size is a new flavor (its name carries the size) created
+# before the old one goes; the VM is then resized in place, keeping its disk and Postgres.
 resource "openstack_compute_flavor_v2" "staging" {
-  name      = "${var.name}.vm"
+  name      = "${var.name}.${var.vcpus}c${var.ram_mb}m"
   vcpus     = var.vcpus
   ram       = var.ram_mb
   disk      = var.disk_gb
   is_public = true
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "openstack_compute_keypair_v2" "admin" {

@@ -1021,7 +1021,8 @@ alphaTab's model locally and redraw, keeping the server as the judge on save.
 **Concept.** Where real users' requests and data live. A rented server or cloud has redundant
 power and networking and someone on call; a home lab has neither, but costs nothing extra.
 
-**What we did (ADR-0012).** Production runs like staging, on its own small VM (2 vCPU / 3 GB)
+**What we did (ADR-0012).** Production runs like staging, on its own VM (4 vCPU / 6 GB; staging shrank to 2 vCPU / 3 GB to
+make room)
 in the home lab behind a Cloudflare Tunnel, with nightly database backups to R2 and an
 external uptime check that emails the owner.
 
@@ -1033,9 +1034,9 @@ external uptime check that emails the owner.
 - A power cut, an internet outage or a lab reboot takes production down; nothing fails over.
 - Users' data (accounts, scores) is stored in the owner's home; backups are nightly, so a lost
   VM can lose up to a day of changes.
-- One worker on 2 vCPUs: transcriptions queue behind each other and take about twice as long
-  as on staging.
-- The lab is nearly full; growing production means shrinking staging or other VMs.
+- One worker: transcriptions queue behind each other.
+- The lab's RAM is then almost fully allocated (32 GB, both slots full); growing means a RAM
+  upgrade (2 x 32 GB SO-DIMM) or shrinking other VMs.
 
 **Revisit when** there are paying customers (move production to a rented VM or the AWS path in
 CLAUDE.md, with managed Postgres and point-in-time recovery), or as soon as an outage costs

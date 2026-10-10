@@ -9,7 +9,8 @@
 The app works end to end on staging (ADR-0010) and is ready for real users through Google
 Play. There are no paying customers yet, so the owner wants the cheapest setup that is safe
 for users' data, and to scale only once revenue justifies it. The home lab already runs
-staging; it has about 2 vCPUs and 3.8 GB of RAM to spare.
+staging; it had 3.8 GB of RAM to spare (vCPUs are shared, RAM is the limit). Staging idled at
+about 1 GB of its 6 GB, so it shrank to 2 vCPU / 3 GB, leaving about 6.8 GB.
 
 Google Play requires, for a new personal developer account, a closed test with at least 12
 testers opted in for 14 days before production access; a privacy policy; in-app and web
@@ -19,7 +20,7 @@ account deletion; a Data safety form; and a content rating.
 
 - **Production is a second, separate environment in the home lab**, built exactly like staging
   (Terraform module per environment, docker compose, Cloudflare Tunnel, nightly backups to
-  R2) with nothing shared: its own VM (2 vCPU / 3 GB to start), database, R2 bucket
+  R2) with nothing shared: its own VM (4 vCPU / 6 GB, the size staging had), database, R2 bucket
   (`riffscribe-prod`), tunnel, Clerk **production** instance and hostname
   `riffscribe.sumitgautam.tech`.
 - **An external uptime check** emails the owner when production's `/readyz` stops answering.
@@ -38,5 +39,6 @@ account deletion; a Data safety form; and a content rating.
 
 - Near-zero running cost: the lab's electricity, R2's free tier, free Cloudflare Tunnel.
 - Real users depend on the home's power and internet, and their data lives in the lab (TD-32).
-- A small VM: one transcription at a time, about twice as slow as staging.
+- Staging is smaller (2 vCPU / 3 GB): enough for testing, slower transcriptions.
+- The lab's RAM is then almost fully allocated; more VMs need a RAM upgrade (TD-32).
 - Staging stays the place to try changes first; production gets only tested commits.
