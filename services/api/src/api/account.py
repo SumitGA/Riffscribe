@@ -22,6 +22,8 @@ router = APIRouter(prefix="/me", tags=["me"])
 logger = logging.getLogger(__name__)
 
 CLERK_API = "https://api.clerk.com/v1"
+# Cloudflare in front of Clerk refuses Python's default "Python-urllib" agent (error 1010).
+USER_AGENT = "riffscribe-api/1.0"
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
@@ -57,7 +59,7 @@ def delete_clerk_user(user_id: str, secret_key: str) -> None:
     request = urllib.request.Request(
         f"{CLERK_API}/users/{user_id}",
         method="DELETE",
-        headers={"Authorization": f"Bearer {secret_key}"},
+        headers={"Authorization": f"Bearer {secret_key}", "User-Agent": USER_AGENT},
     )
     try:
         with urllib.request.urlopen(request, timeout=10) as response:

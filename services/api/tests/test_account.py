@@ -1,3 +1,6 @@
+import urllib.error
+import urllib.request
+from email.message import Message
 from pathlib import Path
 
 import pytest
@@ -72,3 +75,37 @@ def test_the_clerk_sign_in_is_deleted_too_and_a_failure_can_be_retried(
     monkeypatch.setattr(account_module, "delete_clerk_user", lambda u, k: calls.append((u, k)))
     assert api.delete("/me", headers=auth(alice)).status_code == 204
     assert calls == [(alice, "sk_test_x"), (alice, "sk_test_x")]
+
+
+def test_the_clerk_call_names_itself_and_treats_a_missing_user_as_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent: list[urllib.request.Request] = []
+
+    class Response:
+        def __enter__(self) -> "Response":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def urlopen(request: urllib.request.Request, timeout: float) -> Response:
+        sent.append(request)
+        return Response()
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    account_module.delete_clerk_user("user_1", "sk_test_x")
+    request = sent[0]
+    assert request.get_method() == "DELETE"
+    assert request.full_url == "https://api.clerk.com/v1/users/user_1"
+    # Cloudflare in front of Clerk blocks the default "Python-urllib" agent.
+    assert request.get_header("User-agent") == account_module.USER_AGENT
+
+    def gone(request: urllib.request.Request, timeout: float) -> Response:
+        raise urllib.error.HTTPError(request.full_url, 404, "not found", Message(), None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", gone)
+    account_module.delete_clerk_user("user_1", "sk_test_x")  # already deleted: no error
