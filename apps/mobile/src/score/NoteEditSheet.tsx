@@ -6,7 +6,15 @@ import type { Tuning } from '@/api/client';
 import { colors, radius, space } from '@/theme';
 import { Button, Chip, IconButton, Text } from '@/ui';
 
-import { type Edit, noteName, type NoteRef, positionsFor, type TappedNote } from './edits';
+import {
+  type Edit,
+  LENGTHS,
+  noteName,
+  type NoteRef,
+  positionsFor,
+  sameBeats,
+  type TappedNote,
+} from './edits';
 
 /**
  * What can be changed about a tapped note (ADR-0011): which string plays it, its pitch, or
@@ -77,6 +85,23 @@ export function NoteEditSheet({
             <IconButton label="One semitone up" onPress={() => shiftPitch(1)}>
               <Plus color={colors.text} size={22} />
             </IconButton>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text variant="muted">Length</Text>
+          <View style={styles.chips}>
+            {LENGTHS.map(({ beats, label }) => (
+              <Chip
+                key={beats}
+                label={label}
+                selected={sameBeats(beats, note.durationBeats)}
+                onPress={() =>
+                  !sameBeats(beats, note.durationBeats) &&
+                  done({ op: 'set_duration', note: ref, duration_beats: beats })
+                }
+              />
+            ))}
           </View>
         </View>
 

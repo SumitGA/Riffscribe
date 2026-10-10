@@ -9,7 +9,8 @@ import type { CreateVersionRequest, Job } from '@/api/client';
 import { useApi } from '@/api/provider';
 import { findTake, forgetTake } from '@/audio/takes';
 import { formatWhen, isFinished, type StageState, stageStates } from '@/jobs/status';
-import { type Edit, type TappedNote, upsertEdit } from '@/score/edits';
+import { AddNoteSheet } from '@/score/AddNoteSheet';
+import { type Edit, type TappedBeat, type TappedNote, upsertEdit } from '@/score/edits';
 import { ExportSheet } from '@/score/ExportSheet';
 import { NoteEditSheet } from '@/score/NoteEditSheet';
 import { type ExportFormat, fileName, shareBase64, shareDownload, sharePdf } from '@/score/exports';
@@ -204,6 +205,7 @@ function Score({
   const [editing, setEditing] = useState(false);
   const [edits, setEdits] = useState<Edit[]>([]);
   const [tapped, setTapped] = useState<TappedNote | null>(null);
+  const [emptySpot, setEmptySpot] = useState<TappedBeat | null>(null);
   // Save (ADR-0011): a new version, rendered by the worker; wait for it, then show it.
   const save = useMutation({
     mutationFn: async () => {
@@ -307,12 +309,21 @@ function Score({
           onClose={() => setTapped(null)}
         />
       )}
+      {emptySpot && (
+        <AddNoteSheet
+          beat={emptySpot}
+          tuning={job.options.tuning ?? 'standard'}
+          capo={job.options.capo ?? 0}
+          onEdit={(edit) => setEdits((current) => upsertEdit(current, edit))}
+          onClose={() => setEmptySpot(null)}
+        />
+      )}
       <View style={styles.editBar}>
         <Text variant="muted" style={styles.editInfo}>
           {editing
             ? edits.length
               ? `${edits.length} change${edits.length === 1 ? '' : 's'} · tap a note to fix it`
-              : 'Tap a note to fix it'
+              : 'Tap a note to fix it, or a gap to add one'
             : outputs.version > 0
               ? `${subtitle} · edited (version ${outputs.version})`
               : subtitle}
@@ -361,6 +372,7 @@ function Score({
           take={take.data ?? null}
           editing={editing}
           onNoteTap={setTapped}
+          onBeatTap={setEmptySpot}
         />
       )}
     </View>

@@ -24,6 +24,18 @@ export type TappedNote = {
   fret: number | null;
 };
 
+/** An empty spot the user tapped, where a note can be added. */
+export type TappedBeat = { onsetBeats: string; durationBeats: string; tab: boolean };
+
+/** Note lengths the editor offers, in beats (a quarter note is one beat). */
+export const LENGTHS = [
+  { beats: '1/4', label: '1/16' },
+  { beats: '1/2', label: '1/8' },
+  { beats: '1', label: '1/4' },
+  { beats: '2', label: '1/2' },
+  { beats: '4', label: 'Whole' },
+] as const;
+
 /** Open-string pitches, lowest string first, as the pipeline's TUNINGS. */
 const TUNINGS: Record<Tuning, number[]> = {
   standard: [40, 45, 50, 55, 59, 64],
@@ -31,14 +43,18 @@ const TUNINGS: Record<Tuning, number[]> = {
 };
 export const MAX_FRET = 24;
 
+/** Sounding open-string pitches with the capo, index 0 = string 1 (highest). */
+export function openStrings(tuning: Tuning = 'standard', capo = 0): number[] {
+  return TUNINGS[tuning].map((p) => p + capo).reverse();
+}
+
 /** Every (string, fret) that plays `pitch`, string 1 = highest, with the capo's frets taken off. */
 export function positionsFor(
   pitch: number,
   tuning: Tuning = 'standard',
   capo = 0,
 ): { string: number; fret: number }[] {
-  const open = TUNINGS[tuning].map((p) => p + capo).reverse(); // index 0 = string 1
-  return open
+  return openStrings(tuning, capo)
     .map((openPitch, index) => ({ string: index + 1, fret: pitch - openPitch }))
     .filter(({ fret }) => fret >= 0 && fret <= MAX_FRET - capo);
 }
@@ -64,4 +80,13 @@ export function upsertEdit(edits: Edit[], edit: Edit): Edit[] {
   }
   const key = noteKey(edit.note);
   return [...edits.filter((e) => e.op === 'add' || noteKey(e.note) !== key), edit];
+}
+
+/** Whether two beat fractions ("2/2", "1") are equal. */
+export function sameBeats(a: string, b: string): boolean {
+  const value = (f: string) => {
+    const [n, d = '1'] = f.split('/');
+    return Number(n) / Number(d);
+  };
+  return Math.abs(value(a) - value(b)) < 1e-9;
 }

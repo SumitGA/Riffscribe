@@ -1,4 +1,4 @@
-import type { TappedNote } from './edits';
+import type { TappedBeat, TappedNote } from './edits';
 
 /**
  * The page the score viewer's WebView loads, from a cache folder next to alphaTab's files
@@ -52,6 +52,18 @@ export const VIEWER_PAGE = `<!doctype html>
   // A tapped note as the server's score addresses it (ADR-0011): onset in beats from the start
   // of the first (possibly pickup) bar, pitch, and tab position with string 1 = highest
   // (alphaTab counts strings from the lowest). A tied continuation is the note it started as.
+  // Where a new note would go: the tapped beat's onset (and its length, as a default).
+  function beatInfo(beat) {
+    const barStart = api.score.masterBars
+      .slice(0, beat.voice.bar.index).reduce((sum, mb) => sum + mb.calculateDuration(), 0);
+    const strings = beat.voice.bar.staff.tuning.length;
+    return {
+      onsetBeats: beats(barStart + beat.playbackStart),
+      durationBeats: beats(beat.playbackDuration),
+      tab: strings > 0,
+    };
+  }
+
   function noteInfo(note) {
     let origin = note;
     while (origin.isTieDestination && origin.tieOrigin) origin = origin.tieOrigin;
@@ -97,7 +109,18 @@ export const VIEWER_PAGE = `<!doctype html>
     });
     api.error.on((error) => post({ type: "error", message: String(error?.message ?? error) }));
     api.renderFinished.on(() => post({ type: "rendered" }));
-    api.noteMouseDown.on((note) => { if (editing) post({ type: "noteTapped", note: noteInfo(note) }); });
+    // A tap on a note fires beatMouseDown too: report the beat only if no note follows at once.
+    let beatTap = null;
+    api.beatMouseDown.on((beat) => {
+      if (!editing) return;
+      clearTimeout(beatTap);
+      beatTap = setTimeout(() => post({ type: "beatTapped", beat: beatInfo(beat) }), 80);
+    });
+    api.noteMouseDown.on((note) => {
+      if (!editing) return;
+      clearTimeout(beatTap);
+      post({ type: "noteTapped", note: noteInfo(note) });
+    });
     api.playerReady.on(() => post({ type: "playerReady" }));
     api.playerStateChanged.on((e) =>
       post({ type: "playing", playing: e.state === alphaTab.synth.PlayerState.Playing }));
@@ -264,6 +287,7 @@ export type ViewerMessage =
   | { type: 'position'; currentMs: number; endMs: number }
   | { type: 'error'; message: string }
   | { type: 'noteTapped'; note: TappedNote }
+  | { type: 'beatTapped'; beat: TappedBeat }
   | { type: 'exported'; id: number; data: string }
   | { type: 'exportFailed'; id: number; message: string };
 

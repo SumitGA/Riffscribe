@@ -8,7 +8,7 @@ import { formatDuration } from '@/audio/clip';
 import { colors, fonts, radius, space } from '@/theme';
 import { IconButton, ProgressBar, Segmented, Text } from '@/ui';
 
-import type { TappedNote } from './edits';
+import type { TappedBeat, TappedNote } from './edits';
 import { prepareViewer, type ViewerFiles } from './prepareViewer';
 import {
   command,
@@ -51,6 +51,7 @@ export function ScoreView({
   take = null,
   editing = false,
   onNoteTap,
+  onBeatTap,
   ref,
 }: {
   musicXml: string;
@@ -60,6 +61,7 @@ export function ScoreView({
   /** Edit mode: tapping a note reports it through `onNoteTap` (ADR-0011). */
   editing?: boolean;
   onNoteTap?: (note: TappedNote) => void;
+  onBeatTap?: (beat: TappedBeat) => void;
   ref?: Ref<ScoreHandle>;
 }) {
   const webView = useRef<WebView>(null);
@@ -143,6 +145,9 @@ export function ScoreView({
         break;
       case 'noteTapped':
         onNoteTap?.(message.note);
+        break;
+      case 'beatTapped':
+        onBeatTap?.(message.beat);
         break;
       case 'exported':
       case 'exportFailed': {
