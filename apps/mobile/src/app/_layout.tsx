@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 
 import { ApiProvider } from '@/api/provider';
+import { UpdateBanner } from '@/updates/UpdateBanner';
 import { clerkPublishableKey } from '@/config';
 import { colors, fonts } from '@/theme';
 import { useAppFonts } from '@/theme/useAppFonts';
@@ -31,6 +32,7 @@ export default function RootLayout() {
         <ApiProvider>
           <ThemeProvider value={navigationTheme}>
             <Screens />
+            <UpdateBanner />
           </ThemeProvider>
         </ApiProvider>
       </QueryClientProvider>
