@@ -85,6 +85,17 @@ def transcribe(token: str, clip: Path, content_type: str, instrument: str) -> di
     return dict(job)
 
 
+def wait_for_version(token: str, job_id: str, number: int) -> dict[str, Any]:
+    deadline = time.monotonic() + TIMEOUT_S
+    while time.monotonic() < deadline:
+        status, version = api("GET", f"/jobs/{job_id}/versions/{number}", token)
+        check(status == 200, f"version {number}: {status}")
+        if version["status"] != "pending":
+            return dict(version)
+        time.sleep(0.5)
+    raise CheckFailedError(f"version {number} still pending after {TIMEOUT_S}s")
+
+
 def step(name: str) -> None:
     print(f"  ok  {name}", flush=True)
 
@@ -123,6 +134,26 @@ def main() -> int:
             else:
                 check(body.startswith(b"MThd"), "midi is not a MIDI file")
         step("MusicXML, tab MusicXML and MIDI download through presigned URLs")
+
+        # The editor (ADR-0011): a save becomes a new version, rendered by the worker.
+        versions = f"/jobs/{job['id']}/versions"
+        status, saved = api("POST", versions, alice, {"base_version": 0, "edits": []})
+        check(status == 202 and saved["status"] == "pending", f"save: {status} {saved}")
+        edited = wait_for_version(alice, job["id"], saved["version"])
+        check(edited["status"] == "ready", f"version: {edited}")
+        out = edited["outputs"]["tab_musicxml"]
+        status, body = request(out["method"], out["url"], headers=out["headers"])
+        check(status == 200 and b"<score-partwise" in body, f"edited tab: {status}")
+        stale = api("POST", versions, alice, {"base_version": 0, "edits": []})[0]
+        check(stale == 409, f"a save on an old version should be 409, got {stale}")
+        gone = {"op": "delete", "note": {"onset_beats": "999", "pitch": 60}}
+        status, saved = api("POST", versions, alice, {"base_version": 1, "edits": [gone]})
+        refused = wait_for_version(alice, job["id"], saved["version"])
+        check(
+            refused["status"] == "failed" and "isn't in this version" in refused["error_message"],
+            f"bad edit: {refused}",
+        )
+        step("edits become version 1 (rendered); stale saves conflict; bad edits are explained")
 
         again = transcribe(alice, FIXTURES / "piano.m4a", "audio/mp4", "guitar")
         cached = [s["stage"] for s in again["stages"] if s["status"] == "cached"]
