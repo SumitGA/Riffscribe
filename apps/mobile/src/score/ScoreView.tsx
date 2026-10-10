@@ -8,7 +8,7 @@ import { formatDuration } from '@/audio/clip';
 import { colors, fonts, radius, space } from '@/theme';
 import { IconButton, ProgressBar, Segmented, Text } from '@/ui';
 
-import type { TappedBeat, TappedNote } from './edits';
+import type { Edit, TappedBeat, TappedNote } from './edits';
 import { prepareViewer, type ViewerFiles } from './prepareViewer';
 import {
   command,
@@ -43,6 +43,8 @@ export type ScoreHandle = {
   guitarPro: () => Promise<string>;
   /** A self-contained black-on-white HTML page of the whole score, to print to PDF. */
   printable: () => Promise<string>;
+  /** Removes the highlight from the tapped note (its sheet closed). */
+  clearSelection: () => void;
 };
 
 export function ScoreView({
@@ -52,6 +54,8 @@ export function ScoreView({
   editing = false,
   onNoteTap,
   onBeatTap,
+  onTapMissed,
+  marks,
   ref,
 }: {
   musicXml: string;
@@ -62,6 +66,10 @@ export function ScoreView({
   editing?: boolean;
   onNoteTap?: (note: TappedNote) => void;
   onBeatTap?: (beat: TappedBeat) => void;
+  /** A tap in edit mode that hit neither a note nor a beat. */
+  onTapMissed?: () => void;
+  /** Pending edits, marked on the score until saved or cancelled. */
+  marks?: Edit[];
   ref?: Ref<ScoreHandle>;
 }) {
   const webView = useRef<WebView>(null);
@@ -93,7 +101,11 @@ export function ScoreView({
         requests.current.set(id, { resolve, reject });
         webView.current?.injectJavaScript(command(name, id));
       });
-    return { guitarPro: () => ask('exportGuitarPro'), printable: () => ask('exportPrintable') };
+    return {
+      guitarPro: () => ask('exportGuitarPro'),
+      printable: () => ask('exportPrintable'),
+      clearSelection: () => webView.current?.injectJavaScript(command('clearSelection')),
+    };
   }, []);
 
   // Lay out the viewer's files; a take is copied next to the page, the only folder the WebView
@@ -149,6 +161,9 @@ export function ScoreView({
       case 'beatTapped':
         onBeatTap?.(message.beat);
         break;
+      case 'tapMissed':
+        onTapMissed?.();
+        break;
       case 'exported':
       case 'exportFailed': {
         const request = requests.current.get(message.id);
@@ -168,6 +183,12 @@ export function ScoreView({
       webView.current?.injectJavaScript(command('setEditing', editing));
     }
   }, [ready, editing, musicXml]);
+
+  useEffect(() => {
+    if (ready && editing) {
+      webView.current?.injectJavaScript(command('setMarks', marks ?? []));
+    }
+  }, [ready, editing, marks]);
 
   const changeProfile = (value: StaveProfile) => {
     setProfile(value);

@@ -28,6 +28,16 @@ export const VIEWER_PAGE = `<!doctype html>
   .at-cursor-beat { background: #FFB224; width: 3px; }
   .at-highlight * { fill: #FFB224; stroke: #FFB224; }
   .at-selection div { background: rgba(255, 178, 36, 0.2); }
+  .rf-mark { position: absolute; border-radius: 6px; pointer-events: none; z-index: 5; }
+  .rf-selected { border: 2px solid #FFB224; background: rgba(255, 178, 36, 0.25); }
+  .rf-changed { border: 2px solid #FFB224; }
+  .rf-deleted { border: 2px solid #F87171; background: rgba(248, 113, 113, 0.25); }
+  .rf-added { border: 2px dashed #34D399; }
+  .rf-label { position: absolute; top: -18px; left: -2px; font: 600 11px sans-serif;
+              color: #16181D; background: #FFB224; border-radius: 4px; padding: 0 4px;
+              white-space: nowrap; }
+  .rf-deleted .rf-label { background: #F87171; }
+  .rf-added .rf-label { background: #34D399; }
 </style>
 </head>
 <body>
@@ -45,6 +55,113 @@ export const VIEWER_PAGE = `<!doctype html>
   let lastPosition = 0;
   let current = null; // { musicXml, profile, take, source } of the score on screen
   let editing = false;
+  let marks = [];     // pending edits to show on the score
+  let selected = null; // { onsetBeats, pitch } of the note whose sheet is open
+
+  // Taps in edit mode: alphaTab's own mouse handling turns a touch into a drag-selection, so
+  // edit mode switches it off and treats a short, still touch as a tap on whatever is there.
+  function setupTaps() {
+    const host = document.getElementById("score");
+    let down = null;
+    host.addEventListener("pointerdown", (e) => {
+      down = editing ? { x: e.clientX, y: e.clientY, t: Date.now() } : null;
+    }, true);
+    host.addEventListener("pointerup", (e) => {
+      if (!editing || !down) return;
+      const still = Math.hypot(e.clientX - down.x, e.clientY - down.y) < 12;
+      const quick = Date.now() - down.t < 700;
+      down = null;
+      if (still && quick) editTap(e.clientX, e.clientY);
+    }, true);
+  }
+
+  function editTap(clientX, clientY) {
+    const rect = api.canvasElement.element.getBoundingClientRect();
+    const x = clientX - rect.left, y = clientY - rect.top;
+    const lookup = api.renderer.boundsLookup;
+    const beat = lookup && lookup.getBeatAtPos(x, y);
+    if (!beat) return post({ type: "tapMissed" });
+    const note = lookup.getNoteAtPos(beat, x, y);
+    if (note) {
+      const info = noteInfo(note);
+      selected = { onsetBeats: info.onsetBeats, pitch: info.pitch };
+      drawMarks();
+      post({ type: "noteTapped", note: info });
+    } else {
+      post({ type: "beatTapped", beat: beatInfo(beat) });
+    }
+  }
+
+  // Boxes over notes: the selected one, and every pending edit (changed, deleted, added).
+  function drawMarks() {
+    if (!api || !api.renderer.boundsLookup) return;
+    const host = api.canvasElement.element;
+    host.style.position = "relative";
+    host.querySelectorAll(".rf-mark").forEach((el) => el.remove());
+    const box = (bounds, cls, label) => {
+      if (!bounds) return;
+      const el = document.createElement("div");
+      el.className = "rf-mark " + cls;
+      el.style.left = (bounds.x - 4) + "px";
+      el.style.top = (bounds.y - 4) + "px";
+      el.style.width = (bounds.w + 8) + "px";
+      el.style.height = (bounds.h + 8) + "px";
+      if (label) {
+        const tag = document.createElement("span");
+        tag.className = "rf-label";
+        tag.textContent = label;
+        el.appendChild(tag);
+      }
+      host.appendChild(el);
+    };
+    const same = (a, b) => frac(a) === frac(b);
+    // The note's head, on the tab staff when the score has one (that's where frets are edited).
+    const noteBounds = (onsetBeats, pitch) => {
+      const matches = allNotes().filter((n) => !n.isTieDestination && n.realValue === pitch &&
+        same(noteInfo(n).onsetBeats, onsetBeats));
+      const n = matches.find((m) => m.isStringed) || matches[0];
+      if (!n) return null;
+      const beatBounds = api.renderer.boundsLookup.findBeat(n.beat);
+      const hit = beatBounds && beatBounds.notes && beatBounds.notes.find((b) => b.note === n);
+      return hit ? hit.noteHeadBounds : null;
+    };
+    for (const m of marks) {
+      if (m.op === "add") {
+        const beat = beatAt(m.onset_beats);
+        const bounds = beat && api.renderer.boundsLookup.findBeat(beat);
+        box(bounds && bounds.visualBounds, "rf-added",
+            "+ " + (m.string ? "s" + m.string + " " : "") + noteLabel(m.pitch));
+        continue;
+      }
+      const bounds = noteBounds(m.note.onset_beats, m.note.pitch);
+      if (m.op === "delete") box(bounds, "rf-deleted", "delete");
+      else if (m.op === "set_position") box(bounds, "rf-changed", "s" + m.string + " f" + m.fret);
+      else if (m.op === "set_pitch") box(bounds, "rf-changed", "→ " + noteLabel(m.pitch));
+      else if (m.op === "set_duration") box(bounds, "rf-changed", "len " + m.duration_beats);
+    }
+    if (selected) box(noteBounds(selected.onsetBeats, selected.pitch), "rf-selected");
+  }
+
+  const NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const noteLabel = (p) => NAMES[p % 12] + (Math.floor(p / 12) - 1);
+  const frac = (f) => { const [n, d] = String(f).split("/"); return Number(n) / Number(d || 1); };
+
+  function allNotes() {
+    const out = [];
+    for (const staff of api.score.tracks[0].staves)
+      for (const bar of staff.bars) for (const voice of bar.voices)
+        for (const beat of voice.beats) for (const n of beat.notes) out.push(n);
+    return out;
+  }
+
+  // The tab staff's beat at an onset (for marking where a note is being added).
+  function beatAt(onsetBeats) {
+    const staves = api.score.tracks[0].staves;
+    const staff = staves.find((s) => s.tuning && s.tuning.length) || staves[0];
+    for (const bar of staff.bars) for (const voice of bar.voices) for (const beat of voice.beats)
+      if (frac(beatInfo(beat).onsetBeats) === frac(onsetBeats)) return beat;
+    return null;
+  }
 
   const gcd = (a, b) => (b ? gcd(b, a % b) : a);
   const beats = (ticks) => { const g = gcd(ticks, 960); return (ticks / g) + "/" + (960 / g); };
@@ -109,18 +226,8 @@ export const VIEWER_PAGE = `<!doctype html>
     });
     api.error.on((error) => post({ type: "error", message: String(error?.message ?? error) }));
     api.renderFinished.on(() => post({ type: "rendered" }));
-    // A tap on a note fires beatMouseDown too: report the beat only if no note follows at once.
-    let beatTap = null;
-    api.beatMouseDown.on((beat) => {
-      if (!editing) return;
-      clearTimeout(beatTap);
-      beatTap = setTimeout(() => post({ type: "beatTapped", beat: beatInfo(beat) }), 80);
-    });
-    api.noteMouseDown.on((note) => {
-      if (!editing) return;
-      clearTimeout(beatTap);
-      post({ type: "noteTapped", note: noteInfo(note) });
-    });
+    api.renderFinished.on(() => drawMarks());
+    if (!window.__tapsReady) { setupTaps(); window.__tapsReady = true; }
     api.playerReady.on(() => post({ type: "playerReady" }));
     api.playerStateChanged.on((e) =>
       post({ type: "playing", playing: e.state === alphaTab.synth.PlayerState.Playing }));
@@ -178,7 +285,15 @@ export const VIEWER_PAGE = `<!doctype html>
       api.updateSettings();
       api.render();
     },
-    setEditing(on) { editing = on; },
+    setEditing(on) {
+      editing = on;
+      api.settings.player.enableUserInteraction = !on; // no drag-selection while editing
+      api.updateSettings();
+      if (!on) { marks = []; selected = null; }
+      drawMarks();
+    },
+    setMarks(edits) { marks = edits; drawMarks(); },
+    clearSelection() { selected = null; drawMarks(); },
     playPause() { api.playPause(); },
     stop() { api.stop(); },
     setSpeed(speed) { api.playbackSpeed = speed; },
@@ -288,6 +403,7 @@ export type ViewerMessage =
   | { type: 'error'; message: string }
   | { type: 'noteTapped'; note: TappedNote }
   | { type: 'beatTapped'; beat: TappedBeat }
+  | { type: 'tapMissed' }
   | { type: 'exported'; id: number; data: string }
   | { type: 'exportFailed'; id: number; message: string };
 
