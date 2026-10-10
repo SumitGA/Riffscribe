@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Check, Pencil, Share2, Trash2, Undo2, X } from 'lucide-react-native';
+import { Check, History, Pencil, Share2, Trash2, Undo2, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { AddNoteSheet } from '@/score/AddNoteSheet';
 import { type Edit, type TappedBeat, type TappedNote, upsertEdit } from '@/score/edits';
 import { ExportSheet } from '@/score/ExportSheet';
 import { NoteEditSheet } from '@/score/NoteEditSheet';
+import { VersionsSheet } from '@/score/VersionsSheet';
 import { type ExportFormat, fileName, shareBase64, shareDownload, sharePdf } from '@/score/exports';
 import { type ScoreHandle, ScoreView, type Take } from '@/score/ScoreView';
 import { colors, fonts, space } from '@/theme';
@@ -206,12 +207,15 @@ function Score({
   const [edits, setEdits] = useState<Edit[]>([]);
   const [tapped, setTapped] = useState<TappedNote | null>(null);
   const [emptySpot, setEmptySpot] = useState<TappedBeat | null>(null);
+  const [history, setHistory] = useState(false);
   // Save (ADR-0011): a new version, rendered by the worker; wait for it, then show it.
+  // Restoring is a save too: no edits, starting from the chosen version's content.
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (restore?: number) => {
       const created = await api.createVersion(job.id, {
         base_version: outputs.version,
-        edits: edits as CreateVersionRequest['edits'],
+        edits: restore === undefined ? (edits as CreateVersionRequest['edits']) : [],
+        ...(restore === undefined ? {} : { from_version: restore }),
       });
       for (let waited = 0; waited < 60_000; waited += 1000) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -230,6 +234,7 @@ function Score({
       setEdits([]);
       setEditing(false);
       void queryClient.invalidateQueries({ queryKey: ['job', job.id] });
+      void queryClient.invalidateQueries({ queryKey: ['versions', job.id] });
     },
     onError: (error) => {
       Alert.alert("Couldn't save", error.message);
@@ -309,6 +314,14 @@ function Score({
           onClose={() => setTapped(null)}
         />
       )}
+      {history && (
+        <VersionsSheet
+          jobId={job.id}
+          current={outputs.version}
+          onRestore={(version) => save.mutate(version)}
+          onClose={() => setHistory(false)}
+        />
+      )}
       {emptySpot && (
         <AddNoteSheet
           beat={emptySpot}
@@ -351,13 +364,19 @@ function Score({
               title="Save"
               disabled={!edits.length}
               loading={save.isPending}
-              onPress={() => save.mutate()}
+              onPress={() => save.mutate(undefined)}
             />
           </>
         ) : (
-          <IconButton label="Edit the score" onPress={() => setEditing(true)}>
-            <Pencil color={colors.text} size={20} />
-          </IconButton>
+          <>
+            {save.isPending && <ActivityIndicator color={colors.accent} />}
+            <IconButton label="Versions" onPress={() => setHistory(true)}>
+              <History color={colors.text} size={20} />
+            </IconButton>
+            <IconButton label="Edit the score" onPress={() => setEditing(true)}>
+              <Pencil color={colors.text} size={20} />
+            </IconButton>
+          </>
         )}
       </View>
       {musicXml.isPending || take.isPending ? (
