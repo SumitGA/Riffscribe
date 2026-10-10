@@ -31,7 +31,7 @@ from api.schemas import (
     PresignedRequestOut,
     StageOut,
 )
-from tabscribe_platform.db import Job, JobStatus, ScoreVersion, StageRun, User
+from tabscribe_platform.db import Job, JobStatus, ScoreVersion, StageRun, User, VersionStatus
 from tabscribe_platform.jobqueue import STAGES, Priority, StageMessage, queue_for_stage
 from tabscribe_platform.observability import inject_trace
 from tabscribe_platform.storage import ObjectStore, PresignedRequest, job_key, job_prefix
@@ -68,11 +68,15 @@ def _job_out(session: Session, store: ObjectStore, job: Job) -> JobOut:
     if job.status is JobStatus.SUCCEEDED:
         score = session.scalars(
             select(ScoreVersion)
-            .where(ScoreVersion.job_id == job.id, ScoreVersion.user_id == job.user_id)
+            .where(
+                ScoreVersion.job_id == job.id,
+                ScoreVersion.user_id == job.user_id,
+                ScoreVersion.status == VersionStatus.READY,  # a pending edit has no files yet
+            )
             .order_by(ScoreVersion.version.desc())
             .limit(1)
         ).first()
-        if score is not None:
+        if score is not None and score.musicxml_key is not None:
             outputs = JobOutputs(
                 version=score.version,
                 musicxml=_presigned(store.presign_get(score.musicxml_key, "score.musicxml")),

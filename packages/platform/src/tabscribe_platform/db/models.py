@@ -69,6 +69,12 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
+class VersionStatus(StrEnum):
+    PENDING = "pending"  # an edit waiting for the worker to render it
+    READY = "ready"
+    FAILED = "failed"
+
+
 class StageStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
@@ -140,9 +146,9 @@ class StageRun(Base):
 
 
 class ScoreVersion(Base):
-    """A score for a job. Version 0 is the pipeline's output; editor saves (Phase 4) add 1, 2, ...
-
-    Versions are never overwritten.
+    """A score for a job. Version 0 is the pipeline's output; editor saves add 1, 2, ...
+    (ADR-0011): `edits` applied to `base_version`, rendered by the worker. Versions are never
+    overwritten; a pending version has no files yet.
     """
 
     __tablename__ = "score_versions"
@@ -152,7 +158,16 @@ class ScoreVersion(Base):
     job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     version: Mapped[int] = mapped_column(Integer)
-    musicxml_key: Mapped[str] = mapped_column(String(512))
+    status: Mapped[VersionStatus] = mapped_column(
+        _enum(VersionStatus), default=VersionStatus.READY, server_default=VersionStatus.READY
+    )
+    error_message: Mapped[str | None] = mapped_column(String(500))
+    base_version: Mapped[int | None] = mapped_column(Integer)
+    # The edit operations (ADR-0011) as sent; also data for improving the fingering (TD-15).
+    edits: Mapped[dict[str, Any] | None] = mapped_column()
+    # score.json: the editable document (score, tab positions, trim offset)
+    document_key: Mapped[str | None] = mapped_column(String(512))
+    musicxml_key: Mapped[str | None] = mapped_column(String(512))
     tab_musicxml_key: Mapped[str | None] = mapped_column(String(512))
     midi_key: Mapped[str | None] = mapped_column(String(512))
     # sync.json: when each bar starts in the uploaded audio (None for scores made before it)

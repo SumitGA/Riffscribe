@@ -342,6 +342,8 @@ class StageWorker:
         if row is None:
             return None
         cached, score = row
+        if score.musicxml_key is None:
+            return None
 
         old = job_prefix(message.user_id, str(cached.id))
         new = job_prefix(message.user_id, str(message.job_id))
@@ -366,10 +368,11 @@ class StageWorker:
         def moved(k: str) -> str:
             return new + k[len(old) :]
 
+        musicxml_key = score.musicxml_key
         logger.info("job %s reuses the results of job %s", message.job_id, cached.id)
         return _Outputs(
             pipeline_version=self._pipeline_version,
-            musicxml_key=moved(score.musicxml_key),
+            musicxml_key=moved(musicxml_key),
             tab_musicxml_key=moved(score.tab_musicxml_key) if score.tab_musicxml_key else None,
             midi_key=moved(score.midi_key) if score.midi_key else None,
             sync_key=moved(score.sync_key) if score.sync_key else None,
