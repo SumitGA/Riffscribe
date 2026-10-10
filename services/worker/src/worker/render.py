@@ -59,7 +59,9 @@ class VersionRenderer:
 
         try:
             document = self._document(prefix, base_document_key, config.instrument)
-            edited = apply_edits(document, EditList.model_validate(edits).edits)
+            edited = apply_edits(
+                document, EditList.model_validate({"edits": (edits or {}).get("edits", [])}).edits
+            )
             keys = self._render_and_upload(edited, f"{prefix}versions/{number}/")
         except (InvalidInputError, ValidationError) as exc:
             reason = (

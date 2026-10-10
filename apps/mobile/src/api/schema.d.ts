@@ -120,6 +120,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/{job_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Versions */
+        get: operations["list_versions_jobs__job_id__versions_get"];
+        put?: never;
+        /**
+         * Create Version
+         * @description Save edits as a new version. 409 if `base_version` isn't the latest (another save won)
+         *     or the previous save is still being rendered; the app reloads and tries again.
+         */
+        post: operations["create_version_jobs__job_id__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{job_id}/versions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Version */
+        get: operations["get_version_jobs__job_id__versions__number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -215,6 +254,29 @@ export interface components {
         CreateJobResponse: {
             job: components["schemas"]["JobOut"];
             upload: components["schemas"]["PresignedRequestOut"];
+        };
+        /** CreateVersionRequest */
+        CreateVersionRequest: {
+            /** Base Version */
+            base_version: number;
+            /** Edits */
+            edits: components["schemas"]["EditOp"][];
+            /** From Version */
+            from_version?: number | null;
+        };
+        /**
+         * EditOp
+         * @description One edit operation (ADR-0011). The API checks only its kind; the worker checks the rest
+         *     against the score (the API never runs pipeline code).
+         */
+        EditOp: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "set_position" | "set_pitch" | "delete" | "add" | "set_duration";
+        } & {
+            [key: string]: unknown;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -384,6 +446,32 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VersionList */
+        VersionList: {
+            /** Versions */
+            versions: components["schemas"]["VersionOut"][];
+        };
+        /** VersionOut */
+        VersionOut: {
+            /** Version */
+            version: number;
+            status: components["schemas"]["VersionStatus"];
+            /** Base Version */
+            base_version: number | null;
+            /** Error Message */
+            error_message: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            outputs?: components["schemas"]["JobOutputs"] | null;
+        };
+        /**
+         * VersionStatus
+         * @enum {string}
+         */
+        VersionStatus: "pending" | "ready" | "failed";
     };
     responses: never;
     parameters: never;
@@ -597,6 +685,104 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_versions_jobs__job_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_version_jobs__job_id__versions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_version_jobs__job_id__versions__number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -61,6 +61,21 @@ def _own_job(user_id: str, job_id: uuid.UUID) -> Select[Job]:
     return select(Job).where(Job.id == job_id, Job.user_id == user_id)
 
 
+def outputs_of(store: ObjectStore, score: ScoreVersion) -> JobOutputs | None:
+    """Presigned downloads of a ready score version's files (None while it has none)."""
+    if score.musicxml_key is None:
+        return None
+    return JobOutputs(
+        version=score.version,
+        musicxml=_presigned(store.presign_get(score.musicxml_key, "score.musicxml")),
+        tab_musicxml=_presigned(store.presign_get(score.tab_musicxml_key, "tab.musicxml"))
+        if score.tab_musicxml_key
+        else None,
+        midi=_presigned(store.presign_get(score.midi_key, "score.mid")) if score.midi_key else None,
+        sync=_presigned(store.presign_get(score.sync_key, "sync.json")) if score.sync_key else None,
+    )
+
+
 def _job_out(session: Session, store: ObjectStore, job: Job) -> JobOut:
     runs = session.scalars(select(StageRun).where(StageRun.job_id == job.id)).all()
     runs = sorted(runs, key=lambda r: STAGES.index(r.stage) if r.stage in STAGES else len(STAGES))
@@ -76,20 +91,8 @@ def _job_out(session: Session, store: ObjectStore, job: Job) -> JobOut:
             .order_by(ScoreVersion.version.desc())
             .limit(1)
         ).first()
-        if score is not None and score.musicxml_key is not None:
-            outputs = JobOutputs(
-                version=score.version,
-                musicxml=_presigned(store.presign_get(score.musicxml_key, "score.musicxml")),
-                tab_musicxml=_presigned(store.presign_get(score.tab_musicxml_key, "tab.musicxml"))
-                if score.tab_musicxml_key
-                else None,
-                midi=_presigned(store.presign_get(score.midi_key, "score.mid"))
-                if score.midi_key
-                else None,
-                sync=_presigned(store.presign_get(score.sync_key, "sync.json"))
-                if score.sync_key
-                else None,
-            )
+        if score is not None:
+            outputs = outputs_of(store, score)
     return JobOut(
         id=job.id,
         name=job.name,

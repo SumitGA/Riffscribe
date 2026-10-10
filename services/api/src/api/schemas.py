@@ -3,10 +3,11 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from tabscribe_platform.db import JOB_NAME_MAX, JobStatus, StageStatus
+from tabscribe_platform.db import JOB_NAME_MAX, JobStatus, StageStatus, VersionStatus
 
 # Upload types the API accepts, and the file extension the stored upload gets. The normalize
 # stage decodes with ffmpeg and rejects anything that isn't really audio.
@@ -129,3 +130,38 @@ class MeOut(BaseModel):
     user_id: str
     jobs_this_month: int
     jobs_per_month: int
+
+
+EDIT_OPS = ("set_position", "set_pitch", "delete", "add", "set_duration")
+MAX_EDITS = 500
+
+
+class EditOp(BaseModel):
+    """One edit operation (ADR-0011). The API checks only its kind; the worker checks the rest
+    against the score (the API never runs pipeline code)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    op: Literal["set_position", "set_pitch", "delete", "add", "set_duration"]
+
+
+class CreateVersionRequest(BaseModel):
+    # The latest version the edits were made on; saving against an older one is a conflict.
+    base_version: int = Field(ge=0)
+    edits: list[EditOp] = Field(max_length=MAX_EDITS)
+    # Restore: start from this (older) version's content instead of base_version's.
+    from_version: int | None = Field(default=None, ge=0)
+
+
+class VersionOut(BaseModel):
+    version: int
+    status: VersionStatus
+    base_version: int | None  # the version whose content the edits were applied to
+    error_message: str | None
+    created_at: datetime
+    # Downloads, once the version is ready (only when asked for one version).
+    outputs: JobOutputs | None = None
+
+
+class VersionList(BaseModel):
+    versions: list[VersionOut]  # newest first
