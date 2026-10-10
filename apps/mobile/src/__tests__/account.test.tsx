@@ -10,6 +10,7 @@ import Account from '@/app/(tabs)/account';
 
 jest.mock('@clerk/expo', () => ({ useClerk: jest.fn(), useUser: jest.fn() }));
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
+jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactNode }) => children }));
 jest.mock('@/push', () => ({
   pushState: jest.fn(async () => 'unavailable'),
   enablePush: jest.fn(),

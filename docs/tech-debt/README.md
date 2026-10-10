@@ -930,14 +930,13 @@ first and MuseScore's guitars on top; alphaTab uses the last font that has a pre
 
 **Cons**
 - Piano and everything else stay on Sonivox, which can still clip on dense chords.
-- **The app has no third-party notices screen yet.** MIT (this font), Apache-2.0 (Sonivox,
-  Basic Pitch), MPL-2.0 (alphaTab) and OFL (Bravura) all ask for their notices to ship with the
-  app. The texts are in the repo, not in the app.
+- ~~The app has no third-party notices screen yet.~~ Done: Account > Acknowledgements lists this
+  font, Bravura, Sonivox, Basic Pitch and every npm package the app ships, with their licence
+  texts (`scripts/licenses.js` generates them; `make mobile-check` fails when they're stale).
 - alphaTab only plays mono samples from a font; this one is mono, a stereo font would play
   silence.
 
-**Revisit when** preparing any store release (add an Acknowledgements screen listing these
-notices), or when piano users ask for a better piano (MuseScore's is 15 MB: offer it as a
+**Revisit when** piano users ask for a better piano (MuseScore's is 15 MB: offer it as a
 download rather than bundle it).
 
 ## TD-29: Staging is one VM with logs only

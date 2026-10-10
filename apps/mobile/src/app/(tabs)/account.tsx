@@ -1,7 +1,9 @@
 import { useClerk, useUser } from '@clerk/expo';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Link } from 'expo-router';
+import { ChevronRight } from 'lucide-react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApi } from '@/api/provider';
@@ -118,9 +120,16 @@ export default function Account() {
           <Row label="Appearance">
             <Text variant="muted">Dark</Text>
           </Row>
-          <Row label="Version" last>
+          <Row label="Version">
             <Text variant="mono">{Constants.expoConfig?.version ?? '–'}</Text>
           </Row>
+          <Link href="/acknowledgements" asChild>
+            <Pressable accessibilityRole="link">
+              <Row label="Acknowledgements" last>
+                <ChevronRight color={colors.muted} size={18} />
+              </Row>
+            </Pressable>
+          </Link>
         </Card>
 
         <Button title="Sign out" kind="secondary" onPress={onSignOut} />
