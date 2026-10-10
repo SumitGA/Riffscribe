@@ -1,6 +1,7 @@
+import { Alert } from 'react-native';
 import { useClerk, useUser } from '@clerk/expo';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import type { Api } from '@/api/client';
@@ -16,6 +17,7 @@ jest.mock('@/push', () => ({
 }));
 
 const signOut = jest.fn(async () => {});
+const deleteAccount = jest.fn(async () => {});
 
 beforeEach(() => {
   jest.mocked(useClerk).mockReturnValue({ signOut } as unknown as ReturnType<typeof useClerk>);
@@ -28,6 +30,7 @@ beforeEach(() => {
   } as unknown as ReturnType<typeof useUser>);
   jest.mocked(useApi).mockReturnValue({
     me: async () => ({ user_id: 'u', jobs_this_month: 3, jobs_per_month: 10 }),
+    deleteAccount,
   } as unknown as Api);
 });
 
@@ -58,6 +61,21 @@ describe('Account', () => {
     const queryClient = await renderAccount();
     await screen.findByText(/3 of 10 transcriptions this month/); // settled
     await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+    expect(signOut).toHaveBeenCalled();
+    expect(queryClient.getQueryData(['jobs'])).toBeUndefined();
+  });
+
+  it('deletes the account after a warning, then signs out', async () => {
+    const alert = jest.spyOn(Alert, 'alert');
+    const queryClient = await renderAccount();
+    await screen.findByText(/3 of 10 transcriptions this month/);
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete account' }));
+
+    expect(deleteAccount).not.toHaveBeenCalled(); // nothing happens before confirming
+    const buttons = alert.mock.calls[0]?.[2] ?? [];
+    await act(async () => buttons.find((b) => b.text === 'Delete')?.onPress?.());
+
+    expect(deleteAccount).toHaveBeenCalled();
     expect(signOut).toHaveBeenCalled();
     expect(queryClient.getQueryData(['jobs'])).toBeUndefined();
   });

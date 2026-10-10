@@ -98,6 +98,8 @@ export function createApi({ baseUrl, getToken, fetch }: ApiOptions) {
       ),
     listVersions: (jobId: string) => unwrap(client.GET('/jobs/{job_id}/versions', jobPath(jobId))),
     // These answer 204 No Content: success has no body to unwrap.
+    /** Deletes the account and everything in it (Play / App Store requirement). */
+    deleteAccount: async (): Promise<void> => ok(await client.DELETE('/me')),
     deleteJob: async (jobId: string): Promise<void> =>
       ok(await client.DELETE('/jobs/{job_id}', jobPath(jobId))),
     registerPushToken: async (token: string, platform: 'ios' | 'android'): Promise<void> =>

@@ -5,6 +5,7 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApi } from '@/api/provider';
+import { forgetAllTakes } from '@/audio/takes';
 import { disablePush, enablePush, pushState } from '@/push';
 import { colors, fonts, space } from '@/theme';
 import { Button, Card, ProgressBar, Row, Text, Toggle } from '@/ui';
@@ -39,6 +40,28 @@ export default function Account() {
     onError: (error) => Alert.alert("Couldn't turn on notifications", error.message),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['push'] }),
   });
+
+  // Deleting the account (a store requirement): everything on the server, then this phone's
+  // copies of the recordings, then sign out. Safe to repeat if Clerk couldn't be reached.
+  const deleteAccount = useMutation({
+    mutationFn: () => api.deleteAccount(),
+    onSuccess: async () => {
+      forgetAllTakes();
+      await disablePush(api).catch(() => {});
+      await signOut();
+      queryClient.clear();
+    },
+    onError: (error) => Alert.alert("Couldn't delete your account", error.message),
+  });
+  const confirmDelete = () =>
+    Alert.alert(
+      'Delete your account?',
+      'This permanently deletes your account, every transcription and its versions, and the recordings kept on this phone. It can’t be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteAccount.mutate() },
+      ],
+    );
 
   const onSignOut = async () => {
     // Stop this device's notifications before the account changes hands.
@@ -100,7 +123,13 @@ export default function Account() {
           </Row>
         </Card>
 
-        <Button title="Sign out" kind="danger" onPress={onSignOut} />
+        <Button title="Sign out" kind="secondary" onPress={onSignOut} />
+        <Button
+          title="Delete account"
+          kind="danger"
+          loading={deleteAccount.isPending}
+          onPress={confirmDelete}
+        />
       </ScrollView>
     </SafeAreaView>
   );

@@ -499,6 +499,47 @@
         }
       }
     },
+    "/me": {
+      "get": {
+        "summary": "Me",
+        "description": "Who the bearer token belongs to, and how much of this month's quota is used.",
+        "operationId": "me_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Delete Account",
+        "operationId": "delete_account_me_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "summary": "Healthz",
@@ -543,30 +584,6 @@
             }
           }
         }
-      }
-    },
-    "/me": {
-      "get": {
-        "summary": "Me",
-        "description": "Who the bearer token belongs to, and how much of this month's quota is used.",
-        "operationId": "me_me_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MeOut"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
       }
     }
   },

@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,3 +13,6 @@ class ApiSettings(BaseSettings):
     free_jobs_per_month: int = Field(default=10, ge=0)
     # Rate limit on POST /jobs, per user.
     job_creates_per_minute: int = Field(default=10, gt=0)
+    # Clerk Backend API key, to delete a user's sign-in with their account (DELETE /me).
+    # Unset locally and in tests; set only in the server's .env.
+    clerk_secret_key: SecretStr | None = None
