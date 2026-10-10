@@ -36,6 +36,8 @@ class QueueName(StrEnum):
 # The pipeline's stage order (pipeline.stages.default_stages; a test keeps them in sync).
 STAGES = ("normalize", "separate", "transcribe", "quantize", "notation", "tab")
 ML_STAGES = frozenset({"separate", "transcribe"})
+# Not a pipeline stage: render an edited score version (ADR-0011). CPU queue, after the job.
+RENDER = "render"
 
 
 def queue_for_stage(stage: str) -> QueueName:
@@ -56,6 +58,8 @@ class StageMessage(BaseModel):
     user_id: str
     stage: str
     attempt: int = Field(default=1, ge=1)
+    # For RENDER messages: the score version to render.
+    version: int | None = Field(default=None, ge=1)
     # W3C trace context of the step that queued this one, so a job is one trace across workers.
     trace: dict[str, str] = Field(default_factory=dict)
 

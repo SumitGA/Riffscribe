@@ -38,6 +38,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-28](#td-28-guitar-sound-from-a-trimmed-musescore_general-font) | Guitar sound from a trimmed MuseScore_General font | Mobile / legal | Before a store release (notices screen); users want a better piano |
 | [TD-29](#td-29-staging-is-one-vm-with-logs-only) | Staging is one VM with logs only | Infra | Real users, or staging downtime blocks work |
 | [TD-30](#td-30-terraform-state-in-a-local-file) | Terraform state in a local file | Infra | A second person runs Terraform, or before production |
+| [TD-31](#td-31-the-editor-shows-changes-after-saving) | The editor shows changes after saving | Mobile | Users find editing slow or confusing |
 
 ---
 
@@ -988,3 +989,29 @@ locking, so two people can't change the same infrastructure at once.
 
 **Revisit when** a second person runs Terraform, or before production: move it to an S3 backend
 on R2 (`backend "s3"` with R2's endpoint) with a lock.
+
+## TD-31: The editor shows changes after saving
+
+**Concept.** An editor can show a change *optimistically* (redraw at once, assuming the server
+will agree) or *after the server confirms it*. Optimistic feels instant but needs the client
+to apply every operation exactly like the server, or the two drift apart.
+
+**What we did (ADR-0011).** Edit mode collects pending changes (a count, undo, cancel) and
+keeps the score on screen as it was; Save sends them, the worker renders the new version in
+a second or two, and the app then shows it. Each note has at most one pending change, so every
+operation refers to the note as it appears on screen.
+
+**Pros**
+- One implementation of each operation (`pipeline/edits.py`), with the server's checks
+  (impossible frets, collisions) applied before anything is shown.
+- Simple, robust app code; what you see is always a real, saved version.
+
+**Cons**
+- You don't see a change until you save: fixing ten notes means remembering what you changed
+  (the bar shows how many).
+- Two changes to one note collapse into the last (e.g. a pitch change then a string change
+  needs the string chosen with the pitch).
+- Each save is a round trip through the queue.
+
+**Revisit when** users edit a lot at once: apply simple operations (string/fret, delete) to
+alphaTab's model locally and redraw, keeping the server as the judge on save.

@@ -44,6 +44,7 @@ from tabscribe_platform.db import (
 )
 from tabscribe_platform.jobqueue import (
     MAX_ATTEMPTS,
+    RENDER,
     STAGES,
     Delivery,
     JobQueue,
@@ -55,6 +56,7 @@ from tabscribe_platform.storage import ObjectStore, job_prefix
 from worker.dedup import full_pipeline_version, result_cache_key
 from worker.metrics import JOBS_FINISHED, STAGE_RUNS, STAGE_SECONDS
 from worker.notify import Notifier
+from worker.render import VersionRenderer
 
 logger = logging.getLogger(__name__)
 _tracer = trace.get_tracer("tabscribe.worker")
@@ -104,6 +106,7 @@ class StageWorker:
         self._heartbeat_s = heartbeat_s
         self._stages = stages
         self._pipeline_version = full_pipeline_version(stages())
+        self._renderer = VersionRenderer(sessions, store, queue)
 
     def handle(self, delivery: Delivery) -> None:
         """Process one message; always acks or fails it.
@@ -137,6 +140,8 @@ class StageWorker:
 
     def _handle(self, delivery: Delivery) -> str:
         message = delivery.message
+        if message.stage == RENDER:  # an edited score version, not a pipeline stage (ADR-0011)
+            return self._renderer.render(delivery)
         with self._sessions() as session:
             job = self._load(session, message)
             if job is None or job.status not in _ACTIVE:
@@ -342,6 +347,8 @@ class StageWorker:
         if row is None:
             return None
         cached, score = row
+        if score.musicxml_key is None:
+            return None
 
         old = job_prefix(message.user_id, str(cached.id))
         new = job_prefix(message.user_id, str(message.job_id))
@@ -366,10 +373,11 @@ class StageWorker:
         def moved(k: str) -> str:
             return new + k[len(old) :]
 
+        musicxml_key = score.musicxml_key
         logger.info("job %s reuses the results of job %s", message.job_id, cached.id)
         return _Outputs(
             pipeline_version=self._pipeline_version,
-            musicxml_key=moved(score.musicxml_key),
+            musicxml_key=moved(musicxml_key),
             tab_musicxml_key=moved(score.tab_musicxml_key) if score.tab_musicxml_key else None,
             midi_key=moved(score.midi_key) if score.midi_key else None,
             sync_key=moved(score.sync_key) if score.sync_key else None,

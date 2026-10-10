@@ -1,19 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Check, Share2, Trash2, X } from 'lucide-react-native';
+import { Check, History, Pencil, Share2, Trash2, Undo2, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { Job } from '@/api/client';
+import type { CreateVersionRequest, Job } from '@/api/client';
 import { useApi } from '@/api/provider';
 import { findTake, forgetTake } from '@/audio/takes';
 import { formatWhen, isFinished, type StageState, stageStates } from '@/jobs/status';
+import { AddNoteSheet } from '@/score/AddNoteSheet';
+import { type Edit, type TappedBeat, type TappedNote, upsertEdit } from '@/score/edits';
 import { ExportSheet } from '@/score/ExportSheet';
+import { NoteEditSheet } from '@/score/NoteEditSheet';
+import { VersionsSheet } from '@/score/VersionsSheet';
 import { type ExportFormat, fileName, shareBase64, shareDownload, sharePdf } from '@/score/exports';
 import { type ScoreHandle, ScoreView, type Take } from '@/score/ScoreView';
 import { colors, fonts, space } from '@/theme';
-import { Card, IconButton, Text } from '@/ui';
+import { Button, Card, IconButton, Text } from '@/ui';
 import { ProgressRing } from '@/ui/ProgressRing';
 
 /** One transcription: its progress, live, then its score. */
@@ -197,6 +201,46 @@ function Score({
   subtitle: string;
 }) {
   const scoreView = useRef<ScoreHandle>(null);
+  const api = useApi();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [edits, setEdits] = useState<Edit[]>([]);
+  const [tapped, setTapped] = useState<TappedNote | null>(null);
+  const [emptySpot, setEmptySpot] = useState<TappedBeat | null>(null);
+  const [history, setHistory] = useState(false);
+  // Save (ADR-0011): a new version, rendered by the worker; wait for it, then show it.
+  // Restoring is a save too: no edits, starting from the chosen version's content.
+  const save = useMutation({
+    mutationFn: async (restore?: number) => {
+      const created = await api.createVersion(job.id, {
+        base_version: outputs.version,
+        edits: restore === undefined ? (edits as CreateVersionRequest['edits']) : [],
+        ...(restore === undefined ? {} : { from_version: restore }),
+      });
+      for (let waited = 0; waited < 60_000; waited += 1000) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const version = await api.getVersion(job.id, created.version);
+        if (version.status !== 'pending') {
+          return version;
+        }
+      }
+      throw new Error('saving is taking longer than usual; check again in a moment');
+    },
+    onSuccess: (version) => {
+      if (version.status === 'failed') {
+        Alert.alert("Couldn't save", version.error_message ?? 'Something went wrong.');
+        return;
+      }
+      setEdits([]);
+      setEditing(false);
+      void queryClient.invalidateQueries({ queryKey: ['job', job.id] });
+      void queryClient.invalidateQueries({ queryKey: ['versions', job.id] });
+    },
+    onError: (error) => {
+      Alert.alert("Couldn't save", error.message);
+      void queryClient.invalidateQueries({ queryKey: ['job', job.id] }); // e.g. a newer version
+    },
+  });
   const source = outputs.tab_musicxml ?? outputs.musicxml;
   const guitar = job.options.instrument === 'guitar';
   const formats: ExportFormat[] = [
@@ -261,9 +305,80 @@ function Score({
         onExport={onExport}
         onClose={onCloseExport}
       />
-      <Text variant="muted" style={styles.subtitle}>
-        {subtitle}
-      </Text>
+      {tapped && (
+        <NoteEditSheet
+          note={tapped}
+          tuning={job.options.tuning ?? 'standard'}
+          capo={job.options.capo ?? 0}
+          onEdit={(edit) => setEdits((current) => upsertEdit(current, edit))}
+          onClose={() => setTapped(null)}
+        />
+      )}
+      {history && (
+        <VersionsSheet
+          jobId={job.id}
+          current={outputs.version}
+          onRestore={(version) => save.mutate(version)}
+          onClose={() => setHistory(false)}
+        />
+      )}
+      {emptySpot && (
+        <AddNoteSheet
+          beat={emptySpot}
+          tuning={job.options.tuning ?? 'standard'}
+          capo={job.options.capo ?? 0}
+          onEdit={(edit) => setEdits((current) => upsertEdit(current, edit))}
+          onClose={() => setEmptySpot(null)}
+        />
+      )}
+      <View style={styles.editBar}>
+        <Text variant="muted" style={styles.editInfo}>
+          {editing
+            ? edits.length
+              ? `${edits.length} change${edits.length === 1 ? '' : 's'} · tap a note to fix it`
+              : 'Tap a note to fix it, or a gap to add one'
+            : outputs.version > 0
+              ? `${subtitle} · edited (version ${outputs.version})`
+              : subtitle}
+        </Text>
+        {editing ? (
+          <>
+            <IconButton
+              label="Undo the last change"
+              disabled={!edits.length || save.isPending}
+              onPress={() => setEdits((current) => current.slice(0, -1))}
+            >
+              <Undo2 color={edits.length ? colors.text : colors.muted} size={20} />
+            </IconButton>
+            <IconButton
+              label="Stop editing without saving"
+              disabled={save.isPending}
+              onPress={() => {
+                setEdits([]);
+                setEditing(false);
+              }}
+            >
+              <X color={colors.text} size={20} />
+            </IconButton>
+            <Button
+              title="Save"
+              disabled={!edits.length}
+              loading={save.isPending}
+              onPress={() => save.mutate(undefined)}
+            />
+          </>
+        ) : (
+          <>
+            {save.isPending && <ActivityIndicator color={colors.accent} />}
+            <IconButton label="Versions" onPress={() => setHistory(true)}>
+              <History color={colors.text} size={20} />
+            </IconButton>
+            <IconButton label="Edit the score" onPress={() => setEditing(true)}>
+              <Pencil color={colors.text} size={20} />
+            </IconButton>
+          </>
+        )}
+      </View>
       {musicXml.isPending || take.isPending ? (
         <ActivityIndicator color={colors.accent} style={styles.loading} />
       ) : musicXml.isError ? (
@@ -274,6 +389,9 @@ function Score({
           musicXml={musicXml.data}
           hasTab={outputs.tab_musicxml !== null}
           take={take.data ?? null}
+          editing={editing}
+          onNoteTap={setTapped}
+          onBeatTap={setEmptySpot}
         />
       )}
     </View>
@@ -286,6 +404,14 @@ const styles = StyleSheet.create({
   error: { color: colors.dangerText, padding: space.xl },
   progress: { padding: space.xl, gap: space.xl },
   hero: { alignItems: 'center', gap: space.md, paddingVertical: space.lg },
+  editBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.xl,
+    paddingBottom: space.sm,
+  },
+  editInfo: { flex: 1 },
   percent: { fontFamily: fonts.monoBold, fontSize: 36 },
   headline: { fontSize: 22, textAlign: 'center' },
   centered: { textAlign: 'center', paddingHorizontal: space.lg, lineHeight: 20 },

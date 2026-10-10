@@ -10,6 +10,7 @@ from tabscribe_platform.db.models import (
     StageRun,
     StageStatus,
     User,
+    VersionStatus,
 )
 from tabscribe_platform.db.session import make_engine, make_session_factory
 
@@ -25,6 +26,7 @@ __all__ = [
     "StageRun",
     "StageStatus",
     "User",
+    "VersionStatus",
     "make_engine",
     "make_session_factory",
 ]

@@ -14,6 +14,8 @@ export type JobSummary = Schemas['JobSummary'];
 export type Me = Schemas['MeOut'];
 export type PresignedRequest = Schemas['PresignedRequestOut'];
 export type Tuning = Schemas['Tuning'];
+export type ScoreVersion = Schemas['VersionOut'];
+export type CreateVersionRequest = Schemas['CreateVersionRequest'];
 
 /** A non-2xx answer from the API. `message` is FastAPI's `detail`, readable enough to show. */
 export class ApiError extends Error {
@@ -85,6 +87,16 @@ export function createApi({ baseUrl, getToken, fetch }: ApiOptions) {
     getJob: (jobId: string) => unwrap(client.GET('/jobs/{job_id}', jobPath(jobId))),
     listJobs: (query: { cursor?: string; limit?: number } = {}) =>
       unwrap(client.GET('/jobs', { params: { query } })),
+    // Editor saves (ADR-0011): a new version, rendered by the worker.
+    createVersion: (jobId: string, body: CreateVersionRequest) =>
+      unwrap(client.POST('/jobs/{job_id}/versions', { ...jobPath(jobId), body })),
+    getVersion: (jobId: string, version: number) =>
+      unwrap(
+        client.GET('/jobs/{job_id}/versions/{number}', {
+          params: { path: { job_id: jobId, number: version } },
+        }),
+      ),
+    listVersions: (jobId: string) => unwrap(client.GET('/jobs/{job_id}/versions', jobPath(jobId))),
     // These answer 204 No Content: success has no body to unwrap.
     deleteJob: async (jobId: string): Promise<void> =>
       ok(await client.DELETE('/jobs/{job_id}', jobPath(jobId))),

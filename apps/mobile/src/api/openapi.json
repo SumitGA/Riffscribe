@@ -337,6 +337,168 @@
         }
       }
     },
+    "/jobs/{job_id}/versions": {
+      "post": {
+        "tags": [
+          "versions"
+        ],
+        "summary": "Create Version",
+        "description": "Save edits as a new version. 409 if `base_version` isn't the latest (another save won)\nor the previous save is still being rendered; the app reloads and tries again.",
+        "operationId": "create_version_jobs__job_id__versions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "versions"
+        ],
+        "summary": "List Versions",
+        "operationId": "list_versions_jobs__job_id__versions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/versions/{number}": {
+      "get": {
+        "tags": [
+          "versions"
+        ],
+        "summary": "Get Version",
+        "operationId": "get_version_jobs__job_id__versions__number__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "summary": "Healthz",
@@ -475,6 +637,63 @@
           "upload"
         ],
         "title": "CreateJobResponse"
+      },
+      "CreateVersionRequest": {
+        "properties": {
+          "base_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Base Version"
+          },
+          "edits": {
+            "items": {
+              "$ref": "#/components/schemas/EditOp"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Edits"
+          },
+          "from_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "base_version",
+          "edits"
+        ],
+        "title": "CreateVersionRequest"
+      },
+      "EditOp": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "set_position",
+              "set_pitch",
+              "delete",
+              "add",
+              "set_duration"
+            ],
+            "title": "Op"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "op"
+        ],
+        "title": "EditOp",
+        "description": "One edit operation (ADR-0011). The API checks only its kind; the worker checks the rest\nagainst the score (the API never runs pipeline code)."
       },
       "HTTPValidationError": {
         "properties": {
@@ -972,6 +1191,88 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VersionList": {
+        "properties": {
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/VersionOut"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "versions"
+        ],
+        "title": "VersionList"
+      },
+      "VersionOut": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VersionStatus"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "outputs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobOutputs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "status",
+          "base_version",
+          "error_message",
+          "created_at"
+        ],
+        "title": "VersionOut"
+      },
+      "VersionStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "ready",
+          "failed"
+        ],
+        "title": "VersionStatus"
       }
     },
     "securitySchemes": {

@@ -1,3 +1,5 @@
+import type { TappedBeat, TappedNote } from './edits';
+
 /**
  * The page the score viewer's WebView loads, from a cache folder next to alphaTab's files
  * (prepareViewer.ts). It only draws and plays: the controls are native (ScoreView) and drive it
@@ -42,11 +44,49 @@ export const VIEWER_PAGE = `<!doctype html>
   let api = null;
   let lastPosition = 0;
   let current = null; // { musicXml, profile, take, source } of the score on screen
+  let editing = false;
+
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const beats = (ticks) => { const g = gcd(ticks, 960); return (ticks / g) + "/" + (960 / g); };
+
+  // A tapped note as the server's score addresses it (ADR-0011): onset in beats from the start
+  // of the first (possibly pickup) bar, pitch, and tab position with string 1 = highest
+  // (alphaTab counts strings from the lowest). A tied continuation is the note it started as.
+  // Where a new note would go: the tapped beat's onset (and its length, as a default).
+  function beatInfo(beat) {
+    const barStart = api.score.masterBars
+      .slice(0, beat.voice.bar.index).reduce((sum, mb) => sum + mb.calculateDuration(), 0);
+    const strings = beat.voice.bar.staff.tuning.length;
+    return {
+      onsetBeats: beats(barStart + beat.playbackStart),
+      durationBeats: beats(beat.playbackDuration),
+      tab: strings > 0,
+    };
+  }
+
+  function noteInfo(note) {
+    let origin = note;
+    while (origin.isTieDestination && origin.tieOrigin) origin = origin.tieOrigin;
+    let end = note;
+    while (end.isTieOrigin && end.tieDestination) end = end.tieDestination;
+    const barStart = (bar) => api.score.masterBars
+      .slice(0, bar.index).reduce((sum, mb) => sum + mb.calculateDuration(), 0);
+    const start = barStart(origin.beat.voice.bar) + origin.beat.playbackStart;
+    const stop = barStart(end.beat.voice.bar) + end.beat.playbackStart + end.beat.playbackDuration;
+    const strings = origin.beat.voice.bar.staff.tuning.length;
+    return {
+      onsetBeats: beats(start),
+      durationBeats: beats(stop - start),
+      pitch: origin.realValue,
+      string: origin.isStringed && strings ? strings - origin.string + 1 : null,
+      fret: origin.isStringed ? origin.fret : null,
+    };
+  }
 
   function createApi(profile, source) {
     if (api) api.destroy();
     api = new alphaTab.AlphaTabApi(document.getElementById("score"), {
-      core: { fontDirectory: "font/", useWorkers: false },
+      core: { fontDirectory: "font/", useWorkers: false, includeNoteBounds: true },
       display: {
         layoutMode: alphaTab.LayoutMode.Page,
         scale: 0.85,
@@ -69,6 +109,18 @@ export const VIEWER_PAGE = `<!doctype html>
     });
     api.error.on((error) => post({ type: "error", message: String(error?.message ?? error) }));
     api.renderFinished.on(() => post({ type: "rendered" }));
+    // A tap on a note fires beatMouseDown too: report the beat only if no note follows at once.
+    let beatTap = null;
+    api.beatMouseDown.on((beat) => {
+      if (!editing) return;
+      clearTimeout(beatTap);
+      beatTap = setTimeout(() => post({ type: "beatTapped", beat: beatInfo(beat) }), 80);
+    });
+    api.noteMouseDown.on((note) => {
+      if (!editing) return;
+      clearTimeout(beatTap);
+      post({ type: "noteTapped", note: noteInfo(note) });
+    });
     api.playerReady.on(() => post({ type: "playerReady" }));
     api.playerStateChanged.on((e) =>
       post({ type: "playing", playing: e.state === alphaTab.synth.PlayerState.Playing }));
@@ -126,6 +178,7 @@ export const VIEWER_PAGE = `<!doctype html>
       api.updateSettings();
       api.render();
     },
+    setEditing(on) { editing = on; },
     playPause() { api.playPause(); },
     stop() { api.stop(); },
     setSpeed(speed) { api.playbackSpeed = speed; },
@@ -233,6 +286,8 @@ export type ViewerMessage =
   | { type: 'playing'; playing: boolean }
   | { type: 'position'; currentMs: number; endMs: number }
   | { type: 'error'; message: string }
+  | { type: 'noteTapped'; note: TappedNote }
+  | { type: 'beatTapped'; beat: TappedBeat }
   | { type: 'exported'; id: number; data: string }
   | { type: 'exportFailed'; id: number; message: string };
 

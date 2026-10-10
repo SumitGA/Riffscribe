@@ -8,6 +8,7 @@ import { formatDuration } from '@/audio/clip';
 import { colors, fonts, radius, space } from '@/theme';
 import { IconButton, ProgressBar, Segmented, Text } from '@/ui';
 
+import type { TappedBeat, TappedNote } from './edits';
 import { prepareViewer, type ViewerFiles } from './prepareViewer';
 import {
   command,
@@ -48,12 +49,19 @@ export function ScoreView({
   musicXml,
   hasTab,
   take = null,
+  editing = false,
+  onNoteTap,
+  onBeatTap,
   ref,
 }: {
   musicXml: string;
   hasTab: boolean;
   /** Plays this recording in step with the score instead of the synthesized sound. */
   take?: Take | null;
+  /** Edit mode: tapping a note reports it through `onNoteTap` (ADR-0011). */
+  editing?: boolean;
+  onNoteTap?: (note: TappedNote) => void;
+  onBeatTap?: (beat: TappedBeat) => void;
   ref?: Ref<ScoreHandle>;
 }) {
   const webView = useRef<WebView>(null);
@@ -135,6 +143,12 @@ export function ScoreView({
       case 'error':
         setError(message.message);
         break;
+      case 'noteTapped':
+        onNoteTap?.(message.note);
+        break;
+      case 'beatTapped':
+        onBeatTap?.(message.beat);
+        break;
       case 'exported':
       case 'exportFailed': {
         const request = requests.current.get(message.id);
@@ -148,6 +162,12 @@ export function ScoreView({
       }
     }
   };
+
+  useEffect(() => {
+    if (ready) {
+      webView.current?.injectJavaScript(command('setEditing', editing));
+    }
+  }, [ready, editing, musicXml]);
 
   const changeProfile = (value: StaveProfile) => {
     setProfile(value);

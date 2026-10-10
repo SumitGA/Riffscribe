@@ -31,7 +31,7 @@ from api.schemas import (
     PresignedRequestOut,
     StageOut,
 )
-from tabscribe_platform.db import Job, JobStatus, ScoreVersion, StageRun, User
+from tabscribe_platform.db import Job, JobStatus, ScoreVersion, StageRun, User, VersionStatus
 from tabscribe_platform.jobqueue import STAGES, Priority, StageMessage, queue_for_stage
 from tabscribe_platform.observability import inject_trace
 from tabscribe_platform.storage import ObjectStore, PresignedRequest, job_key, job_prefix
@@ -61,6 +61,21 @@ def _own_job(user_id: str, job_id: uuid.UUID) -> Select[Job]:
     return select(Job).where(Job.id == job_id, Job.user_id == user_id)
 
 
+def outputs_of(store: ObjectStore, score: ScoreVersion) -> JobOutputs | None:
+    """Presigned downloads of a ready score version's files (None while it has none)."""
+    if score.musicxml_key is None:
+        return None
+    return JobOutputs(
+        version=score.version,
+        musicxml=_presigned(store.presign_get(score.musicxml_key, "score.musicxml")),
+        tab_musicxml=_presigned(store.presign_get(score.tab_musicxml_key, "tab.musicxml"))
+        if score.tab_musicxml_key
+        else None,
+        midi=_presigned(store.presign_get(score.midi_key, "score.mid")) if score.midi_key else None,
+        sync=_presigned(store.presign_get(score.sync_key, "sync.json")) if score.sync_key else None,
+    )
+
+
 def _job_out(session: Session, store: ObjectStore, job: Job) -> JobOut:
     runs = session.scalars(select(StageRun).where(StageRun.job_id == job.id)).all()
     runs = sorted(runs, key=lambda r: STAGES.index(r.stage) if r.stage in STAGES else len(STAGES))
@@ -68,24 +83,16 @@ def _job_out(session: Session, store: ObjectStore, job: Job) -> JobOut:
     if job.status is JobStatus.SUCCEEDED:
         score = session.scalars(
             select(ScoreVersion)
-            .where(ScoreVersion.job_id == job.id, ScoreVersion.user_id == job.user_id)
+            .where(
+                ScoreVersion.job_id == job.id,
+                ScoreVersion.user_id == job.user_id,
+                ScoreVersion.status == VersionStatus.READY,  # a pending edit has no files yet
+            )
             .order_by(ScoreVersion.version.desc())
             .limit(1)
         ).first()
         if score is not None:
-            outputs = JobOutputs(
-                version=score.version,
-                musicxml=_presigned(store.presign_get(score.musicxml_key, "score.musicxml")),
-                tab_musicxml=_presigned(store.presign_get(score.tab_musicxml_key, "tab.musicxml"))
-                if score.tab_musicxml_key
-                else None,
-                midi=_presigned(store.presign_get(score.midi_key, "score.mid"))
-                if score.midi_key
-                else None,
-                sync=_presigned(store.presign_get(score.sync_key, "sync.json"))
-                if score.sync_key
-                else None,
-            )
+            outputs = outputs_of(store, score)
     return JobOut(
         id=job.id,
         name=job.name,

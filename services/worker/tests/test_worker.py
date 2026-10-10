@@ -25,9 +25,16 @@ from tabscribe_platform.db import (
     StageRun,
     StageStatus,
     User,
+    VersionStatus,
     make_session_factory,
 )
-from tabscribe_platform.jobqueue import MAX_ATTEMPTS, QueueName, RedisJobQueue, StageMessage
+from tabscribe_platform.jobqueue import (
+    MAX_ATTEMPTS,
+    RENDER,
+    QueueName,
+    RedisJobQueue,
+    StageMessage,
+)
 from tabscribe_platform.observability import JsonFormatter, inject_trace
 from tabscribe_platform.storage import ObjectStore, job_key, job_prefix
 from worker.handler import INTERNAL_ERROR_MESSAGE, StageWorker
@@ -407,3 +414,105 @@ def test_queues_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     assert WorkerSettings().queues == [QueueName.ML]
     monkeypatch.setenv("WORKER_QUEUES", "cpu, ml")
     assert WorkerSettings().queues == [QueueName.CPU, QueueName.ML]
+
+
+def add_edit(
+    db: Engine, queue: RedisJobQueue, job_id: uuid.UUID, user_id: str, number: int, edits: list[Any]
+) -> None:
+    """What the API does on save: a pending version and a RENDER message (ADR-0011)."""
+    with Session(db) as session:
+        session.add(
+            ScoreVersion(
+                job_id=job_id,
+                user_id=user_id,
+                version=number,
+                status=VersionStatus.PENDING,
+                base_version=number - 1,
+                edits={"edits": edits},
+            )
+        )
+        session.commit()
+    queue.enqueue(
+        QueueName.CPU, StageMessage(job_id=job_id, user_id=user_id, stage=RENDER, version=number)
+    )
+
+
+def version(db: Engine, job_id: uuid.UUID, number: int) -> ScoreVersion:
+    with Session(db) as session:
+        return session.scalars(
+            select(ScoreVersion).where(
+                ScoreVersion.job_id == job_id, ScoreVersion.version == number
+            )
+        ).one()
+
+
+def test_edits_render_new_versions_on_top_of_each_other(
+    stage_worker: StageWorker,
+    queue: RedisJobQueue,
+    submit_job: SubmitJob,
+    db: Engine,
+    object_store: ObjectStore,
+    s3_user: str,
+    tmp_path: Path,
+) -> None:
+    job_id = submit_job()
+    drain(stage_worker, queue)
+    object_store.download_file(
+        job_key(s3_user, str(job_id), "quantize", "quantized.json"), tmp_path / "q.json"
+    )
+    notes = json.loads((tmp_path / "q.json").read_text())["notes"]
+    first = {"onset_beats": notes[0]["onset_beats"], "pitch": notes[0]["pitch"]}
+
+    add_edit(db, queue, job_id, s3_user, 1, [{"op": "delete", "note": first}])
+    assert drain(stage_worker, queue) == 1
+    v1 = version(db, job_id, 1)
+    assert v1.status is VersionStatus.READY and v1.error_message is None
+    for key in (v1.document_key, v1.musicxml_key, v1.tab_musicxml_key, v1.midi_key, v1.sync_key):
+        assert key is not None and f"/jobs/{job_id}/versions/1/" in key
+        assert object_store.head(key) is not None
+
+    # Version 2 builds on version 1's document, not on the pipeline's output.
+    added = {"op": "add", "onset_beats": "0", "duration_beats": "1", "pitch": 64, "string": 1}
+    add_edit(db, queue, job_id, s3_user, 2, [added])
+    drain(stage_worker, queue)
+    v2 = version(db, job_id, 2)
+    assert v2.status is VersionStatus.READY and v2.document_key is not None
+    object_store.download_file(v2.document_key, tmp_path / "v2.json")
+    v2_notes = json.loads((tmp_path / "v2.json").read_text())["score"]["notes"]
+    assert len(v2_notes) == len(notes)  # one deleted, one added
+    assert version(db, job_id, 0).status is VersionStatus.READY  # the original is untouched
+
+
+def test_a_bad_edit_fails_the_version_with_a_message(
+    stage_worker: StageWorker, queue: RedisJobQueue, submit_job: SubmitJob, db: Engine, s3_user: str
+) -> None:
+    job_id = submit_job()
+    drain(stage_worker, queue)
+
+    gone = {"op": "delete", "note": {"onset_beats": "999", "pitch": 60}}
+    add_edit(db, queue, job_id, s3_user, 1, [gone])
+    drain(stage_worker, queue)
+
+    v1 = version(db, job_id, 1)
+    assert v1.status is VersionStatus.FAILED and v1.musicxml_key is None
+    assert v1.error_message == (
+        "These changes can't be saved: Change 1: that note isn't in this version any more."
+    )
+    assert all(d.ready == 0 for d in queue.depth())  # not retried: retrying can't fix it
+    assert queue.dead_letter_count() == 0
+
+
+def test_a_render_message_for_a_finished_version_is_dropped(
+    stage_worker: StageWorker, queue: RedisJobQueue, submit_job: SubmitJob, db: Engine, s3_user: str
+) -> None:
+    job_id = submit_job()
+    drain(stage_worker, queue)
+    add_edit(db, queue, job_id, s3_user, 1, [])  # an empty edit is a plain copy
+    drain(stage_worker, queue)
+    rendered = version(db, job_id, 1)
+    assert rendered.status is VersionStatus.READY
+
+    replay = StageMessage(job_id=job_id, user_id=s3_user, stage=RENDER, version=1)
+    queue.enqueue(QueueName.CPU, replay)  # a duplicate delivery
+    assert drain(stage_worker, queue) == 1
+    assert version(db, job_id, 1).musicxml_key == rendered.musicxml_key
