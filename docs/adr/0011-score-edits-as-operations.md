@@ -22,8 +22,9 @@ positions (`tab.json`).
   `set_duration`. Notes are addressed by `(onset_beats, pitch)`, which the quantizer already
   makes unique; beats are exact fractions sent as strings (`"3/2"`).
 - **Each version keeps its editable document** (`score.json`: the `Score`, the tab positions,
-  tuning, capo and the audio's trim offset) next to its rendered files. Version 0 gets one
-  when a job finishes; older jobs get one built from their stage artifacts on first edit.
+  tuning, capo and the audio's trim offset) next to its rendered files. Version 0's is built
+  from the job's stage artifacts (quantized score, tab, normalize trim) on the first edit, so
+  older and reused jobs work the same.
 - **`POST /jobs/{id}/versions`** takes `{base_version, edits}` and returns the new version as
   `pending`. It is refused with 409 if `base_version` isn't the latest (another save won), so
   edits never apply to a stale score. The API validates only the request's shape; it never runs
@@ -34,15 +35,14 @@ positions (`tab.json`).
   `sync.json` with the same writers the pipeline uses. The version becomes `ready` or `failed`
   with a message the app shows.
 - **Versions are immutable.** Restoring an old version creates a new one with its content.
-- **The app** applies each operation to alphaTab's model at once for instant feedback, keeps
-  local undo/redo, sends the list on Save and swaps in the server's version when it's ready.
+- **The app** collects the operations (one per note: a later change to a note replaces the
+  earlier one), with undo, sends them on Save and shows the server's version once rendered
+  (TD-31). Taps are mapped to the server's note addresses in the viewer page.
 
 ## Consequences
 
 - Every export (PDF, Guitar Pro, MusicXML, MIDI) works the same for edited versions, and the
   server can refuse impossible edits.
 - Edit lists are small and readable: later they're the data to fit tab fingering to (TD-15).
-- Saving takes a round trip through the queue (a second or two) before the new version's files
-  exist; the app shows its local result meanwhile.
-- The app and the pipeline both implement the operations (alphaTab model vs `Score`); tests on
-  both sides use the same cases so they don't drift.
+- Saving takes a round trip through the queue (a second or two), and the score on screen
+  changes only once the new version is rendered (TD-31).
