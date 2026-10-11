@@ -2,7 +2,16 @@ import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { getItemAsync, setItemAsync } from 'expo-secure-store';
 
-import { askForPushOnce, disablePush, enablePush, jobIdOf, pushState } from '@/push';
+import {
+  askForPushOnce,
+  disablePush,
+  enablePush,
+  jobIdOf,
+  pushState,
+  syncPush,
+  TOKEN_TIMEOUT_MS,
+  turnOffPush,
+} from '@/push';
 
 const mockStore = new Map<string, string>();
 jest.mock('expo-secure-store', () => ({
@@ -79,6 +88,49 @@ describe('push', () => {
     await askForPushOnce(api);
     expect(Notifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
     expect(setItemAsync).toHaveBeenCalledWith('riffscribe.pushAsked', 'yes');
+  });
+
+  it('registers again after the next sign-in when the phone allows notifications', async () => {
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue(permission('granted'));
+    await enablePush(api);
+    await disablePush(api); // signing out, or deleting the account
+    api.registerPushToken.mockClear();
+
+    await syncPush(api); // signed in again
+    expect(api.registerPushToken).toHaveBeenCalledWith('ExponentPushToken[phone]', 'ios');
+    expect(await pushState()).toBe('on');
+  });
+
+  it('stays off after sign-in when the user switched it off, and never asks', async () => {
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue(permission('granted'));
+    await enablePush(api);
+    await turnOffPush(api);
+    api.registerPushToken.mockClear();
+
+    await syncPush(api);
+    expect(api.registerPushToken).not.toHaveBeenCalled();
+    expect(await enablePush(api)).toBe('on'); // switching it on again clears that
+    api.registerPushToken.mockClear();
+    await syncPush(api);
+    expect(api.registerPushToken).toHaveBeenCalled();
+
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue(permission('undetermined'));
+    mockStore.clear();
+    await syncPush(api);
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('gives up with an explanation when the push service never answers', async () => {
+    jest.useFakeTimers();
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue(permission('granted'));
+    jest.mocked(Notifications.getExpoPushTokenAsync).mockReturnValueOnce(new Promise(() => {}));
+    const result = enablePush(api);
+    const failed = expect(result).rejects.toThrow("notification service didn't answer");
+    await jest.advanceTimersByTimeAsync(TOKEN_TIMEOUT_MS);
+    await failed;
+    expect(api.registerPushToken).not.toHaveBeenCalled();
+    expect(await pushState()).toBe('off');
+    jest.useRealTimers();
   });
 
   it('finds the job a notification is about', () => {

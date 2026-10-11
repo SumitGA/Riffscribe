@@ -10,6 +10,10 @@ import type { Api } from '@/api/client';
 const TOKEN_KEY = 'riffscribe.pushToken';
 /** Set once the app has asked for notification permission, so it doesn't keep asking. */
 const ASKED_KEY = 'riffscribe.pushAsked';
+/** Set when the user switches notifications off in Account; sign-in then leaves them off. */
+const OFF_KEY = 'riffscribe.pushOff';
+/** How long to wait for Google's / Apple's push service to hand out a token. */
+export const TOKEN_TIMEOUT_MS = 20_000;
 /** Android groups notifications in channels; the worker sends to this one. */
 const CHANNEL = 'default';
 
@@ -62,10 +66,65 @@ export async function enablePush(api: Pick<Api, 'registerPushToken'>): Promise<P
   if (status !== 'granted') {
     return 'denied';
   }
-  const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId: id });
+  const token = await pushToken(id);
   await api.registerPushToken(token, Platform.OS === 'ios' ? 'ios' : 'android');
   await setItemAsync(TOKEN_KEY, token);
+  await deleteItemAsync(OFF_KEY);
   return 'on';
+}
+
+/**
+ * The device's Expo push token. Getting it asks Google's (or Apple's) push service, which can
+ * fail to answer at all; without a time limit the switch would look "on" while nothing happens.
+ */
+async function pushToken(projectId: string): Promise<string> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            "The phone's notification service didn't answer. Check the connection (and on Android, that Google Play services is up to date), then try again.",
+          ),
+        ),
+      TOKEN_TIMEOUT_MS,
+    );
+  });
+  try {
+    const { data } = await Promise.race([
+      Notifications.getExpoPushTokenAsync({ projectId }),
+      timeout,
+    ]);
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The user switched notifications off in Account: unregister, and stay off after sign-in. */
+export async function turnOffPush(api: Pick<Api, 'removePushToken'>): Promise<void> {
+  await setItemAsync(OFF_KEY, 'yes');
+  await disablePush(api);
+}
+
+/**
+ * After sign-in and on every app start: if the phone allows notifications and the user hasn't
+ * switched them off, register this device for whoever is signed in now. Signing out (or
+ * deleting the account) unregisters it, so without this the next sign-in would be silent. It
+ * also refreshes a token the push service has replaced. Never asks for permission; never throws.
+ */
+export async function syncPush(api: Pick<Api, 'registerPushToken'>): Promise<void> {
+  try {
+    if (!pushAvailable() || (await getItemAsync(OFF_KEY))) {
+      return;
+    }
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status === 'granted') {
+      await enablePush(api);
+    }
+  } catch (error) {
+    console.warn('push registration failed', error);
+  }
 }
 
 /** Stops notifications to this device (turned off, or signing out). Best effort. */
