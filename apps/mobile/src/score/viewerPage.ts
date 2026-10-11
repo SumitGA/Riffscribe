@@ -228,6 +228,8 @@ export const VIEWER_PAGE = `<!doctype html>
     api.renderFinished.on(() => post({ type: "rendered" }));
     api.renderFinished.on(() => drawMarks());
     if (!window.__tapsReady) { setupTaps(); window.__tapsReady = true; }
+    // Each note used to sound twice (oneStaff); keep synth playback as loud as it was.
+    if (source !== "recording") api.masterVolume = 2;
     api.playerReady.on(() => post({ type: "playerReady" }));
     api.playerStateChanged.on((e) =>
       post({ type: "playing", playing: e.state === alphaTab.synth.PlayerState.Playing }));
@@ -237,6 +239,28 @@ export const VIEWER_PAGE = `<!doctype html>
       lastPosition = now;
       post({ type: "position", currentMs: e.currentTime, endMs: e.endTime });
     });
+  }
+
+  // A guitar score has a notation staff and a TAB staff with the same notes, and alphaTab plays
+  // every staff: each note sounded twice (all strings at once from the notation staff, which
+  // has no strings, so it can't strum either). Keep only the TAB staff and let it draw the
+  // notation too, in the notation staff's clef (guitar treble, an octave down).
+  function oneStaff(score) {
+    for (const track of score.tracks) {
+      const tab = track.staves.find((s) => s.tuning && s.tuning.length);
+      const notation = track.staves.find((s) => s !== tab);
+      if (!tab || !notation) continue;
+      tab.bars.forEach((bar, i) => {
+        const source = notation.bars[i];
+        if (!source) return;
+        bar.clef = source.clef;
+        bar.clefOttava = source.clefOttava;
+      });
+      tab.showStandardNotation = true;
+      tab.showTablature = true;
+      tab.index = 0;
+      track.staves = [tab];
+    }
   }
 
   // Strummed chords: the pipeline marks them as MusicXML arpeggios, whose arrow points the way
@@ -268,6 +292,7 @@ export const VIEWER_PAGE = `<!doctype html>
     api.loadSoundFont(new Uint8Array(await readBytes("musescore-guitars.sf3")), true);
     const bytes = new TextEncoder().encode(musicXml);
     const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, api.settings);
+    oneStaff(score);
     strum(score);
     if (source !== "recording") {
       api.renderScore(score);
