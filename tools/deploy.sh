@@ -62,4 +62,6 @@ docker compose ps --format 'table {{.Service}}\t{{.Status}}' < /dev/null
 REMOTE
 # shellcheck disable=SC2029
 host=$(ssh "${SSH}" "grep -E '^(PUBLIC|STAGING)_HOST=' ${STACK}/.env | head -1 | cut -d= -f2")
-curl -fsS "https://${host}/readyz" >/dev/null && echo "https://${host} is up (${RELEASE:+${RELEASE}, }${TAG})"
+# A restarted cloudflared needs a few seconds to reconnect the tunnel (Cloudflare answers 530).
+curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "https://${host}/readyz" >/dev/null \
+  && echo "https://${host} is up (${RELEASE:+${RELEASE}, }${TAG})"
