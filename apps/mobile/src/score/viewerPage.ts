@@ -239,6 +239,26 @@ export const VIEWER_PAGE = `<!doctype html>
     });
   }
 
+  // Strummed chords: the pipeline marks them as MusicXML arpeggios, whose arrow points the way
+  // the pitch moves (up = low strings first, a downstroke). alphaTab reads "up" as an upstroke
+  // and gives an arpeggio no length, so turn them into guitar brush strokes that sweep the
+  // strings over STRUM_MS, the way a pick does, instead of every string sounding at once.
+  const STRUM_MS = 70;
+  function strum(score) {
+    const Brush = alphaTab.model.BrushType;
+    const ticks = Math.round((STRUM_MS * 960 * score.tempo) / 60000); // 960 ticks per quarter
+    for (const track of score.tracks)
+      for (const staff of track.staves)
+        for (const bar of staff.bars)
+          for (const voice of bar.voices)
+            for (const beat of voice.beats) {
+              if (beat.brushType === Brush.ArpeggioUp) beat.brushType = Brush.BrushDown;
+              else if (beat.brushType === Brush.ArpeggioDown) beat.brushType = Brush.BrushUp;
+              else continue;
+              beat.brushDuration = Math.min(ticks, Math.floor(beat.playbackDuration / 2));
+            }
+  }
+
   // take: null, or { file: "take.m4a", barStartsMs: [...] } with the file in this folder.
   async function show(musicXml, profile, take, source) {
     current = { musicXml, profile, take, source };
@@ -247,11 +267,12 @@ export const VIEWER_PAGE = `<!doctype html>
     api.loadSoundFont(new Uint8Array(await readBytes("sonivox.sf2")), false);
     api.loadSoundFont(new Uint8Array(await readBytes("musescore-guitars.sf3")), true);
     const bytes = new TextEncoder().encode(musicXml);
+    const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, api.settings);
+    strum(score);
     if (source !== "recording") {
-      api.load(bytes);
+      api.renderScore(score);
       return;
     }
-    const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, api.settings);
     score.backingTrack = new alphaTab.model.BackingTrack();
     score.backingTrack.rawAudioFile = new Uint8Array(await readBytes(take.file));
     score.masterBars.forEach((bar, i) => {

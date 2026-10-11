@@ -40,6 +40,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-30](#td-30-terraform-state-in-a-local-file) | Terraform state in a local file | Infra | A second person runs Terraform, or before production |
 | [TD-31](#td-31-the-editor-shows-changes-after-saving) | The editor shows changes after saving | Mobile | Users find editing slow or confusing |
 | [TD-32](#td-32-production-in-the-home-lab) | Production in the home lab | Infra / ops | The first paying customers, or any outage that costs users |
+| [TD-33](#td-33-strums-kept-whole-and-played-as-brush-strokes) | Strums kept whole and played as brush strokes | Pipeline / mobile | Users report fake chords in fast runs, or strums that sound too even |
 
 ---
 
@@ -1041,3 +1042,36 @@ external uptime check that emails the owner.
 **Revisit when** there are paying customers (move production to a rented VM or the AWS path in
 CLAUDE.md, with managed Postgres and point-in-time recovery), or as soon as an outage costs
 users something.
+
+## TD-33: Strums kept whole and played as brush strokes
+
+**Concept.** A strum isn't one instant: the pick crosses the strings one after another, a
+median 110 ms and up to 200 ms from first to last string, about a sixteenth note. A quantizer
+that snaps each note to the nearest grid position writes the later strings as separate, later
+notes: the score shows a run of sixteenths and playback dribbles the chord out note by note.
+Playing a chord with every string at the same instant sounds wrong too (organ-like).
+
+**What we did.** The quantizer (v5) joins notes into one chord when they follow each other by at
+most 90 ms within 200 ms, a pitch the chord doesn't have yet, the previous string still ringing,
+and the pitch moving one way (rhythm.StrumParams, tuned by tests/tuning/tune_strums.py on 48
+GuitarSet clips). The chord is written at the first string's beat with its direction (down: low
+strings first). MusicXML marks it as an arpeggio; the app turns that into a guitar brush stroke
+over 70 ms. New accuracy metrics: `chords_whole` (annotated strums written at one grid position)
+and `notes_apart` (separate notes not merged).
+
+**Pros**
+- Strums kept whole on the test clips: 52 % -> 74 % (tuning clips 76 % -> 81 %); the score shows
+  chords, and playback strums them in the right direction.
+- Tab fingering improves on average (Guitar-TECHS 53 % -> 58 % strings right, GuitarSet 82 % ->
+  82.5 %), since a chord's notes are now fingered together.
+
+**Cons**
+- A little more merging of separate notes: 99.3 % -> 98.6 % kept apart on the test clips.
+- Two short chord clips lose one note each in string accuracy (40 % -> 35 %, 14 % -> 0 %).
+- About a quarter of strums still split: mostly strings more than 90 ms apart (slow strums,
+  missed strings); a wider gap merged real melody notes.
+- Every strum plays over the same 70 ms; real strums vary with tempo and feel. MusicXML's arpeggio
+  arrow and alphaTab's brush disagree on which way "up" is, so the viewer translates them.
+
+**Revisit when** users report fake chords in fast runs or strums that sound mechanical, or when
+the note model improves (fewer missed strings would let the gap shrink).

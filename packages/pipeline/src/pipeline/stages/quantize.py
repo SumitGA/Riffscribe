@@ -3,9 +3,11 @@
 Writes quantized.json (the Score) and quantized.mid.
 """
 
+from collections.abc import Sequence
 from fractions import Fraction
 
 import numpy as np
+import numpy.typing as npt
 
 from pipeline.basic_pitch import frame_times
 from pipeline.beats import beat_track
@@ -13,18 +15,20 @@ from pipeline.chords import ChordSpan, recognize_chords
 from pipeline.midi import write_notes
 from pipeline.rhythm import (
     BEATS_PER_BAR,
+    StrumParams,
     TimedNote,
     beat_frames_to_times,
     estimate_key,
     quantize,
     tempo_from_beats,
 )
-from pipeline.score import ChordSymbol, KeySignature, Score, ScoreNote
+from pipeline.score import ChordSymbol, KeySignature, Score, ScoreNote, Strum
 from pipeline.stage import Stage, StageContext, StageInputs
-from pipeline.stages.transcribe import GM_PROGRAM, NoteEvents, NoteList
+from pipeline.stages.transcribe import GM_PROGRAM, Note, NoteEvents, NoteList
 from pipeline.types import ArtifactRef, StageName, StageOutput
 
 FALLBACK_BPM = 120.0  # when too few beats are found (e.g. one long chord)
+STRUM = StrumParams()  # tuned by tests/tuning/tune_strums.py
 
 
 class QuantizedScore(StageOutput):
@@ -38,8 +42,8 @@ class QuantizedScore(StageOutput):
 class QuantizeStage(Stage[QuantizedScore]):
     name = StageName.QUANTIZE
     # 2: simplest grid that fits (quarters, eighths) before sixteenths; 3: strums as chords;
-    # 4: chord names
-    version = "4"
+    # 4: chord names; 5: whole strums (StrumParams) with their direction
+    version = "5"
     requires = (NoteEvents,)
     output_type = QuantizedScore
 
@@ -48,15 +52,13 @@ class QuantizeStage(Stage[QuantizedScore]):
         notes = NoteList.model_validate_json(inputs.path(events.notes).read_text()).notes
         envelope = np.load(inputs.path(events.onset_envelope)).astype(np.float64)
 
-        _, frames = beat_track(envelope, events.envelope_fps)
-        beat_times = beat_frames_to_times(frames, events.envelope_fps)
-        if len(beat_times) < 2:
-            start = min((n.onset_s for n in notes), default=0.0)
-            beat_times = [start + i * 60.0 / FALLBACK_BPM for i in range(2)]
+        beat_times = track_beats(envelope, events.envelope_fps, notes)
         tempo = round(tempo_from_beats(beat_times), 2)
 
         rhythm = quantize(
-            [TimedNote(n.onset_s, n.offset_s, n.pitch, n.velocity) for n in notes], beat_times
+            [TimedNote(n.onset_s, n.offset_s, n.pitch, n.velocity) for n in notes],
+            beat_times,
+            STRUM,
         )
         key = estimate_key(rhythm.notes)
         frames = np.load(inputs.path(events.frames))
@@ -80,6 +82,7 @@ class QuantizeStage(Stage[QuantizedScore]):
                 for n in rhythm.notes
             ],
             chords=chord_symbols(spans),
+            strums=[Strum(onset_beats=s.onset_beats, direction=s.direction) for s in rhythm.strums],
         )
         ctx.path("quantized.json").write_text(score.model_dump_json(indent=1))
 
@@ -104,6 +107,18 @@ class QuantizeStage(Stage[QuantizedScore]):
             tempo_bpm=tempo,
             note_count=len(score.notes),
         )
+
+
+def track_beats(
+    envelope: npt.NDArray[np.float64], fps: float, notes: Sequence[Note]
+) -> list[float]:
+    """Beat times from the onset envelope; a fallback grid if the tracker finds fewer than two."""
+    _, frames = beat_track(envelope, fps)
+    beat_times = beat_frames_to_times(frames, fps)
+    if len(beat_times) < 2:
+        start = min((n.onset_s for n in notes), default=0.0)
+        beat_times = [start + i * 60.0 / FALLBACK_BPM for i in range(2)]
+    return beat_times
 
 
 def chord_symbols(spans: list[list[ChordSpan | None]]) -> list[ChordSymbol]:

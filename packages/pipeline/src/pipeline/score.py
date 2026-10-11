@@ -44,6 +44,16 @@ class ChordSymbol(Frozen):
 HARTE_ROOTS = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 
+StrumDirection = Literal["down", "up"]
+
+
+class Strum(Frozen):
+    """A chord played as a strum: "down" sweeps from the low strings up, "up" the other way."""
+
+    onset_beats: Fraction
+    direction: StrumDirection
+
+
 class Score(Frozen):
     """Contents of quantized.json."""
 
@@ -55,3 +65,4 @@ class Score(Frozen):
     beat_times_s: list[float]  # time in the normalized audio of beat 0, 1, 2, ...
     notes: list[ScoreNote]
     chords: list[ChordSymbol] = Field(default_factory=list)  # gaps mean no chord
+    strums: list[Strum] = Field(default_factory=list)  # chords at these onsets were strummed
