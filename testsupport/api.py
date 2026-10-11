@@ -26,7 +26,9 @@ from tabscribe_platform.jobqueue import RedisJobQueue
 from tabscribe_platform.storage import ObjectStore
 
 AUTH = AuthSettings(issuer="https://test", dev_secret="test-secret-that-is-at-least-32-chars")
-LIMITS = ApiSettings(max_upload_bytes=1000, free_jobs_per_month=2, job_creates_per_minute=5)
+LIMITS = ApiSettings(
+    max_upload_bytes=1000, free_jobs_per_month=2, job_creates_per_minute=5, require_terms=False
+)
 NEW_JOB = {"instrument": "guitar", "content_type": "audio/mp4", "size_bytes": 10}
 
 

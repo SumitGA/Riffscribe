@@ -97,9 +97,15 @@ make deploy-staging STAGING_SSH=ubuntu@<lan ip>             # the latest green c
 make deploy-staging STAGING_SSH=ubuntu@<lan ip> TAG=<sha>   # a specific commit (or a rollback)
 ```
 
-It checks the VM's `.env`, copies the stack files, pulls that commit's images, runs
-migrations, restarts the services (waiting for health checks), installs the nightly backup
-job, and finally checks `https://<STAGING_HOST>/readyz` through the tunnel.
+It checks the VM's `.env`, copies the stack files and the public pages (`infra/site`: Caddy
+serves `/terms`, `/privacy` and `/delete-account`, which the app and Google Play link to),
+pulls that commit's images, runs migrations, restarts the services (waiting for health
+checks), installs the nightly backup job, and finally checks `https://<STAGING_HOST>/readyz`
+through the tunnel.
+
+The terms of use carry a version (`TERMS_VERSION` in `services/api/src/api/account.py`, the
+same date as `infra/site/terms.html`). Changing the terms means a new version: every user
+accepts again in the app before their next upload.
 
 Useful on the VM (`cd /srv/riffscribe/stack`):
 

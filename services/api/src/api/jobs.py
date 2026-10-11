@@ -16,6 +16,7 @@ from sqlalchemy import Select, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from api.account import TERMS_REQUIRED, terms_accepted
 from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, LimiterDep, QueueDep, SessionDep, StoreDep
 from api.schemas import (
@@ -118,6 +119,8 @@ def create_job(
     limits: ApiSettingsDep,
 ) -> CreateJobResponse:
     """Step 1: create a job and get a presigned URL to upload the audio to."""
+    if limits.require_terms and not terms_accepted(session, user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, TERMS_REQUIRED)
     if not limiter.hit(user.id, "create_job", limits.job_creates_per_minute, window_s=60):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too many new jobs; slow down")
     extension = AUDIO_TYPES.get(body.content_type)

@@ -82,6 +82,9 @@ export function createApi({ baseUrl, getToken, fetch }: ApiOptions) {
 
   return {
     me: () => unwrap(client.GET('/me')),
+    /** Accepts the terms of use shown to the user (needed before the first upload). */
+    acceptTerms: async (version: string): Promise<void> =>
+      ok(await client.PUT('/me/terms', { body: { version } })),
     createJob: (body: CreateJobRequest) => unwrap(client.POST('/jobs', { body })),
     submitJob: (jobId: string) => unwrap(client.POST('/jobs/{job_id}/submit', jobPath(jobId))),
     getJob: (jobId: string) => unwrap(client.GET('/jobs/{job_id}', jobPath(jobId))),

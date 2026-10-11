@@ -55,7 +55,13 @@ const jobList: JobList = {
 
 beforeEach(() => {
   jest.mocked(useApi).mockReturnValue({ me, listJobs } as unknown as Api);
-  me.mockResolvedValue({ user_id: 'user_1', jobs_this_month: 3, jobs_per_month: 10 });
+  me.mockResolvedValue({
+    user_id: 'user_1',
+    jobs_this_month: 3,
+    jobs_per_month: 10,
+    terms_version: '2026-10-11',
+    terms_accepted: true,
+  });
   listJobs.mockResolvedValue({ jobs: [], next_cursor: null });
 });
 

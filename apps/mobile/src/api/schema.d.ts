@@ -159,6 +159,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/terms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Accept Terms
+         * @description The user confirms the terms (they have the right to use what they upload, ADR-0009).
+         */
+        put: operations["accept_terms_me_terms_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -168,7 +188,7 @@ export interface paths {
         };
         /**
          * Me
-         * @description Who the bearer token belongs to, and how much of this month's quota is used.
+         * @description Who the bearer token belongs to, this month's quota, and whether the terms are accepted.
          */
         get: operations["me_me_get"];
         put?: never;
@@ -225,6 +245,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptTermsRequest */
+        AcceptTermsRequest: {
+            /** Version */
+            version: string;
+        };
         /** CreateJobRequest */
         CreateJobRequest: {
             instrument: components["schemas"]["Instrument"];
@@ -388,6 +413,10 @@ export interface components {
             jobs_this_month: number;
             /** Jobs Per Month */
             jobs_per_month: number;
+            /** Terms Version */
+            terms_version: string;
+            /** Terms Accepted */
+            terms_accepted: boolean;
         };
         /** PresignedRequestOut */
         PresignedRequestOut: {
@@ -784,6 +813,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VersionOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_terms_me_terms_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptTermsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

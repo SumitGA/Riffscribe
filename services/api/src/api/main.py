@@ -55,10 +55,14 @@ def metrics(queue: QueueDep) -> Response:
 
 
 @app.get("/me")
-def me(user: CurrentUserDep, limiter: LimiterDep, limits: ApiSettingsDep) -> MeOut:
-    """Who the bearer token belongs to, and how much of this month's quota is used."""
+def me(
+    user: CurrentUserDep, limiter: LimiterDep, limits: ApiSettingsDep, session: SessionDep
+) -> MeOut:
+    """Who the bearer token belongs to, this month's quota, and whether the terms are accepted."""
     return MeOut(
         user_id=user.id,
         jobs_this_month=limiter.monthly_jobs_used(user.id),
         jobs_per_month=limits.free_jobs_per_month,
+        terms_version=account.TERMS_VERSION,
+        terms_accepted=account.terms_accepted(session, user.id),
     )

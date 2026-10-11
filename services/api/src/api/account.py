@@ -1,4 +1,5 @@
-"""Deleting your account (Google Play and the App Store require it in the app).
+"""Your account: accepting the terms of use, and deleting the account (Google Play and the App
+Store require deletion in the app).
 
 `DELETE /me` removes everything the user has here (their transcriptions, score versions, push
 tokens and every stored file) and then their Clerk sign-in. It is safe to repeat: if Clerk
@@ -9,21 +10,53 @@ import json
 import logging
 import urllib.error
 import urllib.request
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import delete
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session
 
 from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, SessionDep, StoreDep
+from api.schemas import AcceptTermsRequest
 from tabscribe_platform.db import User
 from tabscribe_platform.storage import user_prefix
 
 router = APIRouter(prefix="/me", tags=["me"])
 logger = logging.getLogger(__name__)
 
+# The terms of use and privacy policy in force (infra/site/terms.html carries the same date).
+# Changing them means a new version here: every user accepts again before their next upload.
+TERMS_VERSION = "2026-10-11"
+TERMS_REQUIRED = "accept the terms of use before uploading"
+
 CLERK_API = "https://api.clerk.com/v1"
 # Cloudflare in front of Clerk refuses Python's default "Python-urllib" agent (error 1010).
 USER_AGENT = "riffscribe-api/1.0"
+
+
+def terms_accepted(session: Session, user_id: str) -> bool:
+    accepted = session.scalar(select(User.terms_version).where(User.id == user_id))
+    return accepted == TERMS_VERSION
+
+
+@router.put("/terms", status_code=status.HTTP_204_NO_CONTENT)
+def accept_terms(body: AcceptTermsRequest, user: CurrentUserDep, session: SessionDep) -> None:
+    """The user confirms the terms (they have the right to use what they upload, ADR-0009)."""
+    if body.version != TERMS_VERSION:  # an app showing old terms must show the new ones first
+        raise HTTPException(status.HTTP_409_CONFLICT, f"the current terms are {TERMS_VERSION}")
+    now = datetime.now(UTC)
+    session.execute(
+        insert(User)
+        .values(id=user.id, terms_version=TERMS_VERSION, terms_accepted_at=now)
+        .on_conflict_do_update(
+            index_elements=[User.id],
+            set_={"terms_version": TERMS_VERSION, "terms_accepted_at": now},
+        )
+    )
+    session.commit()
+    logger.info("terms accepted", extra={"terms_version": TERMS_VERSION})
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)

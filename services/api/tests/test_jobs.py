@@ -9,6 +9,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from api.account import TERMS_VERSION
 from api.deps import get_job_queue
 from api.main import app
 from tabscribe_platform.db import Job, JobStatus, ScoreVersion
@@ -62,6 +63,8 @@ def test_create_upload_submit_poll(api: TestClient, alice: str, job_queue: JobQu
         "user_id": alice,
         "jobs_this_month": 1,
         "jobs_per_month": LIMITS.free_jobs_per_month,
+        "terms_version": TERMS_VERSION,
+        "terms_accepted": False,  # these tests run with require_terms off
     }
 
     polled = api.get(f"/jobs/{job_id}", headers=auth(alice)).json()
