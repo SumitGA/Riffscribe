@@ -41,7 +41,7 @@ scp -q "${here}"/infra/stack/{compose.yml,Caddyfile,backup.sh,backup_to_r2.py} "
 scp -q -r "${here}"/infra/site "${SSH}:${STACK}/"  # terms, privacy, delete-account pages
 ssh "${SSH}" bash -s -- "${TAG}" "${STACK}" "${RELEASE}" <<'REMOTE'
 set -euo pipefail
-tag=$1 stack=$2 release=$3
+tag=$1 stack=$2 release=${3:-}  # ssh drops an empty argument (staging has no release)
 cd "${stack}"
 # This script arrives on stdin, so every docker command reads /dev/null instead: `compose run`
 # would otherwise swallow the rest of it.
@@ -54,6 +54,8 @@ fi
 docker compose pull --quiet < /dev/null
 docker compose run --rm -T migrate < /dev/null
 docker compose up -d --remove-orphans --wait < /dev/null
+# Caddy reads its config only at start; a deploy that changes just the Caddyfile must reload it.
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile < /dev/null
 echo "17 3 * * * ubuntu ${stack}/backup.sh >> ${stack}/backup.log 2>&1" \
   | sudo tee /etc/cron.d/riffscribe-backup >/dev/null
 docker compose ps --format 'table {{.Service}}\t{{.Status}}' < /dev/null
