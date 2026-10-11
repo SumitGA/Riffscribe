@@ -21,11 +21,11 @@ The OpenStack cloud is the owner's home lab (Kolla), behind the home router:
 ## Decision
 
 - **One VM** (2 vCPU / 3 GB / 40 GB, Ubuntu 24.04; 4 vCPU / 6 GB until 2026-10-10, when it shrank to make room for production, ADR-0012), created with Terraform
-  (`infra/terraform/staging`) through the `homelab-lan` clouds.yaml entry and the internal
+  (`infra/terraform/staging`, calling the shared `infra/terraform/modules/riffscribe-vm` since 2026-10-11) through the `homelab-lan` clouds.yaml entry and the internal
   endpoints. Terraform also creates the VM's flavor, its own network and router (SNAT to the
   LAN), a LAN floating IP for SSH and deploys, and a security group that allows SSH from the LAN
   only. cloud-init installs Docker and unattended upgrades.
-- **docker compose on the VM** (`infra/staging/compose.yml`): `cloudflared`, Caddy, the API, one
+- **docker compose on the VM** (`infra/stack/compose.yml`): `cloudflared`, Caddy, the API, one
   worker, Postgres 16 and Valkey. Nothing publishes a port.
 - **Public access through a Cloudflare Tunnel:** `cloudflared` connects out to Cloudflare, which
   serves `riffscribe-staging.sumitgautam.tech` with HTTPS and forwards requests down the
@@ -39,9 +39,9 @@ The OpenStack cloud is the owner's home lab (Kolla), behind the home router:
   (`JWT_JWKS_URL`). Dev tokens (`JWT_DEV_SECRET`, TD-17) are never set on staging.
 - **Images:** GitHub Actions builds the `api` and `worker` images on every green push to `main`
   and pushes them to GHCR tagged with the commit SHA. The VM pulls a given tag; it never builds.
-- **Deploys:** from the LAN, `make deploy-staging STAGING_SSH=ubuntu@<LAN IP> TAG=<sha>` copies
+- **Deploys:** from the LAN, `make deploy ENV=staging [TAG=<sha>]` (the VM address comes from Terraform) copies
   the compose files over SSH, pulls the images, runs migrations, then restarts the services.
-  Secrets live only in `.env` on the VM (`infra/staging/.env.example` lists them).
+  Secrets live only in `.env` on the VM (`infra/stack/.env.example` lists them).
 - **Backups:** nightly `pg_dump` to R2 (`backups/` prefix, kept 14 days); the restore is
   documented in `docs/staging.md`.
 - **App:** an EAS `staging` build profile bakes in the staging API URL and builds an APK for

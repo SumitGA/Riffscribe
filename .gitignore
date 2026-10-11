@@ -47,3 +47,6 @@ work/
 .terraform/
 *.tfvars
 !*.tfvars.example
+
+# Editor swap files
+*.swp

@@ -1,5 +1,5 @@
 #cloud-config
-# First boot of the staging VM (ADR-0010): Docker with the compose plugin, automatic security
+# First boot of a Riffscribe VM (ADR-0010, ADR-0012): Docker with the compose plugin, automatic security
 # updates, and /srv/riffscribe for the stack and Postgres's files (on the root disk).
 package_update: true
 package_upgrade: true
@@ -7,7 +7,7 @@ packages: [ca-certificates, curl, unattended-upgrades]
 
 write_files:
   # The lab's tenant network carries 1442-byte packets; Docker's default 1500 makes large ones
-  # (TLS handshakes) vanish. The staging stack sets its own network's MTU too (compose.yml).
+  # (TLS handshakes) vanish. The stack sets its own network's MTU too (compose.yml).
   - path: /etc/docker/daemon.json
     content: |
       {"mtu": 1442}

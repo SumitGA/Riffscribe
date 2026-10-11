@@ -39,9 +39,11 @@ openstack --os-cloud homelab-lan token issue    # works only from the LAN
 
 ### The VM (Terraform)
 
-The defaults in `infra/terraform/staging/variables.tf` match the lab (image `ubuntu-24.04`,
-2 vCPU / 3 GB / 40 GB, floating IPs from `public1`, SSH from `192.168.0.0/24`); copy
-`terraform.tfvars.example` to `terraform.tfvars` only to change one.
+Each environment is a small root module (`infra/terraform/staging`, `infra/terraform/prod`)
+calling the shared `infra/terraform/modules/riffscribe-vm`, with its own size, network and
+state file. Staging: 2 vCPU / 3 GB / 40 GB on `10.20.0.0/24`; production: 4 vCPU / 6 GB /
+40 GB on `10.30.0.0/24`. Both use image `ubuntu-24.04`, floating IPs from `public1` and SSH
+from `192.168.0.0/24`.
 
 ```sh
 cd infra/terraform/staging
@@ -78,7 +80,7 @@ Cloudflare's free certificate covers `*.sumitgautam.tech` only; a name like
 ### The VM's `.env`
 
 ```sh
-scp infra/staging/.env.example ubuntu@<lan ip>:/srv/riffscribe/stack/.env
+scp infra/stack/.env.example ubuntu@<lan ip>:/srv/riffscribe/stack/.env
 ssh ubuntu@<lan ip>
 nano /srv/riffscribe/stack/.env      # fill in every value; POSTGRES_PASSWORD: openssl rand -hex 24
 chmod 600 /srv/riffscribe/stack/.env
@@ -93,8 +95,8 @@ private: *Your profile > Packages >* the package *> Package settings > Change vi
 ## 2. Deploy
 
 ```sh
-make deploy-staging STAGING_SSH=ubuntu@<lan ip>             # the latest green commit on main
-make deploy-staging STAGING_SSH=ubuntu@<lan ip> TAG=<sha>   # a specific commit (or a rollback)
+make deploy ENV=staging             # the latest green commit on main
+make deploy ENV=staging TAG=<sha>   # a specific commit (or a rollback)
 ```
 
 It checks the VM's `.env`, copies the stack files and the public pages (`infra/site`: Caddy
@@ -102,6 +104,17 @@ serves `/terms`, `/privacy` and `/delete-account`, which the app and Google Play
 pulls that commit's images, runs migrations, restarts the services (waiting for health
 checks), installs the nightly backup job, and finally checks `https://<STAGING_HOST>/readyz`
 through the tunnel.
+
+### Production: releases only
+
+Production (ADR-0012) runs GitHub releases, never a bare commit:
+
+1. Merge to `main`; CI publishes that commit's images; `make deploy ENV=staging` and try it.
+2. Make a release from that commit: `gh release create v1.2.3 --target <sha> --generate-notes`
+   (or GitHub > Releases > Draft a new release). The version matches the app's
+   (`apps/mobile/app.json`).
+3. `make deploy ENV=prod` deploys the latest release; `make deploy ENV=prod TAG=v1.2.2` deploys
+   an older one (a rollback). The VM's `.env` records `RELEASE=` and the commit as `TAG=`.
 
 The terms of use carry a version (`TERMS_VERSION` in `services/api/src/api/account.py`, the
 same date as `infra/site/terms.html`). Changing the terms means a new version: every user

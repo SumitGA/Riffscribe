@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up stack e2e e2e-staging deploy-staging down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e e2e-staging deploy deploy-staging down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -77,8 +77,11 @@ e2e: ## End-to-end test against the running stack: upload, transcribe, download 
 e2e-staging: ## The e2e check against staging: STAGING_URL=https://... E2E_TOKEN=... E2E_OTHER_TOKEN=... (docs/staging.md)
 	API_URL=$(STAGING_URL) uv run python tools/e2e.py
 
-deploy-staging: ## Deploy a commit to staging: STAGING_SSH=ubuntu@<VM IP> [TAG=<sha>] (ADR-0010)
-	STAGING_SSH=$(STAGING_SSH) TAG=$(TAG) tools/deploy_staging.sh
+deploy: ## Deploy to ENV=staging [TAG=<sha>] or ENV=prod [TAG=v1.2.3, default the latest release] [SSH=...]
+	ENV=$(ENV) TAG=$(TAG) SSH=$(SSH) tools/deploy.sh
+
+deploy-staging: ## Deploy main's latest green commit to staging (= make deploy ENV=staging)
+	ENV=staging TAG=$(TAG) SSH=$(or $(SSH),$(STAGING_SSH)) tools/deploy.sh
 
 down: ## Stop everything (data is kept; `docker compose down -v` wipes it)
 	docker compose --profile app --profile init down
