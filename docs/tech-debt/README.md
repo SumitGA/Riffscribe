@@ -976,8 +976,8 @@ starts blocking work.
 on every run. Teams keep it in a shared *remote backend* (an S3 bucket, Terraform Cloud) with
 locking, so two people can't change the same infrastructure at once.
 
-**What we did.** `infra/terraform/staging` keeps its state in a local, git-ignored
-`terraform.tfstate` on the owner's machine.
+**What we did.** `infra/terraform/staging` and `infra/terraform/prod` each keep their state
+in a local, git-ignored `terraform.tfstate` on the owner's machine.
 
 **Pros**
 - Nothing to set up first; fine for one person and one environment.

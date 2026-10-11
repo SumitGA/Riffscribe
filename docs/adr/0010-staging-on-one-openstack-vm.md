@@ -21,7 +21,7 @@ The OpenStack cloud is the owner's home lab (Kolla), behind the home router:
 ## Decision
 
 - **One VM** (2 vCPU / 3 GB / 40 GB, Ubuntu 24.04; 4 vCPU / 6 GB until 2026-10-10, when it shrank to make room for production, ADR-0012), created with Terraform
-  (`infra/terraform/staging`) through the `homelab-lan` clouds.yaml entry and the internal
+  (`infra/terraform/staging`, calling the shared `infra/terraform/modules/riffscribe-vm` since 2026-10-11) through the `homelab-lan` clouds.yaml entry and the internal
   endpoints. Terraform also creates the VM's flavor, its own network and router (SNAT to the
   LAN), a LAN floating IP for SSH and deploys, and a security group that allows SSH from the LAN
   only. cloud-init installs Docker and unattended upgrades.

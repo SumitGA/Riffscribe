@@ -1,4 +1,3 @@
-# Copy to terraform.tfvars (git-ignored) to change any default in variables.tf. The defaults
-# match the home lab: clouds.yaml entry homelab-lan, image ubuntu-24.04, 2 vCPU / 3 GB / 40 GB,
-# floating IPs from public1, SSH from 192.168.0.0/24.
-# ram_mb = 8192
+# Copy to terraform.tfvars (git-ignored) only to change admin_cidr; sizes and networks are in
+# main.tf. Defaults: clouds.yaml entry homelab-lan, SSH from 192.168.0.0/24.
+# admin_cidr = "192.168.0.0/24"

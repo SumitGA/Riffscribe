@@ -1,106 +1,72 @@
-# The staging VM in the home lab (ADR-0010): its own flavor, network and router (SNAT to the
-# LAN), and a floating IP that is a LAN address. The internet never connects in: the VM's
-# cloudflared opens an outbound Cloudflare Tunnel, so the security group only allows SSH from
-# the LAN. The lab has no block storage, so Postgres lives on the root disk and the nightly
-# R2 backup is the safety net.
+# Staging (ADR-0010): one small VM in the home lab, from the shared module.
 
-# Flavors can't change, so a new size is a new flavor (its name carries the size) created
-# before the old one goes; the VM is then resized in place, keeping its disk and Postgres.
-resource "openstack_compute_flavor_v2" "staging" {
-  name      = "${var.name}.${var.vcpus}c${var.ram_mb}m"
-  vcpus     = var.vcpus
-  ram       = var.ram_mb
-  disk      = var.disk_gb
-  is_public = true
-
-  lifecycle {
-    create_before_destroy = true
-  }
+module "vm" {
+  source       = "../modules/riffscribe-vm"
+  environment  = "staging"
+  name         = "riffscribe-staging"
+  vcpus        = 2
+  ram_mb       = 3072 # idles at ~1 GB, a transcription adds ~0.4 GB; production gets the room
+  network_cidr = "10.20.0.0/24"
+  admin_cidr   = var.admin_cidr
 }
 
-resource "openstack_compute_keypair_v2" "admin" {
-  name       = "${var.name}-admin"
-  public_key = file(pathexpand(var.ssh_public_key_path))
+# The resources were in this root module before the shared module existed (2026-10-11).
+moved {
+  from = openstack_compute_flavor_v2.staging
+  to   = module.vm.openstack_compute_flavor_v2.this
 }
 
-data "openstack_networking_network_v2" "external" {
-  name     = var.external_network_name
-  external = true
+moved {
+  from = openstack_compute_keypair_v2.admin
+  to   = module.vm.openstack_compute_keypair_v2.admin
 }
 
-resource "openstack_networking_network_v2" "staging" {
-  name = "${var.name}-net"
+moved {
+  from = openstack_networking_network_v2.staging
+  to   = module.vm.openstack_networking_network_v2.this
 }
 
-resource "openstack_networking_subnet_v2" "staging" {
-  name            = "${var.name}-subnet"
-  network_id      = openstack_networking_network_v2.staging.id
-  cidr            = var.network_cidr
-  dns_nameservers = var.dns_nameservers
+moved {
+  from = openstack_networking_subnet_v2.staging
+  to   = module.vm.openstack_networking_subnet_v2.this
 }
 
-resource "openstack_networking_router_v2" "staging" {
-  name                = "${var.name}-router"
-  external_network_id = data.openstack_networking_network_v2.external.id
+moved {
+  from = openstack_networking_router_v2.staging
+  to   = module.vm.openstack_networking_router_v2.this
 }
 
-resource "openstack_networking_router_interface_v2" "staging" {
-  router_id = openstack_networking_router_v2.staging.id
-  subnet_id = openstack_networking_subnet_v2.staging.id
+moved {
+  from = openstack_networking_router_interface_v2.staging
+  to   = module.vm.openstack_networking_router_interface_v2.this
 }
 
-resource "openstack_networking_secgroup_v2" "staging" {
-  name                 = var.name
-  description          = "Riffscribe staging: SSH from the LAN; everything else leaves via the tunnel"
-  delete_default_rules = true
+moved {
+  from = openstack_networking_secgroup_v2.staging
+  to   = module.vm.openstack_networking_secgroup_v2.this
 }
 
-resource "openstack_networking_secgroup_rule_v2" "egress" {
-  for_each          = toset(["IPv4", "IPv6"])
-  security_group_id = openstack_networking_secgroup_v2.staging.id
-  direction         = "egress"
-  ethertype         = each.value
+moved {
+  from = openstack_networking_secgroup_rule_v2.egress
+  to   = module.vm.openstack_networking_secgroup_rule_v2.egress
 }
 
-resource "openstack_networking_secgroup_rule_v2" "ssh" {
-  security_group_id = openstack_networking_secgroup_v2.staging.id
-  direction         = "ingress"
-  ethertype         = "IPv4"
-  protocol          = "tcp"
-  port_range_min    = 22
-  port_range_max    = 22
-  remote_ip_prefix  = var.admin_cidr
+moved {
+  from = openstack_networking_secgroup_rule_v2.ssh
+  to   = module.vm.openstack_networking_secgroup_rule_v2.ssh
 }
 
-resource "openstack_compute_instance_v2" "vm" {
-  name            = var.name
-  image_name      = var.image_name
-  flavor_id       = openstack_compute_flavor_v2.staging.id
-  key_pair        = openstack_compute_keypair_v2.admin.name
-  security_groups = [openstack_networking_secgroup_v2.staging.name]
-  user_data       = file("${path.module}/cloud-init.yaml")
-
-  network {
-    uuid = openstack_networking_network_v2.staging.id
-  }
-
-  depends_on = [openstack_networking_router_interface_v2.staging] # outbound access at first boot
-
-  lifecycle {
-    ignore_changes = [user_data, image_name] # rebuilds are deliberate (-replace), not drift
-  }
+moved {
+  from = openstack_compute_instance_v2.vm
+  to   = module.vm.openstack_compute_instance_v2.vm
 }
 
-resource "openstack_networking_floatingip_v2" "lan" {
-  pool = var.external_network_name
+moved {
+  from = openstack_networking_floatingip_v2.lan
+  to   = module.vm.openstack_networking_floatingip_v2.lan
 }
 
-data "openstack_networking_port_v2" "vm" {
-  device_id  = openstack_compute_instance_v2.vm.id
-  network_id = openstack_networking_network_v2.staging.id
-}
-
-resource "openstack_networking_floatingip_associate_v2" "lan" {
-  floating_ip = openstack_networking_floatingip_v2.lan.address
-  port_id     = data.openstack_networking_port_v2.vm.id
+moved {
+  from = openstack_networking_floatingip_associate_v2.lan
+  to   = module.vm.openstack_networking_floatingip_associate_v2.lan
 }
