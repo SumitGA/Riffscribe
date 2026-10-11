@@ -77,7 +77,7 @@ e2e: ## End-to-end test against the running stack: upload, transcribe, download 
 e2e-staging: ## The e2e check against staging: STAGING_URL=https://... E2E_TOKEN=... E2E_OTHER_TOKEN=... (docs/staging.md)
 	API_URL=$(STAGING_URL) uv run python tools/e2e.py
 
-deploy: ## Deploy to ENV=staging|prod [TAG=<sha>] [SSH=ubuntu@<ip>]; prod defaults to staging's commit
+deploy: ## Deploy to ENV=staging [TAG=<sha>] or ENV=prod [TAG=v1.2.3, default the latest release] [SSH=...]
 	ENV=$(ENV) TAG=$(TAG) SSH=$(SSH) tools/deploy.sh
 
 deploy-staging: ## Deploy main's latest green commit to staging (= make deploy ENV=staging)

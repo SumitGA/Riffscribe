@@ -105,6 +105,17 @@ pulls that commit's images, runs migrations, restarts the services (waiting for 
 checks), installs the nightly backup job, and finally checks `https://<STAGING_HOST>/readyz`
 through the tunnel.
 
+### Production: releases only
+
+Production (ADR-0012) runs GitHub releases, never a bare commit:
+
+1. Merge to `main`; CI publishes that commit's images; `make deploy ENV=staging` and try it.
+2. Make a release from that commit: `gh release create v1.2.3 --target <sha> --generate-notes`
+   (or GitHub > Releases > Draft a new release). The version matches the app's
+   (`apps/mobile/app.json`).
+3. `make deploy ENV=prod` deploys the latest release; `make deploy ENV=prod TAG=v1.2.2` deploys
+   an older one (a rollback). The VM's `.env` records `RELEASE=` and the commit as `TAG=`.
+
 The terms of use carry a version (`TERMS_VERSION` in `services/api/src/api/account.py`, the
 same date as `infra/site/terms.html`). Changing the terms means a new version: every user
 accepts again in the app before their next upload.
