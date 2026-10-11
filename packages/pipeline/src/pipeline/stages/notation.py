@@ -26,7 +26,7 @@ class Notation(StageOutput):
 
 class NotationStage(Stage[Notation]):
     name = StageName.NOTATION
-    version = "2"  # 2: sync.json
+    version = "3"  # 2: sync.json; 3: strummed chords marked as arpeggios
     requires = (NormalizedAudio, QuantizedScore)
     output_type = Notation
 

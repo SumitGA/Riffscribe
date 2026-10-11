@@ -16,7 +16,7 @@ from fractions import Fraction
 from itertools import pairwise
 
 from pipeline.config import Instrument
-from pipeline.score import ChordSymbol, Score, ScoreNote
+from pipeline.score import ChordSymbol, Score, ScoreNote, StrumDirection
 
 DIVISIONS = 12  # per quarter note: multiples of both 1/4 (sixteenths) and 1/3 (triplets)
 PIANO_SPLIT = 60  # middle C and above on the treble staff
@@ -45,6 +45,7 @@ _HARMONY_KIND = {
     "min7": ("minor-seventh", "m7"),
 }
 _WHOLE_BEATS = (48, 36, 24, 12)  # longest first, for splitting whole-beat spans
+_ARPEGGIO: dict[StrumDirection, str] = {"down": "up", "up": "down"}
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ class Event:
     end: Fraction
     pitches: tuple[int, ...]
     technical: tuple[tuple[int, int], ...] = ()  # (string, fret) per pitch on a TAB staff
+    strum: StrumDirection | None = None  # the chord was strummed this way
 
 
 @dataclass(frozen=True)
@@ -67,6 +69,7 @@ class Piece:
     tie_start: bool
     tie_stop: bool
     technical: tuple[tuple[int, int], ...] = ()
+    strum: StrumDirection | None = None  # on the chord's first piece only
 
 
 @dataclass(frozen=True)
@@ -97,8 +100,12 @@ def write_score(
     positions: list[Mapping[tuple[Fraction, int], tuple[int, int]] | None] = [None] * len(staves)
     if tab is not None:
         positions[-1] = tab.positions  # the TAB staff is the last one
+    # MusicXML marks a strum as an arpeggio; only guitar chords are strummed.
+    strums = {s.onset_beats: s.direction for s in score.strums}
+    if instrument is not Instrument.GUITAR:
+        strums = {}
     events = [
-        _regrid(_events(notes, bars[-1], staff_positions))
+        _regrid(_events(notes, bars[-1], staff_positions, strums))
         for notes, staff_positions in zip(staves, positions, strict=True)
     ]
     for index, (bar_start, bar_end) in enumerate(pairwise(bars)):
@@ -166,6 +173,7 @@ def _events(
     notes: Sequence[ScoreNote],
     score_end: Fraction,
     positions: Mapping[tuple[Fraction, int], tuple[int, int]] | None = None,
+    strums: Mapping[Fraction, StrumDirection] | None = None,
 ) -> list[Event]:
     """One voice: chords at each onset, each lasting until it ends or the next one starts."""
     by_onset: dict[Fraction, list[ScoreNote]] = {}
@@ -181,7 +189,8 @@ def _events(
             end = min(end, onsets[i + 1])
         pitches = tuple(sorted({n.pitch for n in by_onset[onset]}))
         technical = tuple(positions[(onset, p)] for p in pitches) if positions else ()
-        events.append(Event(onset, end, pitches, technical))
+        strum = (strums or {}).get(onset) if len(pitches) > 1 else None
+        events.append(Event(onset, end, pitches, technical, strum))
         cursor = end
     if cursor < score_end:
         events.append(Event(cursor, score_end, ()))
@@ -206,7 +215,9 @@ def _regrid(events: Sequence[Event]) -> list[Event]:
         divisions = 3 if all((p * 3).denominator == 1 for p in beat_points) else 4
         for p in beat_points:
             snapped[p] = beat + Fraction(round((p - beat) * divisions), divisions)
-    regridded = (Event(snapped[e.start], snapped[e.end], e.pitches, e.technical) for e in events)
+    regridded = (
+        Event(snapped[e.start], snapped[e.end], e.pitches, e.technical, e.strum) for e in events
+    )
     return [e for e in regridded if e.start < e.end]
 
 
@@ -227,6 +238,7 @@ def _pieces(events: Iterable[Event], bar_start: Fraction, bar_end: Fraction) -> 
                     tie_start=sounding and e < event.end,
                     tie_stop=sounding and s > event.start,
                     technical=event.technical,
+                    strum=event.strum if s == event.start else None,
                 )
             )
     return pieces
@@ -344,6 +356,10 @@ def _write_pieces(
                 notations.append(("tuplet", {"type": "start", "bracket": "yes"}))
             if chord_index == 0 and last_in_group:
                 notations.append(("tuplet", {"type": "stop"}))
+            if piece.strum and pitch is not None:
+                # MusicXML's arrow points the way the roll moves in pitch: a downstroke (low
+                # strings first) rolls upwards.
+                notations.append(("arpeggiate", {"direction": _ARPEGGIO[piece.strum]}))
             if notations or piece.technical:
                 element = ET.SubElement(note, "notations")
                 for tag, attrs in notations:

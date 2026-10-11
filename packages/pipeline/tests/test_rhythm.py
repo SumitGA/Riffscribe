@@ -7,7 +7,16 @@ import soundfile
 from fixtures.basic_pitch.generate_clips import RATE, piano_note, place
 
 from pipeline.config import Instrument, PipelineConfig
-from pipeline.rhythm import BeatMap, GridNote, TimedNote, estimate_key, quantize, roll_starts
+from pipeline.rhythm import (
+    BeatMap,
+    GridNote,
+    Strum,
+    StrumParams,
+    TimedNote,
+    estimate_key,
+    quantize,
+    roll_starts,
+)
 from pipeline.runner import run_pipeline
 from pipeline.score import Score
 from pipeline.stages import default_stages
@@ -103,6 +112,45 @@ def test_rolled_chord_becomes_one_chord() -> None:
     assert [round(n.onset_s, 3) for n in rhythm.notes][1:4] == [
         round(beats[1] + k * 0.015, 3) for k in range(3)
     ]
+
+
+def test_a_slow_strum_stays_one_chord_and_keeps_its_direction() -> None:
+    """Strings 45 ms apart (a 180 ms sweep, longer than a sixteenth at 136 bpm) are one chord."""
+    spb = 60 / 136
+    beats = [0.5 + i * spb for i in range(8)]
+    down = [
+        TimedNote(beats[1] + k * 0.045, beats[3], p, 80) for k, p in enumerate([40, 47, 52, 56, 59])
+    ]
+    up = [TimedNote(beats[4] + k * 0.04, beats[6], p, 80) for k, p in enumerate([64, 59, 56, 52])]
+    old = quantize([*down, *up], beats)
+    rhythm = quantize([*down, *up], beats, StrumParams())
+
+    assert len({n.onset_beats for n in old.notes}) > 2  # the 35 ms rule splits both strums
+    assert sorted({n.onset_beats for n in rhythm.notes}) == [0, 3]
+    assert rhythm.strums == [Strum(Fraction(0), "down"), Strum(Fraction(3), "up")]
+
+
+def test_a_fast_melody_is_not_mistaken_for_a_strum() -> None:
+    """Sixteenths at 180 bpm (83 ms apart, inside the strum window) that stop as the next starts."""
+    spb = 60 / 180
+    beats = [0.5 + i * spb for i in range(8)]
+    step = spb / 4
+    run = [TimedNote(beats[1] + k * step, beats[1] + k * step + step * 0.9, p, 80)
+           for k, p in enumerate([60, 62, 64, 65])]  # fmt: skip
+    rhythm = quantize(run, beats, StrumParams())
+
+    assert len({n.onset_beats for n in rhythm.notes}) == 4
+    assert rhythm.strums == []
+
+
+def test_a_chord_struck_at_once_has_no_strum() -> None:
+    spb = 60 / 120
+    beats = [0.5 + i * spb for i in range(8)]
+    pinch = [TimedNote(beats[1] + k * 0.003, beats[2], p, 80) for k, p in enumerate([40, 52, 59])]
+    rhythm = quantize(pinch, beats, StrumParams())
+
+    assert len({n.onset_beats for n in rhythm.notes}) == 1
+    assert rhythm.strums == []
 
 
 def test_roll_starts_chain_short_gaps_but_not_fast_runs() -> None:

@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -88,10 +89,78 @@ def evaluate(clip: Clip, workdir: Path) -> dict[str, float]:
         tab_path = workdir / result.output(Tablature).tab.path
         tab = TabFile.model_validate_json(tab_path.read_text())
         metrics["tab_string_accuracy"] = _string_accuracy(clip, score, tab, shift)
+    metrics.update(
+        grid_grouping(
+            clip.truth["notes"],
+            [(n.onset_s + shift, n.offset_s + shift, n.pitch, n.onset_beats) for n in score.notes],
+        )
+    )
     if "chords" in clip.truth and clip.name.endswith("_comp"):  # solos: the band's chords
         estimated = [(c.onset_s + shift, c.offset_s + shift, c.harte()) for c in score.chords]
         metrics.update(chord_accuracy(clip.truth["chords"], estimated))
     return {name: round(float(value), 4) for name, value in metrics.items()}
+
+
+# The player's strums: annotated onsets chained this closely, each pitch once (a strum hits each
+# string once), at least STRUM_MIN_NOTES of them.
+TRUTH_STRUM_GAP_S = 0.1
+TRUTH_STRUM_SPAN_S = 0.25
+STRUM_MIN_NOTES = 3
+SEPARATE_S = 0.1  # annotated events this far apart are separate notes or chords
+
+
+def grid_grouping(
+    ref: list[dict[str, Any]], est: list[tuple[float, float, int, Fraction]]
+) -> dict[str, float]:
+    """Whether the score keeps the player's chords together and their separate notes apart.
+
+    Note F1 is scored on times in seconds, so it can't see this: a strum written as a run of
+    sixteenths still has every note at the right time. Here the score's grid positions count.
+    `chords_whole`: of the annotated strums whose notes we found (2+), the share written at one
+    grid position. `notes_apart`: of neighbouring annotated events at least SEPARATE_S apart
+    (both found), the share that don't share a grid position.
+    """
+    events: list[list[int]] = []
+    for i in sorted(range(len(ref)), key=lambda i: ref[i]["onset_s"]):
+        onset = ref[i]["onset_s"]
+        if (
+            events
+            and onset - ref[events[-1][-1]]["onset_s"] <= TRUTH_STRUM_GAP_S
+            and onset - ref[events[-1][0]]["onset_s"] <= TRUTH_STRUM_SPAN_S
+            and ref[i]["pitch"] not in {ref[j]["pitch"] for j in events[-1]}  # once per string
+        ):
+            events[-1].append(i)
+        else:
+            events.append([i])
+    pairs = mir_eval.transcription.match_notes(
+        _intervals([(n["onset_s"], n["offset_s"]) for n in ref]),
+        _hz([n["pitch"] for n in ref]),
+        _intervals([(on, off) for on, off, _, _ in est]),
+        _hz([p for _, _, p, _ in est]),
+        offset_ratio=None,
+    )
+    grid_of = {r: est[e][3] for r, e in pairs}
+    positions = [{grid_of[i] for i in event if i in grid_of} for event in events]
+    found = [sum(i in grid_of for i in event) for event in events]
+
+    strums = [
+        p
+        for event, p, n in zip(events, positions, found, strict=True)
+        if len(event) >= STRUM_MIN_NOTES and n >= 2
+    ]
+    neighbours = [
+        not (positions[k] & positions[k + 1])
+        for k in range(len(events) - 1)
+        if positions[k]
+        and positions[k + 1]
+        and ref[events[k + 1][0]]["onset_s"] - ref[events[k][-1]]["onset_s"] >= SEPARATE_S
+    ]
+    metrics = {}
+    if strums:
+        metrics["chords_whole"] = sum(len(p) == 1 for p in strums) / len(strums)
+    if neighbours:
+        metrics["notes_apart"] = sum(neighbours) / len(neighbours)
+    return metrics
 
 
 def _string_accuracy(clip: Clip, score: Score, tab: TabFile, shift: float) -> float:

@@ -35,8 +35,9 @@ class Tablature(StageOutput):
 
 class TabStage(Stage[Tablature]):
     name = StageName.TAB
-    # 2: hand-position fingering with a position prior learned from GuitarSet (TD-15)
-    version = "2"
+    # 2: hand-position fingering with a position prior learned from GuitarSet (TD-15);
+    # 3: strummed chords marked as arpeggios in tab.musicxml
+    version = "3"
     requires = (QuantizedScore,)
     output_type = Tablature
 

@@ -3,8 +3,9 @@
 import math
 from bisect import bisect_right
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
+from itertools import pairwise
 from typing import Literal
 
 import numpy as np
@@ -20,6 +21,7 @@ MAX_TOLERANCE_BEATS = 0.125  # ...but never more than a 32nd note, so slow music
 # Strummed or rolled chords: strings hit a few ms apart are one chord, written at the first.
 ROLL_GAP_S = 0.035  # consecutive onsets this close belong to the same roll...
 ROLL_MAX_SPAN_S = 0.1  # ...up to this long in total (a 32nd note is 48 ms even at 157 bpm)
+StrumDirection = Literal["down", "up"]  # down: the low strings first (pitch rises over time)
 # A beat is notated as triplets only if that fits its onsets clearly better than sixteenths.
 TRIPLET_ERROR_RATIO = 0.5
 MIN_ONSETS_FOR_TRIPLET = 2
@@ -46,10 +48,34 @@ class GridNote:
 
 
 @dataclass(frozen=True)
+class StrumParams:
+    """When notes a little apart are one strummed chord (tests/tuning/tune_strums.py).
+
+    A strum sweeps the strings one after another: on guitar recordings the first and last
+    string are a median 110 ms and up to 200 ms apart, about a sixteenth note. Notes that close
+    are also how fast melody runs look, so a wider gap only joins a strum while the earlier
+    string still rings and the pitch keeps moving the same way (low to high on a downstroke).
+    """
+
+    gap_s: float = 0.09  # consecutive strings at most this far apart...
+    span_s: float = 0.2  # ...the whole strum at most this long
+    min_ring_s: float = 0.05  # the previous string still sounds this long after the next starts
+    min_spread_s: float = 0.02  # a chord spread less than this was struck at once (no strum)
+    jitter_s: float = 0.008  # onsets this close say nothing about the strum's direction
+
+
+@dataclass(frozen=True)
+class Strum:
+    onset_beats: Fraction
+    direction: StrumDirection
+
+
+@dataclass(frozen=True)
 class Rhythm:
     notes: list[GridNote]
     pickup_beats: int  # beats before the first full bar (0 = no pickup)
     beat_times_s: list[float]  # time of beat 0, 1, 2, ... in the shifted numbering
+    strums: list[Strum] = field(default_factory=list)  # chords played as a strum
 
 
 @dataclass(frozen=True)
@@ -84,12 +110,22 @@ class BeatMap:
         return float(np.interp(beat, np.arange(times.size), times))
 
 
-def quantize(notes: Sequence[TimedNote], beat_times: Sequence[float]) -> Rhythm:
-    """Snap notes to a per-beat grid, pick the downbeat and number beats from the first bar."""
+def quantize(
+    notes: Sequence[TimedNote], beat_times: Sequence[float], strum: StrumParams | None = None
+) -> Rhythm:
+    """Snap notes to a per-beat grid, pick the downbeat and number beats from the first bar.
+
+    `strum=None` keeps only the tight roll rule (ROLL_GAP_S); StrumParams also joins strums.
+    """
     if not notes:
         return Rhythm(notes=[], pickup_beats=0, beat_times_s=[float(t) for t in beat_times])
     beat_map = BeatMap(beat_times)
-    onsets = [beat_map.beat_at(t) for t in roll_starts([n.onset_s for n in notes])]
+    groups = strum_groups(notes, strum) if strum else []
+    starts = roll_starts([n.onset_s for n in notes])
+    for group in groups:
+        for i in group:
+            starts[i] = notes[group[0]].onset_s
+    onsets = [beat_map.beat_at(t) for t in starts]
     grids = _grid_per_beat(onsets, beat_map)
 
     snapped = [_snap(b, grids) for b in onsets]
@@ -114,11 +150,69 @@ def quantize(notes: Sequence[TimedNote], beat_times: Sequence[float]) -> Rhythm:
         key=lambda g: (g.onset_beats, g.pitch),
     )
     last_beat = math.ceil(max(g.onset_beats + g.duration_beats for g in grid_notes))
+    strums = []
+    if strum:
+        for group in groups:
+            direction = strum_direction([notes[i] for i in group], strum)
+            if direction:
+                strums.append(Strum(snapped[group[0]] - origin, direction))
     return Rhythm(
         notes=grid_notes,
         pickup_beats=(downbeat - origin) % BEATS_PER_BAR,
         beat_times_s=[round(beat_map.time_at(origin + b), 4) for b in range(last_beat + 1)],
+        strums=sorted({s.onset_beats: s for s in strums}.values(), key=lambda s: s.onset_beats),
     )
+
+
+def strum_groups(notes: Sequence[TimedNote], params: StrumParams) -> list[list[int]]:
+    """Indices of notes played as one chord, each group in time order (singles included).
+
+    A note joins the chord before it if it is within the tight roll window (ROLL_GAP_S), or
+    if it continues a strum: close enough (params.gap_s, params.span_s), a pitch the chord
+    doesn't have yet, the previous string still ringing, and the same direction so far.
+    """
+    order = sorted(range(len(notes)), key=lambda i: (notes[i].onset_s, notes[i].pitch))
+    groups: list[list[int]] = []
+    direction = 0  # +1 rising (downstroke), -1 falling (upstroke), 0 not known yet
+    for i in order:
+        note = notes[i]
+        group = groups[-1] if groups else None
+        if group is not None:
+            first, previous = notes[group[0]], notes[group[-1]]
+            gap = note.onset_s - previous.onset_s
+            span = note.onset_s - first.onset_s
+            tight = gap <= ROLL_GAP_S and span <= ROLL_MAX_SPAN_S
+            step = (note.pitch > previous.pitch) - (note.pitch < previous.pitch)
+            steers = gap > params.jitter_s and step != 0
+            strummed = (
+                gap <= params.gap_s
+                and span <= params.span_s
+                and note.pitch not in {notes[j].pitch for j in group}
+                and previous.offset_s >= note.onset_s + params.min_ring_s
+                and not (steers and direction and step != direction)
+            )
+            if tight or strummed:
+                group.append(i)
+                if steers and not direction:
+                    direction = step
+                continue
+        groups.append([i])
+        direction = 0
+    return groups
+
+
+def strum_direction(chord: Sequence[TimedNote], params: StrumParams) -> StrumDirection | None:
+    """Down (low strings first) or up, if the chord's notes were spread out in time."""
+    if len(chord) < 2 or chord[-1].onset_s - chord[0].onset_s < params.min_spread_s:
+        return None
+    rising = falling = 0
+    for a, b in pairwise(chord):
+        if b.onset_s - a.onset_s > params.jitter_s:
+            rising += b.pitch > a.pitch
+            falling += b.pitch < a.pitch
+    if rising == falling:
+        return None
+    return "down" if rising > falling else "up"
 
 
 def roll_starts(onsets_s: Sequence[float]) -> list[float]:

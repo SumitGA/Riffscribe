@@ -10,7 +10,7 @@ import pytest
 from pipeline.config import Instrument, PipelineConfig
 from pipeline.musicxml import DIVISIONS, write_score
 from pipeline.runner import run_pipeline
-from pipeline.score import ChordSymbol, KeySignature, Score, ScoreNote
+from pipeline.score import ChordSymbol, KeySignature, Score, ScoreNote, Strum
 from pipeline.stages import default_stages
 from pipeline.stages.notation import Notation, bar_starts_ms
 
@@ -233,3 +233,23 @@ def test_chord_names_are_written_as_harmony_where_they_start() -> None:
         ("minor-seventh", "m7"),
     ]
     assert [h.findtext("offset") for h in harmonies] == [None, str(DIVISIONS)]  # beat 3 = 1 in
+
+
+def test_strummed_chords_are_marked_as_arpeggios_on_guitar_only() -> None:
+    strums = [Strum(onset_beats=Fraction(0), direction="down"),
+              Strum(onset_beats=Fraction(2), direction="up")]  # fmt: skip
+    chords = [(52, 0, 2), (56, 0, 2), (59, 0, 2), (52, 2, 2), (56, 2, 2)]
+    score = make_score(chords).model_copy(update={"strums": strums})
+
+    notes = measures(write_score(score, GUITAR))[0].findall("note")
+    arrows = [n.find("notations/arpeggiate") for n in notes]
+    # A downstroke sweeps from the low strings up: MusicXML's arrow points up.
+    assert [a.get("direction") if a is not None else None for a in arrows] == [
+        "up",
+        "up",
+        "up",
+        "down",
+        "down",
+    ]
+    piano = measures(write_score(score, PIANO))[0]
+    assert piano.find(".//arpeggiate") is None
