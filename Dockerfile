@@ -24,7 +24,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential curl ca-certificates nasm xz-utils \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-RUN curl -fsSL "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" -o ffmpeg.tar.xz \
+# Retries: a DNS or network blip on the build machine shouldn't fail the build; the checksum
+# still verifies whatever arrives.
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
+        "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" -o ffmpeg.tar.xz \
     && echo "${FFMPEG_SHA256}  ffmpeg.tar.xz" | sha256sum -c - \
     && tar -xJf ffmpeg.tar.xz --strip-components=1 \
     && rm ffmpeg.tar.xz
@@ -79,7 +82,8 @@ FROM python-base AS worker-build
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+    && curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 https://sh.rustup.rs \
+        | sh -s -- -y --profile minimal --default-toolchain stable
 ENV PATH="/root/.cargo/bin:${PATH}"
 COPY pyproject.toml uv.lock ./
 COPY packages/platform/pyproject.toml packages/platform/
