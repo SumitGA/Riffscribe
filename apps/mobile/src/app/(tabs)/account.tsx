@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApi } from '@/api/provider';
 import { forgetAllTakes } from '@/audio/takes';
-import { disablePush, enablePush, pushState } from '@/push';
+import { disablePush, enablePush, pushState, turnOffPush } from '@/push';
 import { colors, fonts, space } from '@/theme';
 import { Button, Card, ProgressBar, Row, Text, Toggle } from '@/ui';
 
@@ -30,7 +30,7 @@ export default function Account() {
   const push = useQuery({ queryKey: ['push'], queryFn: pushState });
   const setPush = useMutation({
     mutationFn: async (on: boolean) =>
-      on ? enablePush(api) : disablePush(api).then(() => 'off' as const),
+      on ? enablePush(api) : turnOffPush(api).then(() => 'off' as const),
     onSuccess: (state) => {
       if (state === 'denied') {
         Alert.alert(
