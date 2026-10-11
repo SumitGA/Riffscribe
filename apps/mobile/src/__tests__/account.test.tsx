@@ -30,7 +30,13 @@ beforeEach(() => {
     },
   } as unknown as ReturnType<typeof useUser>);
   jest.mocked(useApi).mockReturnValue({
-    me: async () => ({ user_id: 'u', jobs_this_month: 3, jobs_per_month: 10 }),
+    me: async () => ({
+      user_id: 'u',
+      jobs_this_month: 3,
+      jobs_per_month: 10,
+      terms_version: '2026-10-11',
+      terms_accepted: true,
+    }),
     deleteAccount,
   } as unknown as Api);
 });

@@ -18,9 +18,18 @@ describe('ApiProvider', () => {
     } as unknown as ReturnType<typeof useAuth>);
     const fetch = jest.fn(
       async (_request: Request) =>
-        new Response(JSON.stringify({ user_id: 'u', jobs_this_month: 0, jobs_per_month: 10 }), {
-          headers: { 'Content-Type': 'application/json' },
-        }),
+        new Response(
+          JSON.stringify({
+            user_id: 'u',
+            jobs_this_month: 0,
+            jobs_per_month: 10,
+            terms_version: '2026-10-11',
+            terms_accepted: true,
+          }),
+          {
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
     );
     globalThis.fetch = fetch as unknown as typeof globalThis.fetch;
 

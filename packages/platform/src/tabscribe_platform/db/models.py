@@ -91,6 +91,10 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # The terms of use the user accepted before uploading (ADR-0009: they confirm they have the
+    # right to use their recordings), and when.
+    terms_version: Mapped[str | None] = mapped_column(String(32))
+    terms_accepted_at: Mapped[datetime | None]
 
 
 class Job(Base):

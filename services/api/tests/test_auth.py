@@ -148,12 +148,6 @@ class TestJwks:
             verifier.verify(token)
 
 
-def test_me(client: TestClient) -> None:
-    response = client.get("/me", headers={"Authorization": f"Bearer {_hs256()}"})
-    assert response.status_code == 200
-    assert response.json()["user_id"] == "alice"
-
-
 @pytest.mark.parametrize("headers", [{}, {"Authorization": "Bearer junk"}])
 def test_me_needs_a_valid_token(client: TestClient, headers: dict[str, str]) -> None:
     response = client.get("/me", headers=headers)

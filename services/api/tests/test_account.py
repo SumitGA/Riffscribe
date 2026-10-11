@@ -10,6 +10,7 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from api import account as account_module
+from api.account import TERMS_VERSION
 from api.deps import get_api_settings
 from api.main import app
 from tabscribe_platform.db import Job, PushToken, User
@@ -109,3 +110,35 @@ def test_the_clerk_call_names_itself_and_treats_a_missing_user_as_done(
 
     monkeypatch.setattr(urllib.request, "urlopen", gone)
     account_module.delete_clerk_user("user_1", "sk_test_x")  # already deleted: no error
+
+
+def test_uploading_needs_the_current_terms_accepted(
+    api: TestClient, alice: str, db: Engine
+) -> None:
+    app.dependency_overrides[get_api_settings] = lambda: LIMITS.model_copy(
+        update={"require_terms": True}
+    )
+    body = {"instrument": "guitar", "content_type": "audio/mp4", "size_bytes": 1000}
+    me = api.get("/me", headers=auth(alice)).json()
+    assert (me["terms_version"], me["terms_accepted"]) == (TERMS_VERSION, False)
+    refused = api.post("/jobs", json=body, headers=auth(alice))
+    assert refused.status_code == 403 and "terms" in refused.json()["detail"]
+
+    old = api.put("/me/terms", json={"version": "2000-01-01"}, headers=auth(alice))
+    assert old.status_code == 409  # an app showing outdated terms
+    assert (
+        api.put("/me/terms", json={"version": TERMS_VERSION}, headers=auth(alice)).status_code
+        == 204
+    )
+
+    assert api.get("/me", headers=auth(alice)).json()["terms_accepted"] is True
+    assert api.post("/jobs", json=body, headers=auth(alice)).status_code == 201
+    with Session(db) as session:
+        user = session.get(User, alice)
+        assert user is not None and user.terms_version == TERMS_VERSION
+        assert user.terms_accepted_at is not None
+    # Accepting again (another phone) is fine.
+    assert (
+        api.put("/me/terms", json={"version": TERMS_VERSION}, headers=auth(alice)).status_code
+        == 204
+    )

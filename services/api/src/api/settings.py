@@ -16,3 +16,6 @@ class ApiSettings(BaseSettings):
     # Clerk Backend API key, to delete a user's sign-in with their account (DELETE /me).
     # Unset locally and in tests; set only in the server's .env.
     clerk_secret_key: SecretStr | None = None
+    # Uploading needs the current terms accepted (PUT /me/terms). Off only in unit tests that
+    # aren't about terms.
+    require_terms: bool = True

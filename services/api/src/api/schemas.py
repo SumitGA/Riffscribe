@@ -130,6 +130,13 @@ class MeOut(BaseModel):
     user_id: str
     jobs_this_month: int
     jobs_per_month: int
+    # The current terms of use, and whether this user has accepted them (needed to upload).
+    terms_version: str
+    terms_accepted: bool
+
+
+class AcceptTermsRequest(BaseModel):
+    version: str = Field(max_length=32)
 
 
 EDIT_OPS = ("set_position", "set_pitch", "delete", "add", "set_duration")

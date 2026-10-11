@@ -38,7 +38,7 @@ services:
   caddy:
     image: caddy:2.10-alpine
     restart: unless-stopped
-    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro"]
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "./site:/srv/site:ro"]
     depends_on:
       api: {condition: service_healthy}
 

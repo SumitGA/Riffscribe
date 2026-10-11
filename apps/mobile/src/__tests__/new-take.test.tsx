@@ -21,6 +21,8 @@ const take: AudioClip = {
 };
 
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
+let termsAccepted = true;
+const acceptTerms = jest.fn(async () => {});
 jest.mock('@/push', () => ({ askForPushOnce: jest.fn(async () => {}) }));
 jest.mock('expo-router', () => ({ router: { replace: jest.fn() } }));
 jest.mock('expo-audio', () => ({
@@ -47,8 +49,17 @@ jest.mock('@/audio/Recorder', () => {
 jest.mock('@/jobs/transcribe', () => ({ startTranscription: jest.fn(), uploadFile: jest.fn() }));
 
 beforeEach(() => {
+  jest.clearAllMocks();
+  termsAccepted = true;
   jest.mocked(useApi).mockReturnValue({
-    me: async () => ({ user_id: 'u', jobs_this_month: 3, jobs_per_month: 10 }),
+    me: async () => ({
+      user_id: 'u',
+      jobs_this_month: 3,
+      jobs_per_month: 10,
+      terms_version: '2026-10-11',
+      terms_accepted: termsAccepted,
+    }),
+    acceptTerms,
   } as unknown as Api);
   jest.mocked(startTranscription).mockResolvedValue({ id: 'job-1' } as never);
 });
@@ -116,6 +127,28 @@ describe('NewTake', () => {
       expect.any(Function),
     );
     await waitFor(() => expect(router.replace).toHaveBeenCalled());
+  });
+});
+
+describe('NewTake, first upload', () => {
+  it('asks to accept the terms first, then transcribes', async () => {
+    termsAccepted = false;
+    await renderNewTake();
+    await fireEvent.press(screen.getByText('Finish recording'));
+    await screen.findByText(/remaining transcriptions/); // settled
+    await fireEvent.press(screen.getByText('Transcribe'));
+
+    expect(startTranscription).not.toHaveBeenCalled();
+    const agree = screen.getByRole('button', { name: 'Agree and transcribe' });
+    await fireEvent.press(agree);
+    expect(acceptTerms).not.toHaveBeenCalled(); // not before ticking the box
+
+    await fireEvent.press(
+      screen.getByRole('checkbox', { name: 'I agree to the Terms of Use and Privacy Policy' }),
+    );
+    await fireEvent.press(agree);
+    await waitFor(() => expect(acceptTerms).toHaveBeenCalledWith('2026-10-11'));
+    await waitFor(() => expect(startTranscription).toHaveBeenCalled());
   });
 });
 

@@ -116,6 +116,18 @@ def main() -> int:
         status, me = api("GET", "/me", alice)
         check(status == 200, f"/me: {status}")
         used_before = me["jobs_this_month"]  # nonzero for a reused staging user
+        if not me["terms_accepted"]:
+            status, refused = api(
+                "POST",
+                "/jobs",
+                alice,
+                {"instrument": "guitar", "content_type": "audio/mp4", "size_bytes": 1000},
+            )
+            check(status == 403, f"upload before accepting the terms: {status} {refused}")
+        for token in (alice, mallory):
+            status, _ = api("PUT", "/me/terms", token, {"version": me["terms_version"]})
+            check(status == 204, f"accept terms: {status}")
+        step("uploads need the terms accepted first")
 
         start = time.monotonic()
         job = transcribe(alice, FIXTURES / "piano.m4a", "audio/mp4", "guitar")

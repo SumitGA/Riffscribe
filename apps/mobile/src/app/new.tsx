@@ -21,6 +21,7 @@ import { pickAudioFile } from '@/audio/pickAudioFile';
 import { Recorder } from '@/audio/Recorder';
 import { keepTake } from '@/audio/takes';
 import { type Step, startTranscription, uploadFile } from '@/jobs/transcribe';
+import { TermsSheet } from '@/legal/TermsSheet';
 import { askForPushOnce } from '@/push';
 import { colors, fonts, radius, space } from '@/theme';
 import { Button, Card, Chip, IconButton, Row, Segmented, Text } from '@/ui';
@@ -152,6 +153,16 @@ function Review({
   const [step, setStep] = useState<Step | null>(null);
   const label = instrument === 'guitar' ? 'Guitar' : 'Piano';
 
+  const [termsOpen, setTermsOpen] = useState(false);
+  const acceptTerms = useMutation({
+    mutationFn: () => api.acceptTerms(me.data!.terms_version),
+    onSuccess: () => {
+      setTermsOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+      transcribe.mutate();
+    },
+  });
+
   const transcribe = useMutation({
     mutationFn: () =>
       startTranscription(
@@ -258,6 +269,14 @@ function Review({
         </Card>
       </ScrollView>
 
+      {termsOpen && (
+        <TermsSheet
+          busy={acceptTerms.isPending}
+          error={acceptTerms.isError ? acceptTerms.error.message : null}
+          onAgree={() => acceptTerms.mutate()}
+          onClose={() => setTermsOpen(false)}
+        />
+      )}
       <SafeAreaView edges={['bottom']} style={styles.actions}>
         {transcribe.isError && <Text style={styles.error}>{transcribe.error.message}</Text>}
         <Button
@@ -267,7 +286,11 @@ function Review({
           disabled={transcribe.isPending}
           onPress={() => {
             player.pause();
-            transcribe.mutate();
+            if (me.data && !me.data.terms_accepted) {
+              setTermsOpen(true); // the first upload: confirm the terms first
+            } else {
+              transcribe.mutate();
+            }
           }}
         />
         <Button

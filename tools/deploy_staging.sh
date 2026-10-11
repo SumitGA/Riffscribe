@@ -17,6 +17,7 @@ echo "deploying ${TAG} to ${STAGING_SSH}"
 ssh "${STAGING_SSH}" "test -f ${STACK}/.env" \
   || { echo "no ${STACK}/.env on the VM: copy infra/staging/.env.example there and fill it in" >&2; exit 1; }
 scp -q "${here}"/infra/staging/{compose.yml,Caddyfile,backup.sh,backup_to_r2.py} "${STAGING_SSH}:${STACK}/"
+scp -q -r "${here}"/infra/site "${STAGING_SSH}:${STACK}/"  # terms, privacy, delete-account pages
 ssh "${STAGING_SSH}" bash -s -- "${TAG}" "${STACK}" <<'REMOTE'
 set -euo pipefail
 tag=$1 stack=$2

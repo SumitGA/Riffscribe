@@ -499,10 +499,50 @@
         }
       }
     },
+    "/me/terms": {
+      "put": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Accept Terms",
+        "description": "The user confirms the terms (they have the right to use what they upload, ADR-0009).",
+        "operationId": "accept_terms_me_terms_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptTermsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/me": {
       "get": {
         "summary": "Me",
-        "description": "Who the bearer token belongs to, and how much of this month's quota is used.",
+        "description": "Who the bearer token belongs to, this month's quota, and whether the terms are accepted.",
         "operationId": "me_me_get",
         "responses": {
           "200": {
@@ -589,6 +629,20 @@
   },
   "components": {
     "schemas": {
+      "AcceptTermsRequest": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "AcceptTermsRequest"
+      },
       "CreateJobRequest": {
         "properties": {
           "instrument": {
@@ -1036,13 +1090,23 @@
           "jobs_per_month": {
             "type": "integer",
             "title": "Jobs Per Month"
+          },
+          "terms_version": {
+            "type": "string",
+            "title": "Terms Version"
+          },
+          "terms_accepted": {
+            "type": "boolean",
+            "title": "Terms Accepted"
           }
         },
         "type": "object",
         "required": [
           "user_id",
           "jobs_this_month",
-          "jobs_per_month"
+          "jobs_per_month",
+          "terms_version",
+          "terms_accepted"
         ],
         "title": "MeOut"
       },
