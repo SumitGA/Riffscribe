@@ -10,11 +10,17 @@
 	# Metrics are for whoever operates the VM, not the internet (TD-29).
 	@internal path /metrics
 	respond @internal 404
-	# Public pages the app and Google Play link to (infra/site): terms, privacy, account deletion.
+	# Public pages the app, Google sign-in and Google Play link to (infra/site).
 	@pages path /terms /privacy /delete-account
 	handle @pages {
 		root * /srv/site
 		rewrite * {path}.html
+		file_server
+	}
+	# The home page (what Riffscribe is; Google sign-in and Play list it as the website).
+	handle / {
+		root * /srv/site
+		rewrite * /index.html
 		file_server
 	}
 	reverse_proxy api:8000
