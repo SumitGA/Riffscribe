@@ -1,12 +1,14 @@
-# Staging stack (ADR-0010): everything on one VM in the home lab. Deployed by
-# `make deploy-staging`, which copies this folder to the VM and runs it with the VM's `.env`
-# (see .env.example; secrets never live in the repo). Images come from GHCR, pinned by TAG.
+# One environment's stack (staging ADR-0010, production ADR-0012): everything on one VM in the
+# home lab. Deployed by `make deploy ENV=staging|prod`, which copies this folder to the VM and
+# runs it with the VM's `.env` (see .env.example; secrets never live in the repo). Images come
+# from GHCR, pinned by TAG.
 #
 # The internet reaches the API through a Cloudflare Tunnel: cloudflared connects *out* to
-# Cloudflare, which serves HTTPS for STAGING_HOST and forwards requests to Caddy (internal,
-# plain HTTP), which hides /metrics and proxies to the API. Nothing publishes a port.
+# Cloudflare, which serves HTTPS for PUBLIC_HOST and forwards requests to Caddy (internal,
+# plain HTTP), which serves the legal pages, hides /metrics and proxies to the API. Nothing
+# publishes a port.
 
-name: riffscribe-staging
+name: riffscribe-${ENVIRONMENT:-staging}
 
 x-app-env: &app-env
   DATABASE_URL: postgresql+psycopg://riffscribe:${POSTGRES_PASSWORD:?set in .env}@postgres:5432/riffscribe
