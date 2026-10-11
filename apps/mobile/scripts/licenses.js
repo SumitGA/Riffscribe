@@ -124,7 +124,11 @@ const assets = ASSETS.map(({ file, copyright, ...rest }) => {
 
 const json = JSON.stringify({ assets, packages, texts }) + '\n';
 if (process.argv.includes('--check')) {
-  if (!fs.existsSync(out) || fs.readFileSync(out, 'utf8') !== json) {
+  // Compare content, not formatting: a formatter may have rewritten the file's layout.
+  const current = fs.existsSync(out)
+    ? JSON.stringify(JSON.parse(fs.readFileSync(out, 'utf8')))
+    : '';
+  if (current !== json.trim()) {
     console.error('src/about/licenses.json is out of date: run `node scripts/licenses.js`');
     process.exit(1);
   }

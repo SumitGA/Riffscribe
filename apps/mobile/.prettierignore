@@ -1,2 +1,3 @@
 src/api/openapi.json
 src/api/schema.d.ts
+src/about/licenses.json
