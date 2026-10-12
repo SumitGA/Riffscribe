@@ -17,6 +17,13 @@
 		rewrite * {path}.html
 		file_server
 	}
+	# Icons for browsers (favicon.ico requests get the PNG; every browser accepts it).
+	@icons path /favicon.ico /favicon.png /apple-touch-icon.png
+	handle @icons {
+		root * /srv/site
+		rewrite /favicon.ico /favicon.png
+		file_server
+	}
 	# The home page (what Riffscribe is; Google sign-in and Play list it as the website).
 	handle / {
 		root * /srv/site

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024">
+  <!-- The app icon: the pick mark on the app's dark background. -->
+  <rect width="1024" height="1024" fill="#0D0E11"/>
+  <image href="pick.svg" x="0" y="0" width="1024" height="1024"/>
+</svg>
