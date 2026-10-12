@@ -8,6 +8,7 @@ import {
   enablePush,
   jobIdOf,
   pushState,
+  RESYNC_MS,
   syncPush,
   TOKEN_TIMEOUT_MS,
   turnOffPush,
@@ -109,15 +110,32 @@ describe('push', () => {
 
     await syncPush(api);
     expect(api.registerPushToken).not.toHaveBeenCalled();
-    expect(await enablePush(api)).toBe('on'); // switching it on again clears that
-    api.registerPushToken.mockClear();
-    await syncPush(api);
-    expect(api.registerPushToken).toHaveBeenCalled();
+    expect(await enablePush(api)).toBe('on'); // switching it on again registers and clears that
+    expect(api.registerPushToken).toHaveBeenCalledTimes(1);
+    await syncPush(api); // just registered: no second call
+    expect(api.registerPushToken).toHaveBeenCalledTimes(1);
 
     jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue(permission('undetermined'));
     mockStore.clear();
     await syncPush(api);
     expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('registers again at most once a day, but straight away after a sign-out', async () => {
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue(permission('granted'));
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    await syncPush(api); // first start: registers
+    await syncPush(api); // back to the foreground a moment later: nothing to do
+    expect(api.registerPushToken).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(1_000_000 + RESYNC_MS + 1); // the next day
+    await syncPush(api);
+    expect(api.registerPushToken).toHaveBeenCalledTimes(2);
+
+    await disablePush(api); // signing out
+    await syncPush(api); // the next sign-in registers right away
+    expect(api.registerPushToken).toHaveBeenCalledTimes(3);
+    now.mockRestore();
   });
 
   it('gives up with an explanation when the push service never answers', async () => {

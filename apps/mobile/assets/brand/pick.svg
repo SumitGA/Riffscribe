@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Riffscribe mark: a guitar pick (amber, the app's accent) with guitar tab on it: four
+       string lines and fret numbers. A recording of guitar, written out as tab. -->
+  <path fill="#FFB224" d="M512 200C700 200 820 262 820 384C820 560 642 762 540 852C524 866 500 866 484 852C382 762 204 560 204 384C204 262 324 200 512 200Z"/>
+  <g stroke="#0D0E11" stroke-width="14" stroke-linecap="round">
+    <line x1="282" y1="340" x2="742" y2="340"/>
+    <line x1="292" y1="425" x2="732" y2="425"/>
+    <line x1="318" y1="510" x2="706" y2="510"/>
+    <line x1="358" y1="595" x2="666" y2="595"/>
+  </g>
+  <!-- Fret numbers sit on the lines: an amber patch hides the line behind each digit. -->
+  <g fill="#FFB224">
+    <rect x="388" y="296" width="72" height="88" rx="10"/>
+    <rect x="548" y="466" width="72" height="88" rx="10"/>
+    <rect x="468" y="551" width="72" height="88" rx="10"/>
+  </g>
+  <g fill="#0D0E11" font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="104" text-anchor="middle">
+    <text x="424" y="377">3</text>
+    <text x="584" y="547">5</text>
+    <text x="504" y="632">0</text>
+  </g>
+</svg>

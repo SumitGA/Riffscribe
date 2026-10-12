@@ -12,6 +12,10 @@ const TOKEN_KEY = 'riffscribe.pushToken';
 const ASKED_KEY = 'riffscribe.pushAsked';
 /** Set when the user switches notifications off in Account; sign-in then leaves them off. */
 const OFF_KEY = 'riffscribe.pushOff';
+/** When this device last registered its token with the API (ms since epoch). */
+const SYNCED_KEY = 'riffscribe.pushSyncedAt';
+/** syncPush registers again at most this often (tokens rarely change). */
+export const RESYNC_MS = 24 * 60 * 60 * 1000;
 /** How long to wait for Google's / Apple's push service to hand out a token. */
 export const TOKEN_TIMEOUT_MS = 20_000;
 /** Android groups notifications in channels; the worker sends to this one. */
@@ -69,6 +73,7 @@ export async function enablePush(api: Pick<Api, 'registerPushToken'>): Promise<P
   const token = await pushToken(id);
   await api.registerPushToken(token, Platform.OS === 'ios' ? 'ios' : 'android');
   await setItemAsync(TOKEN_KEY, token);
+  await setItemAsync(SYNCED_KEY, String(Date.now()));
   await deleteItemAsync(OFF_KEY);
   return 'on';
 }
@@ -111,11 +116,18 @@ export async function turnOffPush(api: Pick<Api, 'removePushToken'>): Promise<vo
  * After sign-in and on every app start: if the phone allows notifications and the user hasn't
  * switched them off, register this device for whoever is signed in now. Signing out (or
  * deleting the account) unregisters it, so without this the next sign-in would be silent. It
- * also refreshes a token the push service has replaced. Never asks for permission; never throws.
+ * also refreshes a token the push service has replaced, at most once a day (RESYNC_MS). Never
+ * asks for permission; never throws.
  */
 export async function syncPush(api: Pick<Api, 'registerPushToken'>): Promise<void> {
   try {
     if (!pushAvailable() || (await getItemAsync(OFF_KEY))) {
+      return;
+    }
+    // Registered for this sign-in less than a day ago: nothing to do. Android makes the app
+    // "active" after every dialog and pull-down of the notification shade.
+    const syncedAt = Number(await getItemAsync(SYNCED_KEY));
+    if ((await getItemAsync(TOKEN_KEY)) && Date.now() - syncedAt < RESYNC_MS) {
       return;
     }
     const { status } = await Notifications.getPermissionsAsync();
@@ -137,6 +149,7 @@ export async function disablePush(api: Pick<Api, 'removePushToken'>): Promise<vo
     await api.removePushToken(token);
   } finally {
     await deleteItemAsync(TOKEN_KEY);
+    await deleteItemAsync(SYNCED_KEY);
   }
 }
 

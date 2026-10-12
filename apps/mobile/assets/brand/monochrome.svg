@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024">
+  <!-- Android themed (monochrome) icon: the pick in one colour, tab and numbers cut out. -->
+  <mask id="cut">
+    <rect width="1024" height="1024" fill="#fff"/>
+    <g transform="translate(102 102) scale(0.80078)">
+      <g stroke="#000" stroke-width="14" stroke-linecap="round">
+        <line x1="282" y1="340" x2="742" y2="340"/><line x1="292" y1="425" x2="732" y2="425"/>
+        <line x1="318" y1="510" x2="706" y2="510"/><line x1="358" y1="595" x2="666" y2="595"/>
+      </g>
+      <g fill="#fff"><rect x="388" y="296" width="72" height="88" rx="10"/><rect x="548" y="466" width="72" height="88" rx="10"/><rect x="468" y="551" width="72" height="88" rx="10"/></g>
+      <g fill="#000" font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="104" text-anchor="middle">
+        <text x="424" y="377">3</text><text x="584" y="547">5</text><text x="504" y="632">0</text>
+      </g>
+    </g>
+  </mask>
+  <g mask="url(#cut)"><g transform="translate(102 102) scale(0.80078)">
+    <path fill="#fff" d="M512 200C700 200 820 262 820 384C820 560 642 762 540 852C524 866 500 866 484 852C382 762 204 560 204 384C204 262 324 200 512 200Z"/>
+  </g></g>
+</svg>
