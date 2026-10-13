@@ -14,6 +14,7 @@ r monochrome.svg 1024 "${assets}/android-icon-monochrome.png" # Android 13 theme
 r pick.svg 1024 "${assets}/splash-icon.png"                 # splash screen, on #0D0E11
 mkdir -p "${assets}/store"
 r icon.svg 512 "${assets}/store/play-icon-512.png"          # Google Play listing icon
+rsvg-convert -w 1024 -h 500 feature-graphic.svg -o "${assets}/store/feature-graphic.png" # Play banner
 r icon.svg 64 "${site}/favicon.png"                         # website
 r icon.svg 180 "${site}/apple-touch-icon.png"
 echo "icons rendered"
