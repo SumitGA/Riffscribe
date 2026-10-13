@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 500">
+  <!-- Google Play feature graphic (1024 x 500): the mark, the name and what it does. Play may
+       crop the edges on some devices, so everything sits well inside. -->
+  <rect width="1024" height="500" fill="#0D0E11"/>
+  <image href="pick.svg" x="60" y="70" width="360" height="360"/>
+  <g font-family="Helvetica, Arial, sans-serif" fill="#E5E7EB">
+    <text x="430" y="228" font-size="84" font-weight="700" letter-spacing="-1">Riffscribe</text>
+    <text x="434" y="290" font-size="34" fill="#9CA3AF">Play guitar or piano.</text>
+    <text x="434" y="336" font-size="34" fill="#9CA3AF">Get the <tspan fill="#FFB224">tab</tspan> and <tspan fill="#FFB224">sheet music</tspan>.</text>
+  </g>
+</svg>
