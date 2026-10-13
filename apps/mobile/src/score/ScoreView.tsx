@@ -23,9 +23,10 @@ const PROFILES: { value: StaveProfile; label: string }[] = [
   { value: 'tab', label: 'Tab' },
   { value: 'both', label: 'Both' },
 ];
-const SOURCES: { value: PlaybackSource; label: string }[] = [
+/** Playback sources; the synth plays the score's own instrument (guitar scores have tab). */
+const sourcesFor = (hasTab: boolean): { value: PlaybackSource; label: string }[] => [
   { value: 'recording', label: 'Your recording' },
-  { value: 'synth', label: 'Guitar sound' },
+  { value: 'synth', label: hasTab ? 'Guitar sound' : 'Piano sound' },
 ];
 const SPEEDS = [1, 0.75, 0.5];
 
@@ -231,7 +232,7 @@ export function ScoreView({
         <View style={styles.profiles}>
           <Segmented
             label="Sound"
-            options={SOURCES}
+            options={sourcesFor(hasTab)}
             value={source}
             onChange={changeSource}
             emphasis="subtle"

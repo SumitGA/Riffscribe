@@ -101,6 +101,25 @@ describe('ScoreView', () => {
     expect(mockInjectJavaScript).toHaveBeenLastCalledWith(command('setProfile', 'tab'));
   });
 
+  it('names the synth after the score: piano scores have no tab', async () => {
+    const dir = new Directory(Paths.document, 'takes');
+    dir.create({ idempotent: true, intermediates: true });
+    const take = new File(dir, 'piano.m4a');
+    take.write('audio');
+    new Directory('file:///cache/score-viewer/').create({ idempotent: true, intermediates: true });
+    await render(
+      <ScoreView
+        musicXml="<score-partwise/>"
+        hasTab={false}
+        take={{ uri: take.uri, barStartsMs: [0, 1500] }}
+      />,
+    );
+    await screen.findByTestId('score-view');
+    await send({ type: 'ready' });
+    expect(await screen.findByText('Piano sound')).toBeTruthy();
+    expect(screen.queryByText('Guitar sound')).toBeNull();
+  });
+
   it('shows notation only, without the switch, for piano', async () => {
     await render(<ScoreView musicXml="<score-partwise/>" hasTab={false} />);
     await screen.findByTestId('score-view');
