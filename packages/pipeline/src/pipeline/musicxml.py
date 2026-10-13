@@ -450,8 +450,10 @@ def _tempo(measure: ET.Element, bpm: float) -> None:
     direction = ET.SubElement(measure, "direction", placement="above")
     metronome = ET.SubElement(ET.SubElement(direction, "direction-type"), "metronome")
     ET.SubElement(metronome, "beat-unit").text = "quarter"
+    # Printed and playback tempo agree: apps that show both (alphaTab) would draw 133 and 132.51
+    # on top of each other.
     ET.SubElement(metronome, "per-minute").text = str(round(bpm))
-    ET.SubElement(direction, "sound", tempo=f"{bpm:g}")
+    ET.SubElement(direction, "sound", tempo=str(round(bpm)))
 
 
 def _part_list(root: ET.Element, instrument: Instrument) -> None:
