@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 
 import { ApiError, type Api, type JobList } from '@/api/client';
@@ -7,7 +8,9 @@ import { useApi } from '@/api/provider';
 import Library from '@/app/(tabs)/index';
 
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
-jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactNode }) => children }));
+// No Link here on purpose: <Link asChild> drops a Pressable's style function, which broke the
+// cards' layout; the Library navigates with router.push.
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 
 const me = jest.fn<ReturnType<Api['me']>, []>();
 const listJobs = jest.fn<Promise<JobList>, []>();
@@ -80,6 +83,19 @@ describe('Library', () => {
     expect(screen.getByText('Failed')).toBeTruthy();
     expect(screen.getByText('Blues riff in A')).toBeTruthy();
     expect(screen.getByText('Guitar take')).toBeTruthy();
+  });
+
+  it('lays each transcription out as a card that opens it', async () => {
+    listJobs.mockResolvedValue(jobList);
+    await renderLibrary();
+    const card = await screen.findByRole('button', { name: /^Blues riff in A, / });
+    // A row with the icon beside the title.
+    expect(card).toHaveStyle({ flexDirection: 'row' });
+    await fireEvent.press(card);
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/jobs/[id]',
+      params: { id: expect.any(String) },
+    });
   });
 
   it('filters by instrument', async () => {

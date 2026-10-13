@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'expo-router';
+import { router } from 'expo-router';
 import { Guitar, Piano } from 'lucide-react-native';
 import { useState } from 'react';
 import {
@@ -127,38 +127,40 @@ function JobCard({ job }: { job: JobSummary }) {
   const instrument = job.instrument === 'guitar' ? 'Guitar' : 'Piano';
   const title = job.name ?? `${instrument} take`;
   return (
-    <Link href={{ pathname: '/jobs/[id]', params: { id: job.id } }} asChild>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${title}, ${instrument}, ${formatWhen(job.created_at)}, ${status.label}`}
-        style={({ pressed }) => [
-          styles.card,
-          running && styles.cardRunning,
-          pressed && styles.pressed,
-        ]}
-      >
-        <View style={styles.iconTile}>
-          <Icon
-            color={
-              running ? colors.accent : job.status === 'failed' ? colors.dangerText : colors.text
-            }
-            size={26}
-            strokeWidth={1.8}
-          />
-        </View>
-        <View style={styles.cardBody}>
-          <Text variant="label" numberOfLines={1}>
-            {title}
-          </Text>
-          <Text variant="muted">
-            {job.name ? `${instrument} · ` : ''}
-            {formatWhen(job.created_at)}
-          </Text>
-        </View>
-        {running && <ActivityIndicator color={colors.accent} />}
-        <Text style={[styles.status, { color: status.color }]}>{status.label}</Text>
-      </Pressable>
-    </Link>
+    // Navigates itself rather than through <Link asChild>: Link passes props to its child
+    // without supporting a style function, which dropped the whole card style (no row layout,
+    // no background; the icon sat above the title).
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${instrument}, ${formatWhen(job.created_at)}, ${status.label}`}
+      onPress={() => router.push({ pathname: '/jobs/[id]', params: { id: job.id } })}
+      style={({ pressed }) => [
+        styles.card,
+        running && styles.cardRunning,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={styles.iconTile}>
+        <Icon
+          color={
+            running ? colors.accent : job.status === 'failed' ? colors.dangerText : colors.text
+          }
+          size={26}
+          strokeWidth={1.8}
+        />
+      </View>
+      <View style={styles.cardBody}>
+        <Text variant="label" numberOfLines={1}>
+          {title}
+        </Text>
+        <Text variant="muted">
+          {job.name ? `${instrument} · ` : ''}
+          {formatWhen(job.created_at)}
+        </Text>
+      </View>
+      {running && <ActivityIndicator color={colors.accent} />}
+      <Text style={[styles.status, { color: status.color }]}>{status.label}</Text>
+    </Pressable>
   );
 }
 
