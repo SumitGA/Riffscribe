@@ -253,3 +253,12 @@ def test_strummed_chords_are_marked_as_arpeggios_on_guitar_only() -> None:
     ]
     piano = measures(write_score(score, PIANO))[0]
     assert piano.find(".//arpeggiate") is None
+
+
+def test_printed_and_playback_tempo_are_the_same_whole_number() -> None:
+    """A measured tempo (132.51) written twice differently made alphaTab draw two labels."""
+    score = make_score([(60, 0, 1)]).model_copy(update={"tempo_bpm": 132.51})
+    direction = measures(write_score(score, GUITAR))[0].find("direction")
+    assert direction is not None
+    assert direction.findtext("direction-type/metronome/per-minute") == "133"
+    assert direction.find("sound").get("tempo") == "133"  # type: ignore[union-attr]

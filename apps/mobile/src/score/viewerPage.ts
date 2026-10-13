@@ -263,6 +263,20 @@ export const VIEWER_PAGE = `<!doctype html>
     }
   }
 
+  // MusicXML gives a tempo twice: the printed one (<per-minute>, rounded) and the playback one
+  // (<sound tempo>, the measured 132.51). alphaTab makes a tempo marking of each and draws both
+  // in the same spot, overlapping. Keep one per bar, rounded, so the label reads "= 133".
+  function oneTempo(score) {
+    for (const bar of score.masterBars) {
+      const tempos = bar.tempoAutomations || [];
+      if (!tempos.length) continue;
+      const keep = tempos[tempos.length - 1];
+      keep.value = Math.round(keep.value);
+      bar.tempoAutomations = [keep];
+    }
+    score.tempo = Math.round(score.tempo);
+  }
+
   // Strummed chords: the pipeline marks them as MusicXML arpeggios, whose arrow points the way
   // the pitch moves (up = low strings first, a downstroke). alphaTab reads "up" as an upstroke
   // and gives an arpeggio no length, so turn them into guitar brush strokes that sweep the
@@ -293,6 +307,7 @@ export const VIEWER_PAGE = `<!doctype html>
     const bytes = new TextEncoder().encode(musicXml);
     const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, api.settings);
     oneStaff(score);
+    oneTempo(score);
     strum(score);
     if (source !== "recording") {
       api.renderScore(score);
