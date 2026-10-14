@@ -1,24 +1,164 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Riffscribe · Guitar and piano recordings to tab and sheet music</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="description" content="Riffscribe turns a recording of solo guitar or piano into editable sheet music and guitar tab."><style>
-:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--accent:#c2410c;--line:#d1d9e0}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e5e7eb;--muted:#9ca3af;--accent:#fb923c;--line:#2b303b}}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-main{max-width:720px;margin:0 auto;padding:32px 16px 64px}
-h1{font-size:1.8rem;line-height:1.2;margin:0 0 4px}h2{font-size:1.15rem;margin:2rem 0 .5rem}
-.meta{color:var(--muted);margin:0 0 1.5rem}a{color:var(--accent)}
-ul{padding-left:1.25rem}li{margin:.25rem 0}
-footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem}
-</style></head>
-<body><main>
-<h1>Riffscribe</h1>
-<p class="meta">Guitar and piano recordings to tab and sheet music</p>
-<p>Record or upload yourself playing solo guitar or piano, and Riffscribe writes it out as editable sheet music and guitar tab: chords, fingering and timing. Play it back alongside your recording, fix notes, and export to PDF, MusicXML, MIDI or Guitar Pro.</p>
-<ul>
-<li>Your transcriptions are private to you, for your own practice and study.</li>
-<li>Your recording is deleted from our servers once it’s transcribed.</li>
-<li>Free, with a monthly number of transcriptions.</li>
-</ul>
-<p>Riffscribe is an Android app, coming soon to Google Play.</p>
-<footer><a href="/terms">Terms of Use</a> · <a href="/privacy">Privacy Policy</a> · <a href="/delete-account">Delete your account</a><br>Riffscribe · Sumit Gautam · <a href="mailto:sumitga.playstore@gmail.com">sumitga.playstore@gmail.com</a></footer>
-</main></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Riffscribe · Guitar and piano recordings to tab and sheet music</title>
+<meta name="description" content="Record yourself playing solo guitar or piano and Riffscribe writes it out as guitar tab and sheet music you can play along with, edit and export.">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:title" content="Riffscribe">
+<meta property="og:description" content="Play guitar or piano. Get the tab and sheet music.">
+<meta property="og:image" content="https://riffscribe.sumitgautam.tech/img/og.png">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0D0E11">
+<style>
+:root {
+  --bg: #0D0E11; --surface: #16181D; --raised: #1F2229; --line: #2B303B;
+  --text: #E5E7EB; --muted: #9CA3AF; --accent: #FFB224; --on-accent: #0D0E11;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--accent); }
+img { max-width: 100%; height: auto; display: block; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+header { padding: 20px 0; }
+header .wrap { display: flex; align-items: center; gap: 12px; }
+header img { width: 40px; height: 40px; border-radius: 10px; }
+header span { font-weight: 700; font-size: 20px; letter-spacing: -0.3px; }
+.hero { display: grid; gap: 40px; align-items: center; padding-top: 32px; padding-bottom: 56px; }
+.hero h1 { font-size: clamp(36px, 7vw, 60px); line-height: 1.05; letter-spacing: -1.5px; margin: 0 0 16px; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero p.lead { color: var(--muted); font-size: 19px; margin: 0 0 28px; max-width: 34em; }
+.stores { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.stores a.play img { height: 60px; width: auto; margin: -9px; }
+.pill {
+  display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+  padding: 8px 16px; color: var(--muted); font-size: 15px;
+}
+.beta { margin-top: 14px; font-size: 15px; color: var(--muted); }
+.phone {
+  border-radius: 28px; border: 1px solid var(--line); background: var(--surface);
+  padding: 8px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+.phone img { border-radius: 20px; }
+.hero .phone { max-width: 320px; justify-self: center; }
+section { padding: 56px 0; border-top: 1px solid var(--line); }
+section h2 { font-size: clamp(26px, 4.5vw, 36px); letter-spacing: -0.8px; margin: 0 0 8px; }
+section .sub { color: var(--muted); margin: 0 0 32px; }
+.steps, .features { display: grid; gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+.card h3 { margin: 0 0 6px; font-size: 18px; }
+.card p { margin: 0; color: var(--muted); font-size: 16px; }
+.num {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent);
+  display: grid; place-items: center; font-weight: 700; margin-bottom: 12px;
+}
+.shots { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+.shots figure { margin: 0; flex: 0 0 240px; scroll-snap-align: start; }
+.shots figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; text-align: center; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+details p { color: var(--muted); margin: 10px 0 0; }
+footer { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--muted); font-size: 15px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; }
+footer nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+@media (min-width: 760px) {
+  .hero { grid-template-columns: 1.2fr 0.8fr; padding-top: 56px; padding-bottom: 72px; }
+  .steps { grid-template-columns: repeat(3, 1fr); }
+  .features { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <img src="/img/icon-160.png" alt="">
+    <span>Riffscribe</span>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <h1>Play it.<br>Get the <em>tab</em>.</h1>
+      <p class="lead">Record yourself playing solo guitar or piano, and Riffscribe writes it out as guitar tab and sheet music you can play along with, fix and export.</p>
+      <div class="stores">
+        <a class="play" href="https://play.google.com/store/apps/details?id=com.sumitga.riffscribe">
+          <img src="/img/google-play-badge.png" alt="Get it on Google Play">
+        </a>
+        <span class="pill">iPhone: coming soon</span>
+      </div>
+      <p class="beta">Riffscribe for Android is in testing.
+        <a href="https://play.google.com/apps/testing/com.sumitga.riffscribe">Join the beta</a> and try it first.</p>
+    </div>
+    <div class="phone">
+      <img src="/img/2-score-notation-and-tab.jpg" alt="A jazz guitar transcription in Riffscribe: sheet music with guitar tab underneath, strum arrows and a play button" width="500" height="1111">
+    </div>
+  </div>
+
+  <section>
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p class="sub">From your playing to a score in under a minute.</p>
+      <div class="steps">
+        <div class="card"><div class="num">1</div><h3>Record or upload</h3><p>Play into your phone, or pick a recording of solo guitar or piano, up to five minutes.</p></div>
+        <div class="card"><div class="num">2</div><h3>Riffscribe writes it out</h3><p>Notes, rhythm, chords and the strings and frets a guitarist would use, as tab and notation.</p></div>
+        <div class="card"><div class="num">3</div><h3>Play, fix, export</h3><p>Play it back with your recording, correct any note, and export to PDF, Guitar Pro, MusicXML or MIDI.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>See it</h2>
+      <p class="sub">Real screens from the app.</p>
+      <div class="shots">
+        <figure><div class="phone"><img src="/img/1-library.jpg" alt="The Library with three transcriptions" loading="lazy" width="450" height="1000"></div><figcaption>Your transcriptions</figcaption></figure>
+        <figure><div class="phone"><img src="/img/2-score-notation-and-tab.jpg" alt="Notation and tab" loading="lazy" width="450" height="1000"></div><figcaption>Tab and sheet music</figcaption></figure>
+        <figure><div class="phone"><img src="/img/4-edit-a-note.jpg" alt="Editing a note: string, fret, pitch and length" loading="lazy" width="450" height="1000"></div><figcaption>Fix any note</figcaption></figure>
+        <figure><div class="phone"><img src="/img/5-export.jpg" alt="Export to PDF, Guitar Pro, MusicXML and MIDI" loading="lazy" width="450" height="1000"></div><figcaption>Export anywhere</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>What you get</h2>
+      <p class="sub">Made for practising and learning your own playing.</p>
+      <div class="features">
+        <div class="card"><h3>Guitarist-like tab</h3><p>Strings and frets chosen the way a player would, not just the lowest fret.</p></div>
+        <div class="card"><h3>Chords and strums</h3><p>Chord names above the music, strummed chords kept together, with their direction.</p></div>
+        <div class="card"><h3>Synced playback</h3><p>Hear your own recording with the score following along, or a guitar or piano sound.</p></div>
+        <div class="card"><h3>An editor</h3><p>Change string, fret, pitch or length, add or remove notes, and go back to any version.</p></div>
+        <div class="card"><h3>Export</h3><p>PDF to print, Guitar Pro for tab apps, MusicXML for notation apps, MIDI for your DAW.</p></div>
+        <div class="card"><h3>Private by design</h3><p>Your transcriptions are yours alone, and your recording is deleted from our servers once it’s transcribed.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Questions</h2>
+      <p class="sub">&nbsp;</p>
+      <details><summary>What can it transcribe?</summary><p>One instrument at a time: solo guitar (strummed chords, riffs, lead, fingerpicking) or solo piano. Full band recordings come later.</p></details>
+      <details><summary>Is it accurate?</summary><p>It gets most notes right on clear recordings, but transcription is automatic and can make mistakes. The editor is there to fix them quickly.</p></details>
+      <details><summary>Does it cost anything?</summary><p>Riffscribe is free, with a monthly number of transcriptions.</p></details>
+      <details><summary>What happens to my recordings?</summary><p>They’re used only to make your transcription and are deleted from our servers right after. Your transcriptions are private: nothing is published or shared. You can delete your account and everything in it at any time. See the <a href="/privacy">privacy policy</a>.</p></details>
+      <details><summary>When is the iPhone version coming?</summary><p>After the Android launch. The page will link to the App Store as soon as it’s there.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Riffscribe · Sumit Gautam · <a href="mailto:sumitga.playstore@gmail.com">sumitga.playstore@gmail.com</a></span>
+    <nav><a href="/terms">Terms of Use</a><a href="/privacy">Privacy Policy</a><a href="/delete-account">Delete your account</a></nav>
+  </div>
+</footer>
+</body>
+</html>
