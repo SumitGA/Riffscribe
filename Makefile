@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up stack e2e e2e-staging deploy deploy-staging down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e e2e-staging deploy deploy-staging stats down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -79,6 +79,9 @@ e2e-staging: ## The e2e check against staging: STAGING_URL=https://... E2E_TOKEN
 
 deploy: ## Deploy to ENV=staging [TAG=<sha>] or ENV=prod [TAG=v1.2.3, default the latest release] [SSH=...]
 	ENV=$(ENV) TAG=$(TAG) SSH=$(SSH) tools/deploy.sh
+
+stats: ## Sign-ups (Clerk) and usage (database) for ENV=prod|staging: counts only, no personal data
+	ENV=$(or $(ENV),prod) tools/stats.sh
 
 deploy-staging: ## Deploy main's latest green commit to staging (= make deploy ENV=staging)
 	ENV=staging TAG=$(TAG) SSH=$(or $(SSH),$(STAGING_SSH)) tools/deploy.sh
