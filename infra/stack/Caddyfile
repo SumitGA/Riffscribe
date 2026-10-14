@@ -18,6 +18,11 @@
 		file_server
 	}
 	# Icons for browsers (favicon.ico requests get the PNG; every browser accepts it).
+	# The home page's images.
+	handle /img/* {
+		root * /srv/site
+		file_server
+	}
 	@icons path /favicon.ico /favicon.png /apple-touch-icon.png
 	handle @icons {
 		root * /srv/site
