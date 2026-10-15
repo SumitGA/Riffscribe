@@ -11,7 +11,7 @@
 	@internal path /metrics
 	respond @internal 404
 	# Public pages the app, Google sign-in and Google Play link to (infra/site).
-	@pages path /terms /privacy /delete-account
+	@pages path /terms /privacy /delete-account /beta
 	handle @pages {
 		root * /srv/site
 		rewrite * {path}.html

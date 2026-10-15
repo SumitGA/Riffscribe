@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join the beta · Riffscribe</title>
+<meta name="description" content="Try Riffscribe on Android before it launches: join the beta in two taps.">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:title" content="Join the Riffscribe beta">
+<meta property="og:description" content="Play guitar or piano. Get the tab and sheet music. Try it first on Android.">
+<meta property="og:image" content="https://riffscribe.sumitgautam.tech/img/og.png">
+<meta name="theme-color" content="#0D0E11">
+<style>
+:root {
+  --bg: #0D0E11; --surface: #16181D; --line: #2B303B;
+  --text: #E5E7EB; --muted: #9CA3AF; --accent: #FFB224; --on-accent: #0D0E11;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--accent); }
+.wrap { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+header { padding: 20px 0; }
+header a { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+header img { width: 40px; height: 40px; border-radius: 10px; }
+header span { font-weight: 700; font-size: 20px; letter-spacing: -0.3px; }
+h1 { font-size: clamp(32px, 6vw, 48px); line-height: 1.1; letter-spacing: -1px; margin: 24px 0 12px; }
+.lead { color: var(--muted); font-size: 19px; margin: 0 0 32px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+.step h2 { display: flex; align-items: center; gap: 12px; font-size: 19px; margin: 0 0 8px; }
+.num {
+  flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent);
+  display: grid; place-items: center; font-weight: 700; font-size: 16px;
+}
+.step p { margin: 0 0 12px; color: var(--muted); }
+.step p:last-child { margin-bottom: 0; }
+.button {
+  display: inline-block; background: var(--accent); color: var(--on-accent); font-weight: 700;
+  text-decoration: none; border-radius: 999px; padding: 12px 22px;
+}
+.note { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; color: var(--muted); margin: 32px 0; }
+.note strong { color: var(--text); }
+footer { border-top: 1px solid var(--line); margin-top: 48px; padding: 28px 0 48px; color: var(--muted); font-size: 15px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a href="/"><img src="/img/icon-160.png" alt=""><span>Riffscribe</span></a>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Join the beta</h1>
+  <p class="lead">Riffscribe for Android is in a free private beta. Play guitar or piano into your phone and get the tab and sheet music. It takes two taps to join.</p>
+
+  <div class="step">
+    <h2><span class="num">1</span>Join the testers’ group</h2>
+    <p>Open the link and tap <strong>Join group</strong>. You won’t get emails from other testers.</p>
+    <p><a class="button" href="https://groups.google.com/g/riffscribe-beta">Join the group</a></p>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">2</span>Become a tester</h2>
+    <p>Open the link and tap <strong>Become a tester</strong>, then <strong>download it on Google Play</strong>.</p>
+    <p><a class="button" href="https://play.google.com/apps/testing/com.sumitga.riffscribe">Become a tester</a></p>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">3</span>Try it</h2>
+    <p>Open Riffscribe, sign in, and record a few seconds of guitar or piano. Then play it back, fix a note, or export it.</p>
+  </div>
+
+  <p class="note"><strong>Use the same Google account as on your phone</strong> for both steps, or Google Play won’t show you the app.
+    If the link says the app isn’t available yet, wait a minute after joining the group and try again.</p>
+
+  <p class="note"><strong>Please keep the app installed for two weeks.</strong> Google only lets new apps launch after a two-week test,
+    and every tester counts. Tell us what works and what doesn’t at <a href="mailto:sumitga.playstore@gmail.com?subject=Riffscribe%20beta">sumitga.playstore@gmail.com</a>.</p>
+
+  <p class="note"><strong>On iPhone?</strong> The iPhone version comes after the Android launch.</p>
+</main>
+
+<footer>
+  <div class="wrap"><a href="/">Riffscribe</a> · <a href="/terms">Terms of Use</a> · <a href="/privacy">Privacy Policy</a></div>
+</footer>
+</body>
+</html>
