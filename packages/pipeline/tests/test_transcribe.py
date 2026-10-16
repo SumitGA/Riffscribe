@@ -14,6 +14,7 @@ from pipeline.stages.transcribe import (
     NoteEvents,
     NoteList,
     TranscribeStage,
+    drop_suboctaves,
     merge_retriggers,
 )
 from pipeline.types import StageName
@@ -118,3 +119,21 @@ def test_real_repeated_notes_stay_apart() -> None:
     notes = [first, louder, other, alone, later]
 
     assert merge_retriggers(notes) == sorted(notes, key=lambda n: (n.start_s, n.pitch))
+
+
+def test_a_quieter_note_an_octave_below_a_sounding_note_is_dropped() -> None:
+    played = RawNote(start_s=0.0, end_s=1.0, pitch=64, amplitude=0.8)
+    ghost = RawNote(start_s=0.02, end_s=0.6, pitch=52, amplitude=0.5)
+    two_below = RawNote(start_s=0.5, end_s=0.9, pitch=40, amplitude=0.5)
+
+    assert drop_suboctaves([played, ghost, two_below]) == [played]
+
+
+def test_real_low_notes_under_a_note_stay() -> None:
+    played = RawNote(start_s=0.5, end_s=1.0, pitch=64, amplitude=0.8)
+    bass = RawNote(start_s=0.5, end_s=1.0, pitch=52, amplitude=0.7)  # as loud: played
+    earlier = RawNote(start_s=0.0, end_s=1.0, pitch=40, amplitude=0.3)  # started first
+    fifth = RawNote(start_s=0.5, end_s=1.0, pitch=57, amplitude=0.3)  # not an octave
+    notes = [played, bass, earlier, fifth]
+
+    assert drop_suboctaves(notes) == notes

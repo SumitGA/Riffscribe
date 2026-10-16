@@ -1075,3 +1075,34 @@ and `notes_apart` (separate notes not merged).
 
 **Revisit when** users report fake chords in fast runs or strums that sound mechanical, or when
 the note model improves (fewer missed strings would let the gap shrink).
+
+## TD-34: Extra guitar notes removed by two hand-set rules
+
+**Concept.** Basic Pitch, the note model, writes notes nobody played. On the guitar clips half of
+these extras are *retriggers*: picking a new note makes the model report the strings still
+ringing a second time, as a fresh, slightly quieter note straight after the first. Another
+quarter are *sub-octave ghosts*: a quieter copy of a note one or two octaves below it. Both make
+melodies sound cluttered and turn single notes into chords.
+
+**What we did.** Two rules after decoding, guitar only (transcribe stage v8 and v9):
+- a note that starts within 30 ms of the same pitch ending, under 90 % of its level, with
+  another pitch starting within 40 ms, extends that note instead (`merge_retriggers`);
+- a note that starts while a note 12 or 24 semitones above it sounds, at under 80 % of its
+  level, is dropped (`drop_suboctaves`).
+
+**Pros**
+- Fewer extra notes: Guitar-TECHS precision 0.738 -> 0.805, GuitarSet 0.805 -> 0.852, with
+  recall almost unchanged (0.775 -> 0.774, 0.844 -> 0.832). F1 0.743 -> 0.778 and 0.818 -> 0.836.
+- Tab string accuracy rises with it (Guitar-TECHS 0.578 -> 0.600, GuitarSet 0.825 -> 0.845):
+  fewer stray notes to finger.
+
+**Cons**
+- The thresholds were read off the same clips the suite scores, Guitar-TECHS included, so these
+  numbers are optimistic and Guitar-TECHS is no longer fully held out for this change (TD-8).
+- Some real notes go: 6 of 195 real repeated notes, 1 real low octave; quiet real retriggers
+  (a soft re-pick as another string sounds) are merged away.
+- Overtone ghosts above a note stay: by level they look like real octave doublings in chords.
+- On phone-like versions of the solo clips the effect is neutral (solos had few of these).
+
+**Revisit when** there are new labelled recordings to check the thresholds on (real phone takes),
+or the note model is replaced or fine-tuned on guitar.
