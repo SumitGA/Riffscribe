@@ -4,13 +4,13 @@
    "beat_f": 0.0,
    "chord_majmin": 0.7376,
    "chord_root": 0.7658,
-   "chords_whole": 0.9474,
-   "note_f1": 0.7667,
-   "note_f1_with_offsets": 0.4,
-   "note_precision": 0.7731,
-   "note_recall": 0.7603,
+   "chords_whole": 0.9444,
+   "note_f1": 0.7759,
+   "note_f1_with_offsets": 0.4052,
+   "note_precision": 0.8108,
+   "note_recall": 0.7438,
    "notes_apart": 1.0,
-   "tab_string_accuracy": 0.8043,
+   "tab_string_accuracy": 0.9333,
    "tempo_correct": 1.0
   },
   "01_Funk1-114-Ab_solo": {
@@ -28,12 +28,12 @@
    "chord_majmin": 0.9504,
    "chord_root": 0.943,
    "chords_whole": 1.0,
-   "note_f1": 0.6688,
-   "note_f1_with_offsets": 0.2524,
-   "note_precision": 0.791,
-   "note_recall": 0.5792,
+   "note_f1": 0.6516,
+   "note_f1_with_offsets": 0.2129,
+   "note_precision": 0.7953,
+   "note_recall": 0.5519,
    "notes_apart": 1.0,
-   "tab_string_accuracy": 0.9717,
+   "tab_string_accuracy": 0.9703,
    "tempo_correct": 1.0
   },
   "03_Rock1-130-A_solo": {
@@ -52,12 +52,12 @@
    "chord_majmin": 0.9786,
    "chord_root": 0.9786,
    "chords_whole": 1.0,
-   "note_f1": 0.7912,
-   "note_f1_with_offsets": 0.3004,
-   "note_precision": 0.7013,
-   "note_recall": 0.9076,
+   "note_f1": 0.8583,
+   "note_f1_with_offsets": 0.4049,
+   "note_precision": 0.8281,
+   "note_recall": 0.8908,
    "notes_apart": 1.0,
-   "tab_string_accuracy": 0.9815,
+   "tab_string_accuracy": 0.9717,
    "tempo_correct": 0.0
   },
   "05_BN1-129-Eb_solo": {
@@ -81,9 +81,9 @@
   },
   "chords_P1_Set1_7": {
    "chords_whole": 0.6,
-   "note_f1": 0.7273,
-   "note_f1_with_offsets": 0.4364,
-   "note_precision": 0.625,
+   "note_f1": 0.7547,
+   "note_f1_with_offsets": 0.4906,
+   "note_precision": 0.6667,
    "note_recall": 0.8696,
    "notes_apart": 1.0,
    "tab_string_accuracy": 0.35
@@ -99,12 +99,12 @@
   },
   "chords_P2_Set1_m7": {
    "chords_whole": 0.5,
-   "note_f1": 0.7778,
-   "note_f1_with_offsets": 0.4444,
-   "note_precision": 0.6774,
+   "note_f1": 0.8077,
+   "note_f1_with_offsets": 0.4615,
+   "note_precision": 0.7241,
    "note_recall": 0.913,
-   "notes_apart": 0.8,
-   "tab_string_accuracy": 0.4286
+   "notes_apart": 0.7,
+   "tab_string_accuracy": 0.5238
   },
   "chords_P2_Set2_min": {
    "chords_whole": 1.0,
@@ -126,29 +126,29 @@
    "tempo_correct": 1.0
   },
   "music_02": {
-   "note_f1": 0.7879,
-   "note_f1_with_offsets": 0.381,
-   "note_precision": 0.7982,
+   "note_f1": 0.8089,
+   "note_f1_with_offsets": 0.4356,
+   "note_precision": 0.8426,
    "note_recall": 0.7778,
    "notes_apart": 1.0,
-   "tab_string_accuracy": 0.7692
+   "tab_string_accuracy": 0.7143
   },
   "music_05": {
-   "note_f1": 0.7848,
-   "note_f1_with_offsets": 0.6076,
-   "note_precision": 0.8857,
+   "note_f1": 0.7949,
+   "note_f1_with_offsets": 0.641,
+   "note_precision": 0.9118,
    "note_recall": 0.7045,
    "notes_apart": 1.0,
    "tab_string_accuracy": 0.7742
   },
   "music_08": {
    "chords_whole": 0.3333,
-   "note_f1": 0.7022,
-   "note_f1_with_offsets": 0.4356,
-   "note_precision": 0.7524,
+   "note_f1": 0.7349,
+   "note_f1_with_offsets": 0.5302,
+   "note_precision": 0.8316,
    "note_recall": 0.6583,
    "notes_apart": 1.0,
-   "tab_string_accuracy": 0.4684
+   "tab_string_accuracy": 0.5949
   },
   "music_11": {
    "chords_whole": 1.0,
@@ -163,24 +163,24 @@
  "mean": {
   "guitar_techs": {
    "chords_whole": 0.7389,
-   "note_f1": 0.743,
-   "note_f1_with_offsets": 0.4963,
-   "note_precision": 0.738,
+   "note_f1": 0.7581,
+   "note_f1_with_offsets": 0.528,
+   "note_precision": 0.7677,
    "note_recall": 0.7749,
-   "notes_apart": 0.975,
-   "tab_string_accuracy": 0.5784
+   "notes_apart": 0.9625,
+   "tab_string_accuracy": 0.5993
   },
   "guitarset": {
    "beat_f": 0.2484,
    "chord_majmin": 0.8889,
    "chord_root": 0.8958,
-   "chords_whole": 0.7369,
-   "note_f1": 0.8183,
-   "note_f1_with_offsets": 0.5368,
-   "note_precision": 0.8051,
-   "note_recall": 0.8437,
+   "chords_whole": 0.7361,
+   "note_f1": 0.8282,
+   "note_f1_with_offsets": 0.5484,
+   "note_precision": 0.8332,
+   "note_recall": 0.8336,
    "notes_apart": 1.0,
-   "tab_string_accuracy": 0.8249,
+   "tab_string_accuracy": 0.8446,
    "tempo_correct": 0.6667
   },
   "piano_synth": {
@@ -194,6 +194,6 @@
    "tempo_correct": 0.5
   }
  },
- "pipeline_version": "0.1.0+a2cb7623",
+ "pipeline_version": "0.1.0+8f426820",
  "tolerance": 0.02
 }
