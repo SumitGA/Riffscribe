@@ -169,6 +169,32 @@ describe('JobScreen', () => {
     );
   });
 
+  it("passes the bar timings without a recording when this phone doesn't have it", async () => {
+    const get = (url: string) => ({ method: 'GET', url, headers: {}, expires_in_s: 900 });
+    globalThis.fetch = jest.fn(async (url: string) =>
+      url === 'https://s3/sync'
+        ? new Response(JSON.stringify({ bar_starts_ms: [0, 1860] }))
+        : new Response('<score-partwise/>'),
+    ) as unknown as typeof globalThis.fetch;
+    await renderJob(
+      job({
+        id: 'job-elsewhere',
+        status: 'succeeded',
+        outputs: {
+          version: 0,
+          musicxml: get('https://s3/score'),
+          tab_musicxml: null,
+          midi: null,
+          sync: get('https://s3/sync'),
+        },
+      }),
+    );
+
+    expect(await screen.findByTestId('score')).toHaveTextContent(
+      '<score-partwise/> take={"uri":null,"barStartsMs":[0,1860]}',
+    );
+  });
+
   it('shows why a job failed', async () => {
     await renderJob(
       job({

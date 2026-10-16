@@ -14,7 +14,8 @@ import type { TappedBeat, TappedNote } from './edits';
  *
  * With a take (the user's recording, copied next to the page), playback uses it as alphaTab's
  * backing track instead of the synthesizer, with a sync point at the start of every bar so the
- * cursor follows the recording's real timing (sync.json from the pipeline).
+ * cursor follows the recording's real timing (sync.json from the pipeline). The synthesizer
+ * follows the same timing, bar by bar (followTiming).
  */
 export const VIEWER_PAGE = `<!doctype html>
 <html>
@@ -297,7 +298,25 @@ export const VIEWER_PAGE = `<!doctype html>
             }
   }
 
-  // take: null, or { file: "take.m4a", barStartsMs: [...] } with the file in this folder.
+  // The synthesizer plays a score at its one tempo, but players speed up and slow down, so
+  // the guitar sound drifted from the rhythm that was played (up to a tenth of a second and
+  // more). Give every bar the tempo it was really played at, from when it starts and ends in
+  // the recording (sync.json), hidden so the score still shows its one rounded tempo. The last
+  // bar has no end and keeps the pace of the one before.
+  function followTiming(score, barStartsMs) {
+    score.masterBars.forEach((bar, i) => {
+      const start = barStartsMs[i];
+      const end = barStartsMs[i + 1];
+      if (start === undefined || end === undefined || end <= start) return;
+      const quarters = bar.calculateDuration() / 960; // 960 ticks per quarter
+      const bpm = (quarters * 60000) / (end - start);
+      const pace = alphaTab.model.Automation.buildTempoAutomation(false, 0, bpm, 0, false);
+      bar.tempoAutomations = [...(bar.tempoAutomations || []), pace];
+    });
+  }
+
+  // take: null, or { file, barStartsMs: [...] }: file is the recording in this folder ("take.m4a"),
+  // or null when this phone doesn't have it (the bar timings still steer the synthesizer).
   async function show(musicXml, profile, take, source) {
     current = { musicXml, profile, take, source };
     createApi(profile, source);
@@ -310,6 +329,7 @@ export const VIEWER_PAGE = `<!doctype html>
     oneTempo(score);
     strum(score);
     if (source !== "recording") {
+      if (take) followTiming(score, take.barStartsMs);
       api.renderScore(score);
       return;
     }
@@ -331,12 +351,13 @@ export const VIEWER_PAGE = `<!doctype html>
 
   window.riff = {
     load(musicXml, profile, take) {
-      show(musicXml, profile, take, take ? "recording" : "synth")
+      show(musicXml, profile, take, take && take.file ? "recording" : "synth")
         .catch((error) => post({ type: "error", message: String(error?.message ?? error) }));
     },
-    // "recording" (the take as backing track) or "synth"; needs a take for "recording".
+    // "recording" (the take as backing track) or "synth"; needs a take's file for "recording".
     setSource(source) {
       if (!current || source === current.source) return;
+      if (source === "recording" && !(current.take && current.take.file)) return;
       show(current.musicXml, current.profile, current.take, source)
         .catch((error) => post({ type: "error", message: String(error?.message ?? error) }));
     },
@@ -451,8 +472,11 @@ export type StaveProfile = 'both' | 'score' | 'tab';
 /** What playback sounds like: the user's own recording, or alphaTab's synthesized guitar. */
 export type PlaybackSource = 'recording' | 'synth';
 
-/** The user's recording for the page: a file in the viewer's folder and the bar timings. */
-export type ViewerTake = { file: string; barStartsMs: number[] };
+/**
+ * The user's recording for the page: a file in the viewer's folder (null when this phone doesn't
+ * have it) and when each bar starts in it, which also paces the synthesized sound.
+ */
+export type ViewerTake = { file: string | null; barStartsMs: number[] };
 
 /** What the page tells the app. */
 export type ViewerMessage =

@@ -80,6 +80,24 @@ describe('ScoreView', () => {
     expect(mockInjectJavaScript).toHaveBeenLastCalledWith(command('setSource', 'synth'));
   });
 
+  it("paces the guitar sound by the bar timings when this phone doesn't have the recording", async () => {
+    await render(
+      <ScoreView
+        musicXml="<score-partwise/>"
+        hasTab
+        take={{ uri: null, barStartsMs: [0, 2000] }}
+      />,
+    );
+    await screen.findByTestId('score-view');
+    await send({ type: 'ready' });
+    expect(mockInjectJavaScript).toHaveBeenCalledWith(
+      command('load', '<score-partwise/>', 'both', { file: null, barStartsMs: [0, 2000] }),
+    );
+    // Nothing to switch to.
+    expect(screen.queryByText('Guitar sound')).toBeNull();
+    expect(screen.queryByText('Your recording')).toBeNull();
+  });
+
   it('drives playback, speed and the view from native controls', async () => {
     await render(<ScoreView musicXml="<score-partwise/>" hasTab />);
     await screen.findByTestId('score-view');

@@ -285,14 +285,14 @@ function Score({
     },
     staleTime: Infinity,
   });
-  // This phone's copy of the recording, played in step with the score (sync.json). Without
-  // either, playback uses the synthesized sound.
+  // When each bar starts in the recording (sync.json): this phone's copy of the recording plays
+  // in step with the score, and the synthesized sound keeps the same timing. Without the
+  // recording, playback uses the synthesized sound; without the timings, at the score's tempo.
   const sync = outputs.sync;
   const take = useQuery({
     queryKey: ['take', job.id, outputs.version],
     queryFn: async (): Promise<Take | null> => {
-      const file = findTake(job.id);
-      if (!file || !sync) {
+      if (!sync) {
         return null;
       }
       const response = await fetch(sync.url, { headers: sync.headers });
@@ -300,7 +300,7 @@ function Score({
         return null;
       }
       const { bar_starts_ms } = (await response.json()) as { bar_starts_ms: number[] };
-      return { uri: file.uri, barStartsMs: bar_starts_ms };
+      return { uri: findTake(job.id)?.uri ?? null, barStartsMs: bar_starts_ms };
     },
     staleTime: Infinity,
   });
