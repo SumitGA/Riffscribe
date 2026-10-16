@@ -30,8 +30,11 @@ const sourcesFor = (hasTab: boolean): { value: PlaybackSource; label: string }[]
 ];
 const SPEEDS = [1, 0.75, 0.5];
 
-/** The user's recording on this phone, and when each bar starts in it (sync.json). */
-export type Take = { uri: string; barStartsMs: number[] };
+/**
+ * The user's recording on this phone (null if it isn't on this phone), and when each bar starts
+ * in it (sync.json), which also paces the synthesized sound.
+ */
+export type Take = { uri: string | null; barStartsMs: number[] };
 
 /**
  * Sheet music and tab rendered by alphaTab from a MusicXML document, with native playback
@@ -89,7 +92,7 @@ export function ScoreView({
   const [speed, setSpeed] = useState(1);
   const [metronome, setMetronome] = useState(false);
   const [loop, setLoop] = useState(false);
-  const [source, setSource] = useState<PlaybackSource>(take ? 'recording' : 'synth');
+  const [source, setSource] = useState<PlaybackSource>(take?.uri ? 'recording' : 'synth');
   const [pageTake, setPageTake] = useState<ViewerTake | null>(null);
 
   const run = (name: string, ...args: unknown[]) =>
@@ -114,14 +117,17 @@ export function ScoreView({
   useEffect(() => {
     const prepare = async () => {
       const prepared = await prepareViewer();
-      if (take) {
+      if (take?.uri) {
         try {
           const file = await copyTake(take.uri, prepared.folder);
           setPageTake({ file, barStartsMs: take.barStartsMs });
         } catch (e) {
           console.warn("couldn't use the recording; playing the guitar sound", e);
+          setPageTake({ file: null, barStartsMs: take.barStartsMs });
           setSource('synth');
         }
+      } else if (take) {
+        setPageTake({ file: null, barStartsMs: take.barStartsMs });
       }
       setFiles(prepared);
     };
@@ -228,7 +234,7 @@ export function ScoreView({
           />
         </View>
       )}
-      {pageTake && (
+      {pageTake?.file && (
         <View style={styles.profiles}>
           <Segmented
             label="Sound"
