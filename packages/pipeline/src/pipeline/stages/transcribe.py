@@ -1,5 +1,6 @@
 """transcribe: Basic Pitch on the normalized audio -> note events (notes.json) and raw.mid."""
 
+from bisect import bisect_left, bisect_right
 from dataclasses import replace
 
 import numpy as np
@@ -44,6 +45,23 @@ DECODE = {
     Instrument.PIANO: DecodeParams(),
 }
 LEVEL_NORMALIZE = {Instrument.GUITAR: True, Instrument.PIANO: False}
+# Picking a new note makes Basic Pitch report the strings still ringing a second time, as a
+# fresh note straight after the first (half of the guitar's extra notes). Such a retrigger is
+# quieter than the note it continues, and starts with another pitch; a real re-pick is as loud
+# or louder. Measured on the guitar clips (GuitarSet + Guitar-TECHS): merging these removed 53
+# of 94 split notes and 6 of 195 real repeated notes.
+MERGE_RETRIGGERS = {Instrument.GUITAR: True, Instrument.PIANO: False}
+RETRIGGER_GAP_S = 0.03  # starts at most this long after the same pitch ended...
+RETRIGGER_LEVEL = 0.9  # ...quieter than this share of it...
+RETRIGGER_WITH_S = 0.04  # ...and another pitch starts within this long
+# Basic Pitch also hears a guitar note an octave or two below, quieter (the other common
+# extra note). A note that starts while one 12 or 24 semitones above it sounds, at under 80 %
+# of its level, is dropped: on the guitar clips that removed 26 such ghosts and 1 real note.
+# Overtones above a note can't be told from real octave doublings by level, so they stay.
+DROP_SUBOCTAVES = {Instrument.GUITAR: True, Instrument.PIANO: False}
+SUBOCTAVE_INTERVALS = (12, 24)
+SUBOCTAVE_LEVEL = 0.8
+SUBOCTAVE_EARLY_S = 0.03  # may start this much before the note above
 
 
 class Note(Frozen):
@@ -75,8 +93,9 @@ class NoteEvents(StageOutput):
 class TranscribeStage(Stage[NoteEvents]):
     name = StageName.TRANSCRIBE
     # 2: note decoding moved to Rust; 3: onset envelope output; 4: reads the separate stage;
-    # 5-6: tuned guitar decoding, relative to the recording's level; 7: frames output
-    version = "7"
+    # 5-6: tuned guitar decoding, relative to the recording's level; 7: frames output;
+    # 8: guitar retriggers merged into the note they continue; 9: guitar sub-octave ghosts
+    version = "9"
     requires = (NormalizedAudio, SeparatedAudio)
     output_type = NoteEvents
 
@@ -100,6 +119,10 @@ class TranscribeStage(Stage[NoteEvents]):
             replace(n, amplitude=n.amplitude / gain)
             for n in decode_notes(frames * gain, onsets * gain, params)
         ]
+        if MERGE_RETRIGGERS[ctx.cfg.instrument]:
+            raw = merge_retriggers(raw)
+        if DROP_SUBOCTAVES[ctx.cfg.instrument]:
+            raw = drop_suboctaves(raw)
         np.save(ctx.path("onset_envelope.npy"), onset_envelope(onsets, low, high))
         np.save(ctx.path("frames.npy"), frames.astype(np.float16))
         notes = [_to_note(n) for n in raw]
@@ -118,6 +141,51 @@ class TranscribeStage(Stage[NoteEvents]):
             frames=ctx.ref("frames.npy"),
             note_count=len(notes),
         )
+
+
+def merge_retriggers(notes: list[RawNote]) -> list[RawNote]:
+    """Joins each retrigger (see MERGE_RETRIGGERS) onto the note it continues."""
+    ordered = sorted(notes, key=lambda n: (n.start_s, n.pitch))
+    starts = [n.start_s for n in ordered]
+    kept: list[RawNote] = []
+    last: dict[int, int] = {}  # pitch -> index in kept of its latest note
+    for note in ordered:
+        i = last.get(note.pitch)
+        if i is not None:
+            before = kept[i]
+            if (
+                note.start_s - before.end_s <= RETRIGGER_GAP_S
+                and note.amplitude < RETRIGGER_LEVEL * before.amplitude
+                and _another_pitch_starts(ordered, starts, note)
+            ):
+                kept[i] = replace(before, end_s=max(before.end_s, note.end_s))
+                continue
+        last[note.pitch] = len(kept)
+        kept.append(note)
+    return kept
+
+
+def _another_pitch_starts(ordered: list[RawNote], starts: list[float], note: RawNote) -> bool:
+    lo = bisect_left(starts, note.start_s - RETRIGGER_WITH_S)
+    hi = bisect_right(starts, note.start_s + RETRIGGER_WITH_S)
+    return any(other.pitch != note.pitch for other in ordered[lo:hi])
+
+
+def drop_suboctaves(notes: list[RawNote]) -> list[RawNote]:
+    """Drops ghost notes an octave or two below a louder note (see DROP_SUBOCTAVES)."""
+    by_pitch: dict[int, list[RawNote]] = {}
+    for note in notes:
+        by_pitch.setdefault(note.pitch, []).append(note)
+
+    def ghost(note: RawNote) -> bool:
+        return any(
+            above.start_s - SUBOCTAVE_EARLY_S <= note.start_s <= above.end_s
+            and note.amplitude < SUBOCTAVE_LEVEL * above.amplitude
+            for interval in SUBOCTAVE_INTERVALS
+            for above in by_pitch.get(note.pitch + interval, ())
+        )
+
+    return [note for note in notes if not ghost(note)]
 
 
 def _to_note(raw: RawNote) -> Note:
