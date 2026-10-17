@@ -107,9 +107,10 @@ def test_the_page_gets_clerks_publishable_key_from_the_issuer(
     settings = AuthSettings(issuer=issuer, jwks_url=f"{issuer}/.well-known/jwks.json")
     app.dependency_overrides[get_auth_settings] = lambda: settings
     config = api.get("/admin/api/config").json()  # no sign-in needed: the sign-in screen uses it
-    assert config["publishable_key"].rstrip("=") == key.rstrip("=")
+    assert config["publishable_key"] == key.rstrip("=")  # Clerk's keys carry no padding
     host = issuer.removeprefix("https://")
     assert config["clerk_js_url"].startswith(f"https://{host}/npm/@clerk/clerk-js@")
+    assert config["clerk_ui_url"].startswith(f"https://{host}/npm/@clerk/ui@")
 
 
 def test_overview_counts_accounts_activity_and_transcriptions(
