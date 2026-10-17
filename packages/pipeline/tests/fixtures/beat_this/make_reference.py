@@ -44,16 +44,18 @@ def load(clips: list[str]) -> np.ndarray:
 def export_model() -> None:
     """Export, fuse attention, quantize, optimize, shorten names; each step checked to keep the
     beats (`make test-accuracy`) and to shrink the file or the time per chunk."""
+    import importlib
     import tempfile
 
     import onnx
     import onnxruntime as ort
-    import torch
-    import torch.nn.functional as functional
     from beat_this.inference import load_model
     from beat_this.model import roformer
     from onnxruntime.quantization import QuantType, quantize_dynamic
 
+    # Untyped on purpose: torch is only installed in the throwaway env (and with the optional
+    # separation extra), so mypy must see the same thing with or without it.
+    torch: Any = importlib.import_module("torch")
     model = load_model("small0")
     # The rotary embedding's position cache would be baked into the graph as a 1 MB constant.
     for module in model.modules():
@@ -62,9 +64,9 @@ def export_model() -> None:
     # Attention as ONNX Runtime's fused MultiHeadAttention kernel instead of MatMul + Softmax:
     # 547 -> 423 ms per 30 s chunk (float, Apple M-series). Same maths as upstream's
     # scaled_dot_product_attention (default scale, no mask, no dropout at inference).
-    roformer.Attend.forward = _fused_attend(torch, functional)
+    roformer.Attend.forward = _fused_attend(torch, torch.nn.functional)
 
-    class Logits(torch.nn.Module):
+    class Logits(torch.nn.Module):  # type: ignore[misc]
         def __init__(self) -> None:
             super().__init__()
             self.model = model
