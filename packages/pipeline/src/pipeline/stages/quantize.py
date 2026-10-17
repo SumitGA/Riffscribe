@@ -46,26 +46,22 @@ class QuantizeStage(Stage[QuantizedScore]):
     name = StageName.QUANTIZE
     # 2: simplest grid that fits (quarters, eighths) before sixteenths; 3: strums as chords;
     # 4: chord names; 5: whole strums (StrumParams) with their direction; 6: beats tracked over
-    # Beat This! beat probabilities, bars from its downbeat probabilities
-    version = "6"
+    # Beat This! beat probabilities, bars from its downbeat probabilities; 7: strums retuned for
+    # GAPS notes
+    version = "7"
     requires = (NoteEvents,)
     output_type = QuantizedScore
 
     def run(self, inputs: StageInputs, ctx: StageContext) -> QuantizedScore:
         events = inputs.get(NoteEvents)
         notes = NoteList.model_validate_json(inputs.path(events.notes).read_text()).notes
-        activation = np.load(inputs.path(events.beat_activation)).astype(np.float64)
-        if activation.size and activation[:, 0].max() >= MIN_BEAT_PROBABILITY:
-            beat_frames = beat_track(activation[:, 0], events.beat_fps)[1]
-        else:
-            beat_frames = np.empty(0, np.int64)
-        if beat_frames.size >= 2:
-            beat_times = beat_frames_to_times(beat_frames, events.beat_fps)
-            downbeat_weights = activation[beat_frames, 1].tolist()
-        else:
-            envelope = np.load(inputs.path(events.onset_envelope)).astype(np.float64)
-            beat_times = track_beats(envelope, events.envelope_fps, notes)
-            downbeat_weights = []
+        beat_times, downbeat_weights = beat_grid(
+            np.load(inputs.path(events.beat_activation)).astype(np.float64),
+            events.beat_fps,
+            np.load(inputs.path(events.onset_envelope)).astype(np.float64),
+            events.envelope_fps,
+            notes,
+        )
         tempo = round(tempo_from_beats(beat_times), 2)
 
         rhythm = quantize(
@@ -121,6 +117,23 @@ class QuantizeStage(Stage[QuantizedScore]):
             tempo_bpm=tempo,
             note_count=len(score.notes),
         )
+
+
+def beat_grid(
+    activation: npt.NDArray[np.float64],
+    beat_fps: float,
+    envelope: npt.NDArray[np.float64],
+    envelope_fps: float,
+    notes: Sequence[Note],
+) -> tuple[list[float], list[float]]:
+    """Beat times, tracked over the beat probabilities (the onset envelope when no beat is
+    heard), and each beat's downbeat probability (empty from the envelope)."""
+    if activation.size and activation[:, 0].max() >= MIN_BEAT_PROBABILITY:
+        beat_frames = beat_track(activation[:, 0], beat_fps)[1]
+        if beat_frames.size >= 2:
+            beat_times = beat_frames_to_times(beat_frames, beat_fps)
+            return beat_times, activation[beat_frames, 1].tolist()
+    return track_beats(envelope, envelope_fps, notes), []
 
 
 def track_beats(

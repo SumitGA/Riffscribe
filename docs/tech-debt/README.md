@@ -41,7 +41,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-31](#td-31-the-editor-shows-changes-after-saving) | The editor shows changes after saving | Mobile | Users find editing slow or confusing |
 | [TD-32](#td-32-production-in-the-home-lab) | Production in the home lab | Infra / ops | The first paying customers, or any outage that costs users |
 | [TD-33](#td-33-strums-kept-whole-and-played-as-brush-strokes) | Strums kept whole and played as brush strokes | Pipeline / mobile | Users report fake chords in fast runs, or strums that sound too even |
-| [TD-34](#td-34-extra-guitar-notes-removed-by-two-hand-set-rules) | Extra guitar notes removed by two hand-set rules | Pipeline | New labelled recordings; the note model is replaced |
+| [TD-34](#td-34-extra-guitar-notes-removed-by-two-hand-set-rules) | Extra guitar notes removed by two hand-set rules (resolved: removed with ADR-0014) | Pipeline | - |
 | [TD-35](#td-35-beat-model-converted-and-quantized-by-us) | Beat model converted and quantized by us | Pipeline | Upstream ships ONNX or a newer model; beat step shows in job latency |
 | [TD-36](#td-36-guitar-note-model-converted-and-quantized-by-us) | Guitar note model converted and quantized by us; two note models run | Pipeline / legal | Job latency matters; GPU workers; real guitar recordings with corrections |
 
@@ -380,7 +380,10 @@ usable weights beats Basic Pitch on guitar on CPU today:
   on our GuitarSet clips: note F1 0.39-0.57 vs Basic Pitch 0.74-0.89, and 7.5 s vs 0.22 s of CPU
   per 20 s clip. A piano model needs adapting to guitar first.
 - *Riley et al. guitar models* (ICASSP 2024; GAPS, ISMIR 2024: 88 % zero-shot / 91 % supervised
-  note F1 on GuitarSet) are fine-tuned from Kong's model; their weights are not released.
+  note F1 on GuitarSet) are fine-tuned from Kong's model. This spike concluded their weights were
+  not released; they had been, on Hugging Face in September 2025 (MIT). Since 2026-10-17 they
+  transcribe guitar (ADR-0014, TD-36): Basic Pitch now does piano notes, chord recognition and
+  the fallback beat tracker.
 - *MuScriptor* weights are CC BY-NC (no commercial use); *YourMT3* is GPL-3.0 and takes minutes
   of CPU per 30 s; *SynthTab* data is CC BY-NC; *FretNet / TabCNN* are research code trained on
   GuitarSet with no maintained weights.
@@ -605,6 +608,11 @@ everywhere when the tone only had to be present (ringing notes from the previous
 and when it had to rise at the strum, the best setting gained 0.005 on the tuning clips and lost
 0.08 on the held-out Guitar-TECHS chords. Where Basic Pitch misses a strummed note there is
 little evidence of it left to recover; a better note model is the fix (TD-11).
+
+**Superseded for guitar (2026-10-17).** Guitar notes now come from the GAPS model (ADR-0014),
+so the tuned guitar decoding, `level_gain` and `tune_decoding.py` were removed (they are in git
+history). Piano still uses Basic Pitch's defaults; GAPS uses upstream's thresholds except a
+note's end (TD-36).
 
 **Revisit when** user recordings with corrections exist (Phase 4): they are the right tuning set.
 
@@ -1080,6 +1088,10 @@ and `notes_apart` (separate notes not merged).
 the note model improves (fewer missed strings would let the gap shrink).
 
 ## TD-34: Extra guitar notes removed by two hand-set rules
+
+**Resolved (2026-10-17).** The GAPS note model (ADR-0014) makes a sixth of Basic Pitch's extra
+notes on Guitar-TECHS; on its notes both rules changed no score, so they were removed (transcribe
+stage v11). The entry is kept for the record.
 
 **Concept.** Basic Pitch, the note model, writes notes nobody played. On the guitar clips half of
 these extras are *retriggers*: picking a new note makes the model report the strings still

@@ -7,8 +7,8 @@ Each clip is transcribed once (cached); every setting then reruns only the quant
 scores from accuracy_eval.grid_grouping pull against each other: `chords_whole` (the player's
 strums written at one grid position) and `notes_apart` (separate notes not merged into fake
 chords). Settings are ranked on the tuning clips by their mean, and rejected if notes_apart
-falls more than MAX_APART_LOSS below today's rule; the committed test clips (GuitarSet and the
-held-out Guitar-TECHS) are scored at the end as an unbiased check.
+falls more than MAX_APART_LOSS below today's setting (quantize.STRUM); the committed test clips
+(GuitarSet and the held-out Guitar-TECHS) are scored at the end as an unbiased check.
 """
 
 import itertools
@@ -29,7 +29,7 @@ from pipeline.rhythm import StrumParams, TimedNote, quantize
 from pipeline.runner import run_pipeline
 from pipeline.stages import default_stages
 from pipeline.stages.normalize import NormalizedAudio
-from pipeline.stages.quantize import track_beats
+from pipeline.stages.quantize import STRUM, beat_grid
 from pipeline.stages.transcribe import NoteEvents, NoteList
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
@@ -39,6 +39,9 @@ MAX_APART_LOSS = 0.01
 # strings were at most 60 ms apart and missed the slow ones). Best: gap 0.09, span 0.2, ring
 # 0.05: test chords_whole 0.52 -> 0.74, notes_apart 0.993 -> 0.986. Longer spans change
 # nothing; gaps of 0.1 or more merge separate notes beyond MAX_APART_LOSS.
+# Third pass, GAPS notes (transcribe v11) and Beat This! beats: GAPS times each string of a strum
+# where it was played, so strums come out wider. Best: gap 0.12, span 0.2, ring 0.1: tuning
+# chords_whole 0.855 -> 0.893, notes_apart 0.998 -> 0.992; test 0.736 -> 0.868, 0.978 -> 0.968.
 GRID: dict[str, list[float]] = {
     "gap_s": [0.07, 0.08, 0.09, 0.1, 0.12, 0.14],
     "span_s": [0.2, 0.25, 0.3, 0.35],
@@ -58,12 +61,19 @@ def load(truth_paths: list[Path]) -> list[dict[str, Any]]:
         )
         events = result.output(NoteEvents)
         notes = NoteList.model_validate_json((work / events.notes.path).read_text()).notes
-        envelope = np.load(work / events.onset_envelope.path).astype(np.float64)
+        beats, downbeats = beat_grid(
+            np.load(work / events.beat_activation.path).astype(np.float64),
+            events.beat_fps,
+            np.load(work / events.onset_envelope.path).astype(np.float64),
+            events.envelope_fps,
+            notes,
+        )
         clips.append(
             {
                 "name": truth_path.name.removesuffix(".truth.json"),
                 "notes": [TimedNote(n.onset_s, n.offset_s, n.pitch, n.velocity) for n in notes],
-                "beats": track_beats(envelope, events.envelope_fps, notes),
+                "beats": beats,
+                "downbeats": downbeats,
                 "shift": result.output(NormalizedAudio).trim_start_s,
                 "ref": truth["notes"],
             }
@@ -72,7 +82,7 @@ def load(truth_paths: list[Path]) -> list[dict[str, Any]]:
 
 
 def scores(clip: dict[str, Any], params: StrumParams | None) -> dict[str, float]:
-    rhythm = quantize(clip["notes"], clip["beats"], params)
+    rhythm = quantize(clip["notes"], clip["beats"], params, clip["downbeats"])
     shift = clip["shift"]
     est = [(n.onset_s + shift, n.offset_s + shift, n.pitch, n.onset_beats) for n in rhythm.notes]
     return grid_grouping(clip["ref"], est)
@@ -88,8 +98,8 @@ def mean(clips: list[dict[str, Any]], params: StrumParams | None) -> dict[str, f
 
 def main() -> None:
     tuning = load(sorted(CACHE.glob("*.truth.json")))
-    today = mean(tuning, None)
-    print(f"today's rule (35 ms rolls): {today}")
+    today = mean(tuning, STRUM)
+    print(f"today's setting ({STRUM}): {today}")
     results = []
     for values in itertools.product(*GRID.values()):
         params = replace(StrumParams(), **dict(zip(GRID, values, strict=True)))
@@ -105,9 +115,8 @@ def main() -> None:
         sorted(FIXTURES.glob("guitarset/*.truth.json"))
         + sorted(FIXTURES.glob("guitar_techs/*.truth.json"))
     )
-    print(f"\ntest clips, today: {mean(test, None)}")
+    print(f"\ntest clips, today: {mean(test, STRUM)}")
     print(f"test clips, best:  {mean(test, best)}  ({best})")
-    print(f"test clips, default StrumParams(): {mean(test, StrumParams())}")
 
 
 if __name__ == "__main__":
