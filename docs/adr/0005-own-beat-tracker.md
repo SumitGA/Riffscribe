@@ -1,6 +1,7 @@
 # ADR-0005: Our own beat tracker instead of librosa
 
-- Status: accepted
+- Status: accepted, amended by ADR-0013 (the tracker now runs over Beat This! beat
+  probabilities; the onset envelope is the fallback)
 - Date: 2026-10-04
 - Amends: "librosa for beat and tempo" in CLAUDE.md
 

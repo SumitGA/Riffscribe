@@ -177,6 +177,16 @@ def test_pickup_from_accented_downbeats() -> None:
     assert rhythm.pickup_beats == 2
 
 
+def test_tracked_downbeats_override_accents() -> None:
+    beats = steady_beats(16)
+    notes = [note_at(b, beats, vel=110 if (b - 2) % 4 == 0 else 50) for b in range(14)]
+    # The tracker heard bars starting on beat 1.
+    weights = [0.9 if b % 4 == 1 else 0.1 for b in range(16)]
+    rhythm = quantize(notes, beats, downbeat_weights=weights)
+
+    assert rhythm.pickup_beats == 1
+
+
 def test_durations_are_at_least_one_step_and_do_not_overlap_repeats() -> None:
     beats = steady_beats(8)
     notes = [

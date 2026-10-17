@@ -63,13 +63,13 @@ mypy_path = "packages/pipeline/src:packages/pipeline/tests:packages/platform/src
 
 [[tool.mypy.overrides]]
 module = [
-    "alembic.*", "demucs", "demucs.*", "mido", "mir_eval", "mir_eval.*", "onnxruntime", "pyloudnorm", "scipy", "scipy.*", "soundfile", "torch",
+    "alembic.*", "demucs", "demucs.*", "mido", "mir_eval", "mir_eval.*", "onnxruntime", "onnxruntime.*", "pyloudnorm", "scipy", "scipy.*", "soundfile", "torch",
 ]
 ignore_missing_imports = true
 
 # Only imported by the fixtures' make_reference.py scripts, which run in throwaway envs.
 [[tool.mypy.overrides]]
-module = ["basic_pitch", "basic_pitch.*", "librosa", "librosa.*"]
+module = ["basic_pitch", "basic_pitch.*", "beat_this.*", "librosa", "librosa.*", "onnx"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

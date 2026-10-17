@@ -11,6 +11,7 @@ import numpy as np
 import numpy.typing as npt
 
 from pipeline.config import Instrument, PipelineConfig
+from pipeline.rhythm import BEATS_PER_BAR, BeatMap
 from pipeline.runner import run_pipeline
 from pipeline.score import Score
 from pipeline.stages import default_stages
@@ -85,6 +86,11 @@ def evaluate(clip: Clip, workdir: Path) -> dict[str, float]:
         tempo_error = abs(score.tempo_bpm / clip.truth["tempo_bpm"] - 1)
         metrics["beat_f"] = mir_eval.beat.f_measure(ref_beats, est_beats)
         metrics["tempo_correct"] = float(tempo_error <= TEMPO_TOLERANCE)
+        est_bars = np.asarray(score.beat_times_s[score.pickup_beats :: BEATS_PER_BAR]) + shift
+        metrics["downbeat_f"] = mir_eval.beat.f_measure(
+            np.asarray(clip.truth["downbeats_s"], dtype=float), est_bars
+        )
+        metrics.update(bar_positions(clip.truth, score, shift))
     if clip.instrument is Instrument.GUITAR:
         tab_path = workdir / result.output(Tablature).tab.path
         tab = TabFile.model_validate_json(tab_path.read_text())
@@ -107,6 +113,43 @@ TRUTH_STRUM_GAP_S = 0.1
 TRUTH_STRUM_SPAN_S = 0.25
 STRUM_MIN_NOTES = 3
 SEPARATE_S = 0.1  # annotated events this far apart are separate notes or chords
+
+
+POSITION_TOLERANCE = 1 / 8  # beats: half a sixteenth either way
+
+
+def bar_positions(truth: dict[str, Any], score: Score, shift: float) -> dict[str, float]:
+    """Whether notes are written where they were played, judged against the annotated beats.
+
+    `notes_on_beat`: of the notes we found, the share written at the right place within the beat
+    (on it, on the "and", ...). `notes_in_bar`: the share at the right place within the bar
+    (which beat, and where in it). A note written a beat or half a beat off scores 0 here, even
+    if its time in seconds is right.
+    """
+    ref = truth["notes"]
+    ref_beats = BeatMap(truth["beats_s"])
+    first_bar = round(ref_beats.beat_at(truth["downbeats_s"][0]))
+    pairs = mir_eval.transcription.match_notes(
+        _intervals([(n["onset_s"], n["offset_s"]) for n in ref]),
+        _hz([n["pitch"] for n in ref]),
+        _intervals([(n.onset_s + shift, n.offset_s + shift) for n in score.notes]),
+        _hz([n.pitch for n in score.notes]),
+        offset_ratio=None,
+    )
+    if not pairs:
+        return {}
+
+    def off(a: float, b: float, cycle: float) -> bool:
+        d = abs(a - b) % cycle
+        return min(d, cycle - d) > POSITION_TOLERANCE
+
+    on_beat = in_bar = 0
+    for r, e in pairs:
+        truth_pos = ref_beats.beat_at(ref[r]["onset_s"]) - first_bar
+        written = float(score.notes[e].onset_beats) - score.pickup_beats
+        on_beat += not off(truth_pos, written, 1)
+        in_bar += not off(truth_pos, written, BEATS_PER_BAR)
+    return {"notes_on_beat": on_beat / len(pairs), "notes_in_bar": in_bar / len(pairs)}
 
 
 def grid_grouping(

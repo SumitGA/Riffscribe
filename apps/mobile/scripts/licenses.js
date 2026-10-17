@@ -34,6 +34,11 @@ const ASSETS = [
     license: 'Apache-2.0',
     copyright: ['Copyright 2022 Spotify AB'],
   },
+  {
+    name: 'Beat This! (beat tracking model, on our server)',
+    license: 'MIT',
+    file: '../../packages/pipeline/src/pipeline/models/beat_this/LICENSE',
+  },
 ];
 
 function productionPackages() {
