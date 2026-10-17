@@ -19,3 +19,9 @@ class ApiSettings(BaseSettings):
     # Uploading needs the current terms accepted (PUT /me/terms). Off only in unit tests that
     # aren't about terms.
     require_terms: bool = True
+    # Who may use the admin section (/admin): Clerk user IDs, comma-separated. Empty: nobody.
+    admin_user_ids: str = ""
+
+    @property
+    def admins(self) -> frozenset[str]:
+        return frozenset(i.strip() for i in self.admin_user_ids.split(",") if i.strip())

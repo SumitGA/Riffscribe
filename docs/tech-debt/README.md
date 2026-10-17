@@ -44,6 +44,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-34](#td-34-extra-guitar-notes-removed-by-two-hand-set-rules) | Extra guitar notes removed by two hand-set rules (resolved: removed with ADR-0014) | Pipeline | - |
 | [TD-35](#td-35-beat-model-converted-and-quantized-by-us) | Beat model converted and quantized by us | Pipeline | Upstream ships ONNX or a newer model; beat step shows in job latency |
 | [TD-36](#td-36-guitar-note-model-converted-and-quantized-by-us) | Guitar note model converted and quantized by us; two note models run | Pipeline / legal | Job latency matters; GPU workers; real guitar recordings with corrections |
+| [TD-37](#td-37-admin-section-read-only-numbers-from-two-sources) | Admin section: read-only numbers from two sources | Backend / ops | Retention needs app opens; many users; phases B and C |
 
 ---
 
@@ -1196,3 +1197,30 @@ probability 0.2 instead of 0.1.
 or chord recognition from GAPS's own frame output so Basic Pitch can go for guitar), when
 labelled recordings of steel-string and electric guitars exist to fine-tune or retune on, or
 before launch (legal review, with TD-11).
+
+## TD-37: Admin section: read-only numbers from two sources
+
+**Concept.** The admin page (ADR-0015) combines accounts from Clerk (who signed in, when, last
+active) with usage from our database (transcriptions, failures, processing times). *Retention*
+is the share of people who come back after signing up, counted per sign-up week (a *cohort*).
+
+**What we did.** Phase A is read-only. Every page load fetches all Clerk users (500 per request)
+and runs a few aggregate queries. Retention counts the weeks in which someone made a
+transcription. Access is Cloudflare Access plus an allowlist of Clerk user IDs in the VM's
+`.env`.
+
+**Pros**
+- No new tables, no migration, no new service; nothing the app uses changes.
+- The allowlist is one environment variable, and Cloudflare stops everyone else before the
+  server.
+
+**Cons**
+- Retention undercounts: someone who opens the app to read or play a score but doesn't
+  transcribe that week isn't counted. "Last active" from Clerk shows only the latest day.
+- Fetching every Clerk user per page load is fine for thousands of users, not for hundreds of
+  thousands; there is no caching.
+- Adding an admin means editing `.env` on the VM and restarting the API.
+
+**Revisit when** retention needs app opens (record a daily "seen" per user, with phase B's
+migration), when users reach the tens of thousands (cache the Clerk list, or keep a copy in our
+database via Clerk webhooks), or when a second person needs admin access (Clerk roles).

@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Admin · Riffscribe</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<!-- The admin section (ADR-0015). Behind Cloudflare Access; the API also checks that the
+     signed-in Clerk user is in ADMIN_USER_IDS. Read only. Every value from the API is put in
+     the page with textContent, never as HTML: emails and job names are user input. -->
+<style>
+:root {
+  --bg: #0D0E11; --surface: #16181D; --surface-2: #1D2027; --line: #2B303B;
+  --text: #E5E7EB; --muted: #9CA3AF; --accent: #FFB224; --on-accent: #0D0E11;
+  --good: #4ADE80; --bad: #F87171; --blue: #60A5FA;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px 48px; }
+header { display: flex; align-items: center; gap: 12px; padding: 16px 0; flex-wrap: wrap; }
+header img { width: 32px; height: 32px; border-radius: 8px; }
+header h1 { font-size: 18px; margin: 0; flex: 1; }
+header .who { color: var(--muted); font-size: 13px; }
+button {
+  font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+h2 { font-size: 16px; margin: 32px 0 12px; }
+.note { color: var(--muted); font-size: 13px; margin: -6px 0 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.card .n { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+.card .l { color: var(--muted); font-size: 13px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; font-size: 13px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--surface-2); }
+tr.open td { background: var(--surface-2); }
+.legend { display: flex; gap: 16px; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+svg text { fill: var(--muted); font-size: 11px; }
+.cell { text-align: center; min-width: 48px; }
+.bad { color: var(--bad); }
+.good { color: var(--good); }
+.muted { color: var(--muted); }
+.center { max-width: 480px; margin: 12vh auto; text-align: center; }
+.center p { color: var(--muted); }
+code { background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-size: 13px; word-break: break-all; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/favicon.png" alt="">
+    <h1>Riffscribe admin</h1>
+    <span class="who" id="who"></span>
+    <button id="refresh" hidden>Refresh</button>
+    <button id="signout" hidden>Sign out</button>
+  </header>
+  <div id="gate" class="center"><p>Loading…</p></div>
+  <main id="main" hidden>
+    <div class="cards" id="cards"></div>
+
+    <h2>Last 30 days</h2>
+    <div class="panel">
+      <div class="legend">
+        <span><i style="background: var(--accent)"></i>Sign-ups</span>
+        <span><i style="background: var(--blue)"></i>Transcriptions</span>
+        <span><i style="background: var(--bad)"></i>Failed</span>
+      </div>
+      <div id="chart"></div>
+    </div>
+    <p class="note">Days are UTC.</p>
+
+    <h2>Retention</h2>
+    <p class="note">People who signed up in each week, and how many of them made a transcription in
+      each week after (week 0 is the week they joined). Opening the app to read a score isn't
+      recorded yet.</p>
+    <div class="panel scroll"><table id="retention"></table></div>
+
+    <div class="grid2">
+      <div>
+        <h2>Processing time (last 30 days)</h2>
+        <div class="panel scroll"><table id="stages"></table></div>
+      </div>
+      <div>
+        <h2>Failures (last 30 days)</h2>
+        <div class="panel scroll"><table id="errors"></table></div>
+        <h2>Queue now</h2>
+        <div class="panel scroll"><table id="queues"></table></div>
+      </div>
+    </div>
+
+    <h2>Users</h2>
+    <p class="note">Newest first. Click a user to see their transcriptions.</p>
+    <div class="panel scroll"><table id="users"></table></div>
+  </main>
+</div>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let getToken = async () => null;
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k === "style") node.style.cssText = v;
+    else node.setAttribute(k, v);
+  }
+  for (const child of children) node.append(child instanceof Node ? child : String(child ?? ""));
+  return node;
+}
+const fmt = new Intl.NumberFormat();
+const num = (n) => (n === null || n === undefined ? "–" : fmt.format(n));
+const when = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "–");
+const day = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" }) : "–");
+const pct = (part, whole) => (whole ? Math.round((100 * part) / whole) + "%" : "–");
+
+async function api(path) {
+  const token = await getToken();
+  const response = await fetch("/admin/api/" + path, {
+    headers: token ? { Authorization: "Bearer " + token } : {},
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    let detail = response.statusText;
+    try { detail = (await response.json()).detail || detail; } catch {}
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+function gate(...nodes) {
+  $("main").hidden = true;
+  $("refresh").hidden = true;
+  $("gate").hidden = false;
+  $("gate").replaceChildren(...nodes);
+}
+
+function table(id, head, rows, numeric = []) {
+  const thead = el("tr", {}, ...head.map((h, i) => el("th", numeric.includes(i) ? { class: "num" } : {}, h)));
+  const body = rows.length
+    ? rows
+    : [el("tr", {}, el("td", { colspan: head.length, class: "muted" }, "Nothing yet"))];
+  $(id).replaceChildren(el("thead", {}, thead), el("tbody", {}, ...body));
+}
+
+function cards(o) {
+  const items = [
+    [o.accounts, o.accounts_from_clerk ? "Accounts (Clerk)" : "Accounts (database)"],
+    [o.active_1d, "Active today"],
+    [o.active_7d, "Active, 7 days"],
+    [o.active_30d, "Active, 30 days"],
+    [o.users_transcribed, "Made a transcription"],
+    [o.transcriptions, "Transcriptions"],
+    [o.transcriptions_7d, "Transcriptions, 7 days"],
+    [o.failed, "Failed"],
+    [o.devices_with_notifications, "Devices with notifications"],
+    [o.dead_letters, "Dead letters"],
+  ];
+  $("cards").replaceChildren(
+    ...items.map(([n, label]) => el("div", { class: "card" }, el("div", { class: "n" }, num(n)), el("div", { class: "l" }, label)))
+  );
+}
+
+function chart(days) {
+  const width = 1000, height = 180, pad = 22;
+  const max = Math.max(1, ...days.map((d) => Math.max(d.signups, d.transcriptions)));
+  const slot = (width - pad) / days.length;
+  const bar = Math.max(2, slot / 2 - 2);
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height + 20}`);
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Sign-ups and transcriptions per day");
+  const rect = (x, value, color) => {
+    const h = (value / max) * height;
+    const r = document.createElementNS(ns, "rect");
+    for (const [k, v] of Object.entries({ x, y: height - h, width: bar, height: Math.max(h, value ? 1 : 0), fill: color, rx: 1 })) r.setAttribute(k, v);
+    return r;
+  };
+  const text = (x, y, value, anchor = "middle") => {
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y); t.setAttribute("text-anchor", anchor);
+    t.textContent = value;
+    return t;
+  };
+  svg.append(text(0, 10, String(max), "start"));
+  days.forEach((d, i) => {
+    const x = pad + i * slot;
+    const group = document.createElementNS(ns, "g");
+    const tip = document.createElementNS(ns, "title");
+    tip.textContent = `${d.day}: ${d.signups} sign-ups, ${d.transcriptions} transcriptions, ${d.failed} failed`;
+    group.append(tip, rect(x, d.signups, "var(--accent)"), rect(x + bar + 1, d.transcriptions, "var(--blue)"));
+    if (d.failed) group.append(rect(x + bar + 1, d.failed, "var(--bad)"));
+    svg.append(group);
+    if (i % 5 === 0 || i === days.length - 1) {
+      const label = new Date(d.day + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+      svg.append(text(x + bar, height + 15, label));
+    }
+  });
+  $("chart").replaceChildren(svg);
+}
+
+function retention(cohorts) {
+  const weeks = Math.max(1, ...cohorts.map((c) => c.transcribed.length));
+  const head = ["Joined week of", "People", ...Array.from({ length: weeks }, (_, i) => "Week " + i)];
+  const rows = cohorts.slice().reverse().map((c) =>
+    el("tr", {},
+      el("td", {}, day(c.week + "T00:00:00")),
+      el("td", { class: "num" }, num(c.size)),
+      ...Array.from({ length: weeks }, (_, i) => {
+        if (i >= c.transcribed.length) return el("td", { class: "cell" }, "");
+        const share = c.size ? c.transcribed[i] / c.size : 0;
+        const style = `background: rgba(255, 178, 36, ${(0.08 + 0.6 * share).toFixed(2)})`;
+        return el("td", { class: "cell", style: c.size ? style : "", title: `${c.transcribed[i]} of ${c.size}` }, c.size ? pct(c.transcribed[i], c.size) : "–");
+      })
+    )
+  );
+  table("retention", head, rows, [1]);
+}
+
+function others(o) {
+  table("stages", ["Step", "Runs", "Median", "95% under"],
+    o.stages.map((s) => el("tr", {}, el("td", {}, s.stage), el("td", { class: "num" }, num(s.runs)), el("td", { class: "num" }, s.median_s + " s"), el("td", { class: "num" }, s.p95_s + " s"))),
+    [1, 2, 3]);
+  table("errors", ["Reason", "Jobs"],
+    o.errors.map((e) => el("tr", {}, el("td", {}, e.code), el("td", { class: "num" }, num(e.count)))), [1]);
+  table("queues", ["Queue", "Priority", "Waiting", "Running", "Retrying"],
+    o.queues.map((q) => el("tr", {}, el("td", {}, q.queue), el("td", {}, q.priority), el("td", { class: "num" }, num(q.ready)), el("td", { class: "num" }, num(q.in_flight)), el("td", { class: "num" }, num(q.delayed)))),
+    [2, 3, 4]);
+}
+
+function users(list) {
+  const head = ["Email", "Sign-in", "Joined", "Last active", "Terms", "Transcriptions", "Failed", "Last transcription", "Notifications"];
+  const rows = list.map((u) => {
+    const row = el("tr", { class: "click", tabindex: "0", title: u.id },
+      el("td", {}, u.email || u.id),
+      el("td", {}, u.method),
+      el("td", {}, day(u.joined)),
+      el("td", {}, day(u.last_active)),
+      el("td", { class: u.terms_accepted ? "good" : "muted" }, u.terms_accepted ? "yes" : "no"),
+      el("td", { class: "num" }, num(u.transcriptions)),
+      el("td", { class: "num" + (u.failed ? " bad" : "") }, num(u.failed)),
+      el("td", {}, when(u.last_transcription)),
+      el("td", { class: "num" }, num(u.notification_devices)),
+    );
+    const toggle = () => showJobs(u, row, head.length);
+    row.addEventListener("click", toggle);
+    row.addEventListener("keydown", (e) => { if (e.key === "Enter") toggle(); });
+    return row;
+  });
+  table("users", head, rows, [5, 6, 8]);
+}
+
+async function showJobs(user, row, span) {
+  const next = row.nextElementSibling;
+  if (next && next.dataset.jobsFor === user.id) {
+    next.remove();
+    row.classList.remove("open");
+    return;
+  }
+  row.classList.add("open");
+  const holder = el("td", { colspan: span }, el("span", { class: "muted" }, "Loading…"));
+  const detail = el("tr", {}, holder);
+  detail.dataset.jobsFor = user.id;
+  row.after(detail);
+  try {
+    const { jobs } = await api("users/" + encodeURIComponent(user.id) + "/jobs");
+    const inner = el("table", {});
+    inner.append(
+      el("thead", {}, el("tr", {}, ...["Created", "Name", "Instrument", "Status", "Took", "Error"].map((h) => el("th", {}, h)))),
+      el("tbody", {}, ...(jobs.length ? jobs.map((j) => el("tr", {},
+        el("td", {}, when(j.created_at)),
+        el("td", {}, j.name || "–"),
+        el("td", {}, j.instrument || "–"),
+        el("td", { class: j.status === "failed" ? "bad" : j.status === "succeeded" ? "good" : "" }, j.status),
+        el("td", { class: "num" }, j.seconds === null ? "–" : j.seconds + " s"),
+        el("td", { class: "muted", title: j.error_message || "" }, j.error_code || ""),
+      )) : [el("tr", {}, el("td", { colspan: 6, class: "muted" }, "No transcriptions"))])),
+    );
+    holder.replaceChildren(el("div", { class: "muted", style: "margin-bottom: 6px" }, "User ID ", el("code", {}, user.id)), inner);
+  } catch (error) {
+    holder.replaceChildren(el("span", { class: "bad" }, "Couldn't load: " + error.message));
+  }
+}
+
+async function loadDashboard() {
+  $("refresh").disabled = true;
+  try {
+    const [overview, ret, list] = await Promise.all([api("overview"), api("retention"), api("users")]);
+    $("gate").hidden = true;
+    $("main").hidden = false;
+    $("refresh").hidden = false;
+    cards(overview);
+    chart(overview.days);
+    retention(ret.cohorts);
+    others(overview);
+    users(list.users);
+  } catch (error) {
+    if (error.status === 403) {
+      gate(el("h2", {}, "This account isn't an admin"), el("p", {}, error.message));
+    } else if (error.status === 401) {
+      gate(el("h2", {}, "Signed out"), el("p", {}, "Sign in again to continue."));
+    } else {
+      gate(el("h2", {}, "Couldn't load the dashboard"), el("p", {}, error.message));
+    }
+  } finally {
+    $("refresh").disabled = false;
+  }
+}
+
+function loadScript(src, key) {
+  return new Promise((resolve, reject) => {
+    const script = el("script", { src, async: "", crossorigin: "anonymous", "data-clerk-publishable-key": key });
+    script.onload = resolve;
+    script.onerror = () => reject(new Error("couldn't load the sign-in script"));
+    document.head.append(script);
+  });
+}
+
+async function start() {
+  const config = await (await fetch("/admin/api/config", { cache: "no-store" })).json();
+  if (!config.publishable_key) {
+    // Local dev (no Clerk): paste a token from `make token USER=<id>`.
+    const input = el("input", { placeholder: "dev token (make token)", style: "width: 100%; padding: 8px" });
+    const go = el("button", { style: "margin-top: 8px" }, "Use token");
+    go.onclick = () => { const t = input.value.trim(); getToken = async () => t; loadDashboard(); };
+    gate(el("h2", {}, "Local sign-in"), input, go);
+    return;
+  }
+  await loadScript(config.clerk_js_url, config.publishable_key);
+  const clerk = window.Clerk;
+  await clerk.load();
+  const render = () => {
+    if (!clerk.user) {
+      $("who").textContent = "";
+      $("signout").hidden = true;
+      const box = el("div", { style: "display: inline-block" });
+      gate(box);
+      clerk.mountSignIn(box, { forceRedirectUrl: "/admin", signUpUrl: "/admin" });
+      return;
+    }
+    $("who").textContent = clerk.user.primaryEmailAddress?.emailAddress || clerk.user.id;
+    $("signout").hidden = false;
+    getToken = () => clerk.session.getToken();
+    loadDashboard();
+  };
+  $("signout").onclick = () => clerk.signOut({ redirectUrl: "/admin" });
+  let current = clerk.user?.id ?? null;
+  clerk.addListener(({ user }) => {
+    const id = user?.id ?? null;
+    if (id !== current) { current = id; render(); }  // signed in or out, not token refreshes
+  });
+  render();
+}
+
+$("refresh").onclick = loadDashboard;
+start().catch((error) => gate(el("h2", {}, "Couldn't start"), el("p", {}, error.message)));
+</script>
+</body>
+</html>
