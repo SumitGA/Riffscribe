@@ -1,0 +1,15 @@
+GAPS guitar transcription model
+Copyright (c) 2025 Xavier Riley. Released under the MIT licence (see LICENSE) on the model card
+of https://huggingface.co/xavriley/midi-transcription-models.
+
+This model is fine-tuned from the high-resolution piano transcription model of
+Qiuqiang Kong et al., "High-resolution Piano Transcription with Pedals by Regressing Onset and
+Offset Times" (2021), whose weights are released under Creative Commons Attribution 4.0
+(https://zenodo.org/record/4034264, https://creativecommons.org/licenses/by/4.0/).
+
+The pre- and post-processing ported in pipeline/gaps.py come from piano_transcription_inference
+(Qiuqiang Kong; MIT per its package metadata; the same code is Apache-2.0 in
+https://github.com/bytedance/piano_transcription).
+
+Changes: converted from PyTorch to ONNX, int8 convolution and fully connected weights, float16
+storage of the remaining large weights (tests/fixtures/gaps/make_reference.py).

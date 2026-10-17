@@ -1,8 +1,8 @@
-"""transcribe: Basic Pitch on the normalized audio -> note events (notes.json) and raw.mid;
-Beat This! on the same audio -> beat and downbeat probabilities (beat_activation.npy)."""
+"""transcribe: the normalized audio -> note events (notes.json) and raw.mid, from the GAPS
+model for guitar and Basic Pitch for piano; Beat This! on the same audio -> beat and downbeat
+probabilities (beat_activation.npy)."""
 
-from bisect import bisect_left, bisect_right
-from dataclasses import replace
+import math
 
 import numpy as np
 import soundfile
@@ -15,13 +15,15 @@ from pipeline.basic_pitch import (
     DecodeParams,
     RawNote,
     decode_notes,
-    level_gain,
     onset_envelope,
 )
 from pipeline.basic_pitch import SAMPLE_RATE as MODEL_RATE
 from pipeline.beat_this import FPS as BEAT_FPS
 from pipeline.beat_this import BeatThis
 from pipeline.config import Instrument
+from pipeline.gaps import SAMPLE_RATE as GAPS_RATE
+from pipeline.gaps import Gaps
+from pipeline.gaps import decode_notes as decode_gaps
 from pipeline.midi import write_notes
 from pipeline.stage import Stage, StageContext, StageInputs
 from pipeline.stages.normalize import NormalizedAudio
@@ -34,37 +36,12 @@ PITCH_RANGE = {
     Instrument.PIANO: (21, 108),  # A0 to C8
 }
 GM_PROGRAM = {Instrument.GUITAR: 25, Instrument.PIANO: 0}  # steel guitar, grand piano
-# Note decoding per instrument. Guitar: activations are first scaled to a reference level
-# (`level_gain`, so thresholds are relative to the recording), then decoded with settings
-# grid-searched on 24 GuitarSet excerpts and checked on the 6 held-out test clips
-# (tests/tuning/tune_decoding.py): note F1 0.761 -> 0.818, precision 0.729 -> 0.805, recall
-# 0.811 -> 0.844. Fixed thresholds scored nearly as well on GuitarSet but dropped 61 % of the
-# notes on a quieter phone recording; relative ones removed ~7 % (mostly stacked extras).
-# Piano keeps Basic Pitch's defaults until there is real piano data to tune on (TD-16).
-DECODE = {
-    Instrument.GUITAR: DecodeParams(
-        onset_threshold=0.65, frame_threshold=0.45, min_note_frames=6, infer_onsets=False
-    ),
-    Instrument.PIANO: DecodeParams(),
-}
-LEVEL_NORMALIZE = {Instrument.GUITAR: True, Instrument.PIANO: False}
-# Picking a new note makes Basic Pitch report the strings still ringing a second time, as a
-# fresh note straight after the first (half of the guitar's extra notes). Such a retrigger is
-# quieter than the note it continues, and starts with another pitch; a real re-pick is as loud
-# or louder. Measured on the guitar clips (GuitarSet + Guitar-TECHS): merging these removed 53
-# of 94 split notes and 6 of 195 real repeated notes.
-MERGE_RETRIGGERS = {Instrument.GUITAR: True, Instrument.PIANO: False}
-RETRIGGER_GAP_S = 0.03  # starts at most this long after the same pitch ended...
-RETRIGGER_LEVEL = 0.9  # ...quieter than this share of it...
-RETRIGGER_WITH_S = 0.04  # ...and another pitch starts within this long
-# Basic Pitch also hears a guitar note an octave or two below, quieter (the other common
-# extra note). A note that starts while one 12 or 24 semitones above it sounds, at under 80 %
-# of its level, is dropped: on the guitar clips that removed 26 such ghosts and 1 real note.
-# Overtones above a note can't be told from real octave doublings by level, so they stay.
-DROP_SUBOCTAVES = {Instrument.GUITAR: True, Instrument.PIANO: False}
-SUBOCTAVE_INTERVALS = (12, 24)
-SUBOCTAVE_LEVEL = 0.8
-SUBOCTAVE_EARLY_S = 0.03  # may start this much before the note above
+# Guitar notes come from the GAPS model (ADR-0014): on the held-out Guitar-TECHS clips note F1
+# 0.78 -> 0.88, a sixth of the extra notes. It replaced Basic Pitch with tuned decoding and two
+# rules against its extra notes (TD-34), which find nothing to remove in GAPS's notes. Piano
+# notes come from Basic Pitch with its default decoding (TD-16). Basic Pitch still runs for
+# every instrument: its activations feed chord recognition and the fallback beat tracker.
+GAPS_NOTES = {Instrument.GUITAR: True, Instrument.PIANO: False}
 
 
 class Note(Frozen):
@@ -72,7 +49,7 @@ class Note(Frozen):
     offset_s: float = Field(ge=0)
     pitch: int = Field(ge=0, le=127)
     velocity: int = Field(ge=1, le=127)
-    amplitude: float  # model confidence-like activation, 0..1
+    amplitude: float  # 0..1: GAPS's velocity output, or Basic Pitch's mean activation
 
 
 class NoteList(Frozen):
@@ -101,36 +78,35 @@ class TranscribeStage(Stage[NoteEvents]):
     # 2: note decoding moved to Rust; 3: onset envelope output; 4: reads the separate stage;
     # 5-6: tuned guitar decoding, relative to the recording's level; 7: frames output;
     # 8: guitar retriggers merged into the note they continue; 9: guitar sub-octave ghosts;
-    # 10: beat activation output (Beat This!)
-    version = "10"
+    # 10: beat activation output (Beat This!); 11: guitar notes from the GAPS model
+    version = "11"
     requires = (NormalizedAudio, SeparatedAudio)
     output_type = NoteEvents
 
     def __init__(self) -> None:
         self._model: BasicPitch | None = None  # loaded on first run, not when cached
         self._beat_model: BeatThis | None = None
+        self._gaps: Gaps | None = None
 
     def run(self, inputs: StageInputs, ctx: StageContext) -> NoteEvents:
         source = inputs.get(SeparatedAudio).audio or inputs.get(NormalizedAudio).audio
-        audio, rate = soundfile.read(inputs.path(source), dtype="float32")
+        original, rate = soundfile.read(inputs.path(source), dtype="float32")
         if rate % MODEL_RATE:
             raise ValueError(f"expected a multiple of {MODEL_RATE} Hz, got {rate} Hz")
-        audio = resample_poly(audio, 1, rate // MODEL_RATE).astype(np.float32)
+        audio = resample_poly(original, 1, rate // MODEL_RATE).astype(np.float32)
 
         if self._model is None:
             self._model = BasicPitch()
         low, high = PITCH_RANGE[ctx.cfg.instrument]
         frames, onsets = self._model.activations(audio)
-        params = replace(DECODE[ctx.cfg.instrument], min_pitch=low, max_pitch=high)
-        gain = level_gain(frames, low, high) if LEVEL_NORMALIZE[ctx.cfg.instrument] else 1.0
-        raw = [  # velocities stay on the recording's own scale
-            replace(n, amplitude=n.amplitude / gain)
-            for n in decode_notes(frames * gain, onsets * gain, params)
-        ]
-        if MERGE_RETRIGGERS[ctx.cfg.instrument]:
-            raw = merge_retriggers(raw)
-        if DROP_SUBOCTAVES[ctx.cfg.instrument]:
-            raw = drop_suboctaves(raw)
+        if GAPS_NOTES[ctx.cfg.instrument]:
+            if self._gaps is None:
+                self._gaps = Gaps()
+            common = math.gcd(rate, GAPS_RATE)
+            audio_16k = resample_poly(original, GAPS_RATE // common, rate // common)
+            raw = decode_gaps(self._gaps.outputs(audio_16k.astype(np.float32)), low, high)
+        else:
+            raw = decode_notes(frames, onsets, DecodeParams(min_pitch=low, max_pitch=high))
         if self._beat_model is None:
             self._beat_model = BeatThis()
         beats = self._beat_model.activations(audio)  # also a 22050 Hz model
@@ -155,51 +131,6 @@ class TranscribeStage(Stage[NoteEvents]):
             frames=ctx.ref("frames.npy"),
             note_count=len(notes),
         )
-
-
-def merge_retriggers(notes: list[RawNote]) -> list[RawNote]:
-    """Joins each retrigger (see MERGE_RETRIGGERS) onto the note it continues."""
-    ordered = sorted(notes, key=lambda n: (n.start_s, n.pitch))
-    starts = [n.start_s for n in ordered]
-    kept: list[RawNote] = []
-    last: dict[int, int] = {}  # pitch -> index in kept of its latest note
-    for note in ordered:
-        i = last.get(note.pitch)
-        if i is not None:
-            before = kept[i]
-            if (
-                note.start_s - before.end_s <= RETRIGGER_GAP_S
-                and note.amplitude < RETRIGGER_LEVEL * before.amplitude
-                and _another_pitch_starts(ordered, starts, note)
-            ):
-                kept[i] = replace(before, end_s=max(before.end_s, note.end_s))
-                continue
-        last[note.pitch] = len(kept)
-        kept.append(note)
-    return kept
-
-
-def _another_pitch_starts(ordered: list[RawNote], starts: list[float], note: RawNote) -> bool:
-    lo = bisect_left(starts, note.start_s - RETRIGGER_WITH_S)
-    hi = bisect_right(starts, note.start_s + RETRIGGER_WITH_S)
-    return any(other.pitch != note.pitch for other in ordered[lo:hi])
-
-
-def drop_suboctaves(notes: list[RawNote]) -> list[RawNote]:
-    """Drops ghost notes an octave or two below a louder note (see DROP_SUBOCTAVES)."""
-    by_pitch: dict[int, list[RawNote]] = {}
-    for note in notes:
-        by_pitch.setdefault(note.pitch, []).append(note)
-
-    def ghost(note: RawNote) -> bool:
-        return any(
-            above.start_s - SUBOCTAVE_EARLY_S <= note.start_s <= above.end_s
-            and note.amplitude < SUBOCTAVE_LEVEL * above.amplitude
-            for interval in SUBOCTAVE_INTERVALS
-            for above in by_pitch.get(note.pitch + interval, ())
-        )
-
-    return [note for note in notes if not ghost(note)]
 
 
 def _to_note(raw: RawNote) -> Note:

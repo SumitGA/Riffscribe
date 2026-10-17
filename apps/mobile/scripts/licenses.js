@@ -39,6 +39,16 @@ const ASSETS = [
     license: 'MIT',
     file: '../../packages/pipeline/src/pipeline/models/beat_this/LICENSE',
   },
+  {
+    name: 'GAPS guitar transcription model (on our server)',
+    license: 'MIT',
+    file: '../../packages/pipeline/src/pipeline/models/gaps/LICENSE',
+  },
+  {
+    name: 'High-resolution piano transcription model, Qiuqiang Kong et al. (basis of the GAPS model)',
+    license: 'CC-BY-4.0',
+    copyright: ['Copyright (c) 2020 Qiuqiang Kong et al. (zenodo.org/record/4034264)'],
+  },
 ];
 
 function productionPackages() {

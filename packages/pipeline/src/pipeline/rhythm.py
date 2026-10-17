@@ -57,9 +57,9 @@ class StrumParams:
     string still rings and the pitch keeps moving the same way (low to high on a downstroke).
     """
 
-    gap_s: float = 0.09  # consecutive strings at most this far apart...
+    gap_s: float = 0.12  # consecutive strings at most this far apart...
     span_s: float = 0.2  # ...the whole strum at most this long
-    min_ring_s: float = 0.05  # the previous string still sounds this long after the next starts
+    min_ring_s: float = 0.1  # the previous string still sounds this long after the next starts
     min_spread_s: float = 0.02  # a chord spread less than this was struck at once (no strum)
     jitter_s: float = 0.008  # onsets this close say nothing about the strum's direction
 
