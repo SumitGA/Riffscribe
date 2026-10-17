@@ -29,6 +29,21 @@
 		rewrite /favicon.ico /favicon.png
 		file_server
 	}
+	# The admin section (ADR-0015): the page, and its API under /admin/api, which the API itself
+	# guards (ADMIN_USER_IDS). Cloudflare Access protects both paths before they reach here.
+	@admin path /admin /admin/
+	handle @admin {
+		header Cache-Control "no-store"
+		header X-Frame-Options "DENY"
+		header X-Robots-Tag "noindex, nofollow"
+		root * /srv/site
+		rewrite * /admin.html
+		file_server
+	}
+	handle /admin/api/* {
+		header Cache-Control "no-store"
+		reverse_proxy api:8000
+	}
 	# The home page (what Riffscribe is; Google sign-in and Play list it as the website).
 	handle / {
 		root * /srv/site

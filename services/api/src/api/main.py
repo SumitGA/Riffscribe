@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, Response, status
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from sqlalchemy import text
 
-from api import account, jobs, push, versions
+from api import account, admin, jobs, push, versions
 from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, LimiterDep, QueueDep, RedisDep, SessionDep
 from api.observability import metrics_response, time_requests
@@ -25,6 +25,8 @@ app.include_router(jobs.router)
 app.include_router(push.router)
 app.include_router(versions.router)
 app.include_router(account.router)
+app.include_router(admin.config_router)
+app.include_router(admin.router)
 app.middleware("http")(time_requests)
 # One span per request; the submit span becomes the root of the job's trace.
 FastAPIInstrumentor.instrument_app(app, excluded_urls="healthz,readyz,metrics")

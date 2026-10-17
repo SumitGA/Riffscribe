@@ -119,8 +119,13 @@ def issue_dev_token(settings: AuthSettings, user_id: str, *, ttl_s: int = 3600) 
 
 
 @lru_cache
+def get_auth_settings() -> AuthSettings:
+    return AuthSettings()
+
+
+@lru_cache
 def get_token_verifier() -> TokenVerifier:
-    return TokenVerifier(AuthSettings())
+    return TokenVerifier(get_auth_settings())
 
 
 _bearer = HTTPBearer(auto_error=False)
