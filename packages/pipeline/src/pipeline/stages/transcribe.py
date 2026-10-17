@@ -1,4 +1,5 @@
-"""transcribe: Basic Pitch on the normalized audio -> note events (notes.json) and raw.mid."""
+"""transcribe: Basic Pitch on the normalized audio -> note events (notes.json) and raw.mid;
+Beat This! on the same audio -> beat and downbeat probabilities (beat_activation.npy)."""
 
 from bisect import bisect_left, bisect_right
 from dataclasses import replace
@@ -18,6 +19,8 @@ from pipeline.basic_pitch import (
     onset_envelope,
 )
 from pipeline.basic_pitch import SAMPLE_RATE as MODEL_RATE
+from pipeline.beat_this import FPS as BEAT_FPS
+from pipeline.beat_this import BeatThis
 from pipeline.config import Instrument
 from pipeline.midi import write_notes
 from pipeline.stage import Stage, StageContext, StageInputs
@@ -82,7 +85,10 @@ class NoteEvents(StageOutput):
     stage = StageName.TRANSCRIBE
     notes: ArtifactRef  # notes.json (NoteList)
     midi: ArtifactRef  # raw.mid, unquantized, fixed 120 bpm grid
-    onset_envelope: ArtifactRef  # onset_envelope.npy, float32, for beat tracking
+    # beat_activation.npy: float16 (n_frames, 2), probability of a beat / a downbeat per frame
+    beat_activation: ArtifactRef
+    beat_fps: float
+    onset_envelope: ArtifactRef  # onset_envelope.npy, float32, fallback beat tracking
     envelope_fps: float
     # frames.npy: float16 (n_frames, 88) raw note activations for chord recognition; bin 0 is
     # A0, frame i is at basic_pitch.frame_times(n_frames)[i]
@@ -94,13 +100,15 @@ class TranscribeStage(Stage[NoteEvents]):
     name = StageName.TRANSCRIBE
     # 2: note decoding moved to Rust; 3: onset envelope output; 4: reads the separate stage;
     # 5-6: tuned guitar decoding, relative to the recording's level; 7: frames output;
-    # 8: guitar retriggers merged into the note they continue; 9: guitar sub-octave ghosts
-    version = "9"
+    # 8: guitar retriggers merged into the note they continue; 9: guitar sub-octave ghosts;
+    # 10: beat activation output (Beat This!)
+    version = "10"
     requires = (NormalizedAudio, SeparatedAudio)
     output_type = NoteEvents
 
     def __init__(self) -> None:
         self._model: BasicPitch | None = None  # loaded on first run, not when cached
+        self._beat_model: BeatThis | None = None
 
     def run(self, inputs: StageInputs, ctx: StageContext) -> NoteEvents:
         source = inputs.get(SeparatedAudio).audio or inputs.get(NormalizedAudio).audio
@@ -123,6 +131,10 @@ class TranscribeStage(Stage[NoteEvents]):
             raw = merge_retriggers(raw)
         if DROP_SUBOCTAVES[ctx.cfg.instrument]:
             raw = drop_suboctaves(raw)
+        if self._beat_model is None:
+            self._beat_model = BeatThis()
+        beats = self._beat_model.activations(audio)  # also a 22050 Hz model
+        np.save(ctx.path("beat_activation.npy"), beats.astype(np.float16))
         np.save(ctx.path("onset_envelope.npy"), onset_envelope(onsets, low, high))
         np.save(ctx.path("frames.npy"), frames.astype(np.float16))
         notes = [_to_note(n) for n in raw]
@@ -136,6 +148,8 @@ class TranscribeStage(Stage[NoteEvents]):
         return NoteEvents(
             notes=ctx.ref("notes.json"),
             midi=ctx.ref("raw.mid"),
+            beat_activation=ctx.ref("beat_activation.npy"),
+            beat_fps=BEAT_FPS,
             onset_envelope=ctx.ref("onset_envelope.npy"),
             envelope_fps=ENVELOPE_FPS,
             frames=ctx.ref("frames.npy"),

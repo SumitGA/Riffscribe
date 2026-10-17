@@ -111,11 +111,16 @@ class BeatMap:
 
 
 def quantize(
-    notes: Sequence[TimedNote], beat_times: Sequence[float], strum: StrumParams | None = None
+    notes: Sequence[TimedNote],
+    beat_times: Sequence[float],
+    strum: StrumParams | None = None,
+    downbeat_weights: Sequence[float] = (),
 ) -> Rhythm:
     """Snap notes to a per-beat grid, pick the downbeat and number beats from the first bar.
 
     `strum=None` keeps only the tight roll rule (ROLL_GAP_S); StrumParams also joins strums.
+    `downbeat_weights`, one per beat, say how likely each beat starts a bar; bars start on the
+    beat (mod 4) with the most weight. Without them, where the loudest on-beat notes land.
     """
     if not notes:
         return Rhythm(notes=[], pickup_beats=0, beat_times_s=[float(t) for t in beat_times])
@@ -134,7 +139,11 @@ def quantize(
     merged = _merge_duplicates(notes, snapped, durations)
 
     origin = math.floor(min(onset for _, onset, _ in merged))
-    downbeat = _downbeat_phase([(n, onset) for n, onset, _ in merged])
+    downbeat = (
+        max(range(BEATS_PER_BAR), key=lambda p: sum(downbeat_weights[p::BEATS_PER_BAR]))
+        if len(downbeat_weights)
+        else _downbeat_phase([(n, onset) for n, onset, _ in merged])
+    )
     grid_notes = sorted(
         (
             GridNote(

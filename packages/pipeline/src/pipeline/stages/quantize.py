@@ -1,4 +1,4 @@
-"""quantize: beat tracking, snapping notes to a rhythmic grid and chord names.
+"""quantize: beat grid, snapping notes to a rhythmic grid and chord names.
 
 Writes quantized.json (the Score) and quantized.mid.
 """
@@ -28,6 +28,9 @@ from pipeline.stages.transcribe import GM_PROGRAM, Note, NoteEvents, NoteList
 from pipeline.types import ArtifactRef, StageName, StageOutput
 
 FALLBACK_BPM = 120.0  # when too few beats are found (e.g. one long chord)
+# The model hears no beat in some recordings (e.g. single chords with pauses between); then the
+# onset-envelope tracker is used. No frame this likely to be a beat = no beat heard.
+MIN_BEAT_PROBABILITY = 0.5
 STRUM = StrumParams()  # tuned by tests/tuning/tune_strums.py
 
 
@@ -42,23 +45,34 @@ class QuantizedScore(StageOutput):
 class QuantizeStage(Stage[QuantizedScore]):
     name = StageName.QUANTIZE
     # 2: simplest grid that fits (quarters, eighths) before sixteenths; 3: strums as chords;
-    # 4: chord names; 5: whole strums (StrumParams) with their direction
-    version = "5"
+    # 4: chord names; 5: whole strums (StrumParams) with their direction; 6: beats tracked over
+    # Beat This! beat probabilities, bars from its downbeat probabilities
+    version = "6"
     requires = (NoteEvents,)
     output_type = QuantizedScore
 
     def run(self, inputs: StageInputs, ctx: StageContext) -> QuantizedScore:
         events = inputs.get(NoteEvents)
         notes = NoteList.model_validate_json(inputs.path(events.notes).read_text()).notes
-        envelope = np.load(inputs.path(events.onset_envelope)).astype(np.float64)
-
-        beat_times = track_beats(envelope, events.envelope_fps, notes)
+        activation = np.load(inputs.path(events.beat_activation)).astype(np.float64)
+        if activation.size and activation[:, 0].max() >= MIN_BEAT_PROBABILITY:
+            beat_frames = beat_track(activation[:, 0], events.beat_fps)[1]
+        else:
+            beat_frames = np.empty(0, np.int64)
+        if beat_frames.size >= 2:
+            beat_times = beat_frames_to_times(beat_frames, events.beat_fps)
+            downbeat_weights = activation[beat_frames, 1].tolist()
+        else:
+            envelope = np.load(inputs.path(events.onset_envelope)).astype(np.float64)
+            beat_times = track_beats(envelope, events.envelope_fps, notes)
+            downbeat_weights = []
         tempo = round(tempo_from_beats(beat_times), 2)
 
         rhythm = quantize(
             [TimedNote(n.onset_s, n.offset_s, n.pitch, n.velocity) for n in notes],
             beat_times,
             STRUM,
+            downbeat_weights,
         )
         key = estimate_key(rhythm.notes)
         frames = np.load(inputs.path(events.frames))

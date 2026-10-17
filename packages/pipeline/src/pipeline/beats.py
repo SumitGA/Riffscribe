@@ -1,7 +1,9 @@
 """Tempo estimation and beat tracking (Ellis 2007), ported from librosa 1.0.0 (ISC licence).
 
 Same algorithm and defaults as `librosa.beat.beat_track(onset_envelope=...)`; tests check that
-both give the same tempo and beats. Changes from librosa:
+both give the same tempo and beats. The quantize stage runs it over Beat This! beat probabilities
+(ADR-0013), or over the Basic Pitch onset envelope when the model hears no beat.
+Changes from librosa:
 - The tempogram is averaged chunk by chunk instead of being built in full (librosa holds a
   `win_length x n_frames` float64 matrix, ~140 MB for 5 minutes at 86 frames/s).
 - No numba: the dynamic program uses numpy per frame (see ADR-0005 for measurements).
