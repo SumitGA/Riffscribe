@@ -1106,3 +1106,36 @@ melodies sound cluttered and turn single notes into chords.
 
 **Revisit when** there are new labelled recordings to check the thresholds on (real phone takes),
 or the note model is replaced or fine-tuned on guitar.
+
+## TD-35: Beat model converted and quantized by us
+
+**Concept.** Beats now come from the Beat This! model (ADR-0013). Upstream ships PyTorch
+checkpoints; we convert one to ONNX ourselves, change how attention is expressed, quantize its
+weights to int8 and rename its tensors, so the file we run is not the file the authors published.
+
+**What we did.** `tests/fixtures/beat_this/make_reference.py model` turns the 8.1 MB `small0`
+checkpoint into a 3.0 MB ONNX file (fused MultiHeadAttention, int8 MatMul weights, ONNX Runtime's
+portable graph optimizations saved, short names); `make_reference.py reference` records
+upstream's outputs, and the tests check our spectrogram (to 1e-4) and logits (mean difference
+under 0.15) against them. Upstream's peak picking is replaced by our Ellis tracker over the
+beat probabilities.
+
+**Pros**
+- 3.0 MB in the repo instead of 8.1 MB, no torch in the images; per 30 s chunk 547 -> 352 ms.
+- Same accuracy: beat F 0.747 (float) vs 0.748 (int8) on 54 GuitarSet clips.
+- The ~200 MB attention needs is freed after each run (`enable_cpu_mem_arena = False`), measured
+  no slower.
+
+**Cons**
+- Conversion uses the legacy TorchScript exporter (the dynamo exporter fails on this model) and
+  an ONNX Runtime contrib op, so a different runtime than ONNX Runtime can't run the file.
+- int8 moves a few beats by one or two frames (4 of 135 on a 60 s clip, 20-40 ms) and logits
+  differ by up to ~1.3; a model upgrade means re-running the conversion and re-recording.
+- Attention inside the model's frontend dominates the time (about 40 %) and can't be made
+  cheaper without retraining: ~4 s for a 5-minute song on Apple M-series, likely about twice that
+  on the production VM's vCPUs.
+- Shorter chunks would be cheaper but cost accuracy (750 frames: beat F 0.754 -> 0.744), so we
+  keep the trained 30 s.
+
+**Revisit when** upstream publishes ONNX weights or a newer model, the beat step shows up in
+job latency on production, or we move transcription to GPU workers (`final0` then costs little).
