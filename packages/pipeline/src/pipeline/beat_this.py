@@ -16,6 +16,8 @@ import numpy as np
 import numpy.typing as npt
 import onnxruntime as ort
 
+from pipeline.mel import mel_filters
+
 SAMPLE_RATE = 22_050
 N_FFT = 1024
 HOP = 441
@@ -84,7 +86,7 @@ def log_mel(audio: Audio) -> Frames:
     padded = np.pad(audio.astype(np.float32), N_FFT // 2, mode="reflect")
     n_frames = 1 + audio.size // HOP
     window = _hann()
-    filters = _mel_filters()
+    filters = mel_filters(SAMPLE_RATE, N_FFT, N_MELS, F_MIN, F_MAX, area_norm=False)
     out = np.empty((n_frames, N_MELS), np.float32)
     block = 2048  # frames per FFT batch, to bound memory on long clips
     for first in range(0, n_frames, block):
@@ -99,32 +101,3 @@ def log_mel(audio: Audio) -> Frames:
 def _hann() -> npt.NDArray[np.float32]:
     window = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(N_FFT) / N_FFT)  # periodic
     return (window / math.sqrt(N_FFT)).astype(np.float32)  # torch.stft(normalized=True)
-
-
-def _mel_filters() -> npt.NDArray[np.float32]:
-    """torchaudio `melscale_fbanks(..., norm=None, mel_scale="slaney")`, (N_FFT/2+1, N_MELS)."""
-    freqs = np.linspace(0, SAMPLE_RATE // 2, N_FFT // 2 + 1)
-    edges = _mel_to_hz(np.linspace(_hz_to_mel(F_MIN), _hz_to_mel(F_MAX), N_MELS + 2))
-    widths = np.diff(edges)
-    slopes = edges[None, :] - freqs[:, None]
-    down = -slopes[:, :-2] / widths[:-1]
-    up = slopes[:, 2:] / widths[1:]
-    return np.maximum(0, np.minimum(down, up)).astype(np.float32)
-
-
-_MEL_STEP_HZ = 200 / 3  # Slaney: linear below 1 kHz, logarithmic above
-_LOG_START_HZ = 1000.0
-_LOG_STEP = np.log(6.4) / 27
-
-
-def _hz_to_mel(hz: float) -> float:
-    if hz < _LOG_START_HZ:
-        return hz / _MEL_STEP_HZ
-    return float(_LOG_START_HZ / _MEL_STEP_HZ + np.log(hz / _LOG_START_HZ) / _LOG_STEP)
-
-
-def _mel_to_hz(mels: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    log_start = _LOG_START_HZ / _MEL_STEP_HZ
-    linear = mels * _MEL_STEP_HZ
-    logarithmic = _LOG_START_HZ * np.exp(_LOG_STEP * (mels - log_start))
-    return np.where(mels >= log_start, logarithmic, linear)

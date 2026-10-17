@@ -41,6 +41,9 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-31](#td-31-the-editor-shows-changes-after-saving) | The editor shows changes after saving | Mobile | Users find editing slow or confusing |
 | [TD-32](#td-32-production-in-the-home-lab) | Production in the home lab | Infra / ops | The first paying customers, or any outage that costs users |
 | [TD-33](#td-33-strums-kept-whole-and-played-as-brush-strokes) | Strums kept whole and played as brush strokes | Pipeline / mobile | Users report fake chords in fast runs, or strums that sound too even |
+| [TD-34](#td-34-extra-guitar-notes-removed-by-two-hand-set-rules) | Extra guitar notes removed by two hand-set rules | Pipeline | New labelled recordings; the note model is replaced |
+| [TD-35](#td-35-beat-model-converted-and-quantized-by-us) | Beat model converted and quantized by us | Pipeline | Upstream ships ONNX or a newer model; beat step shows in job latency |
+| [TD-36](#td-36-guitar-note-model-converted-and-quantized-by-us) | Guitar note model converted and quantized by us; two note models run | Pipeline / legal | Job latency matters; GPU workers; real guitar recordings with corrections |
 
 ---
 
@@ -1139,3 +1142,45 @@ beat probabilities.
 
 **Revisit when** upstream publishes ONNX weights or a newer model, the beat step shows up in
 job latency on production, or we move transcription to GPU workers (`final0` then costs little).
+
+## TD-36: Guitar note model converted and quantized by us
+
+**Concept.** Guitar notes come from the GAPS model (ADR-0014), a network four times the size of
+anything else we run. To make it cheap enough for CPU workers we change the file the authors
+published (ONNX, int8, float16 storage) and how it is run (shorter overlaps, one decoding
+threshold), and we keep Basic Pitch running beside it for chords.
+
+**What we did.** `tests/fixtures/gaps/make_reference.py model` turns the 99 MB checkpoint into a
+33 MB ONNX file: int8 convolutions calibrated on 9 GuitarSet tuning clips (each network's first
+convolution stays float), int8 fully connected weights, GRU weights stored as float16 and cast
+back when the model loads. `make_reference.py reference` records upstream's spectrogram, outputs
+and decoded notes; tests check ours against them (outputs: mean difference under 0.005;
+decoding: identical notes). Chunks overlap by 1 s instead of 5 s. A note ends at frame
+probability 0.2 instead of 0.1.
+
+**Pros**
+- Same note F1 as the float model on every suite, at 1.8 s instead of ~6 s of CPU per 30 s on
+  the staging VM, 33 MB instead of 99 MB, peak ~300 MB instead of ~900 MB.
+- No torch in the images; ONNX Runtime and numpy were already dependencies.
+- Note decoding is vectorised numpy: 0.06 s per 30 s, so no Rust port is needed (ADR-0003).
+
+**Cons**
+- A guitar job takes longer: ~2 s more per 30 s of audio, ~18 s for a 5-minute song, and the
+  worker needs ~300 MB more while it runs. Basic Pitch runs as well, for chord recognition (tuned
+  on its activations) and the onset envelope: two note models per guitar job.
+- int8 calibration is ours: a model upgrade means re-running the conversion, re-recording the
+  reference and re-checking the suite. The quantized layers had to be picked by hand (quantizing
+  the layers after the convolutions statically added extra notes).
+- GAPS learned classical guitar: on the electric Guitar-TECHS clips notes ring on past where the
+  annotations end them (offset F1 0.543 -> 0.500), and strums came out wider, so strum grouping
+  was retuned and separate notes are merged into chords a little more often (notes kept apart
+  0.975 -> 0.953).
+- Licence and provenance: weights MIT by the model card only (no licence file; we keep the
+  standard text and `NOTICE`), derived from Kong et al.'s CC BY 4.0 piano weights (attribution
+  required), trained on YouTube-sourced audio (GAPS): the same legal question as TD-11.
+- 33 MB binary in git; each model upgrade adds another.
+
+**Revisit when** job latency matters to users (then: GPU workers, where this model costs little,
+or chord recognition from GAPS's own frame output so Basic Pitch can go for guitar), when
+labelled recordings of steel-string and electric guitars exist to fine-tune or retune on, or
+before launch (legal review, with TD-11).

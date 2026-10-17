@@ -69,7 +69,10 @@ ignore_missing_imports = true
 
 # Only imported by the fixtures' make_reference.py scripts, which run in throwaway envs.
 [[tool.mypy.overrides]]
-module = ["basic_pitch", "basic_pitch.*", "beat_this.*", "librosa", "librosa.*", "onnx"]
+module = [
+    "basic_pitch", "basic_pitch.*", "beat_this.*", "huggingface_hub", "librosa", "librosa.*", "onnx",
+    "piano_transcription_inference.*",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
