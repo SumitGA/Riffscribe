@@ -27,8 +27,10 @@ from api.auth import AuthSettings, CurrentUser, CurrentUserDep, get_auth_setting
 from api.deps import ApiSettingsDep, QueueDep, SessionDep
 from tabscribe_platform.db import Job, JobStatus, PushToken, StageRun, StageStatus, User
 
-# Clerk's browser SDK, served by each instance's Frontend API (the page loads it from there).
+# Clerk's browser SDK, served by each instance's Frontend API (the page loads it from there):
+# the client, and since clerk-js 6 its sign-in screens as a separate package, released with it.
 CLERK_JS_VERSION = "6.38.0"
+CLERK_UI_VERSION = "1.39.0"
 CLERK_PAGE_SIZE = 500  # Clerk's maximum per request
 
 
@@ -130,6 +132,7 @@ def _utc(moment: datetime) -> datetime:
 class AdminConfig(BaseModel):
     publishable_key: str | None  # None: no Clerk (local dev tokens), so no sign-in screen
     clerk_js_url: str | None
+    clerk_ui_url: str | None
 
 
 @config_router.get("/config")
@@ -140,12 +143,16 @@ def admin_config(
     app ships it) and is the instance's Frontend API host, base64-encoded with a `$`, so it is
     derived from JWT_ISSUER instead of being configured twice."""
     if settings.jwks_url is None:
-        return AdminConfig(publishable_key=None, clerk_js_url=None)
+        return AdminConfig(publishable_key=None, clerk_js_url=None, clerk_ui_url=None)
     host = urllib.parse.urlparse(settings.issuer).netloc
     kind = "test" if host.endswith(".clerk.accounts.dev") else "live"
-    key = f"pk_{kind}_" + base64.b64encode(f"{host}$".encode()).decode()
-    url = f"https://{host}/npm/@clerk/clerk-js@{CLERK_JS_VERSION}/dist/clerk.browser.js"
-    return AdminConfig(publishable_key=key, clerk_js_url=url)
+    key = f"pk_{kind}_" + base64.b64encode(f"{host}$".encode()).decode().rstrip("=")
+    npm = f"https://{host}/npm"
+    return AdminConfig(
+        publishable_key=key,
+        clerk_js_url=f"{npm}/@clerk/clerk-js@{CLERK_JS_VERSION}/dist/clerk.browser.js",
+        clerk_ui_url=f"{npm}/@clerk/ui@{CLERK_UI_VERSION}/dist/ui.browser.js",
+    )
 
 
 # --- overview ---
