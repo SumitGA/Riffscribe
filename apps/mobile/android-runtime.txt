@@ -1,1 +1,5 @@
-8991bffc808d31c884054480ebb5b68d029c6634
+# Android build on Google Play: versionCode 4 (EAS build b7000816), TD-38.
+# Its fingerprint, as EAS computed it (with google-services.json, from the EAS file variable):
+with-google-services=8991bffc808d31c884054480ebb5b68d029c6634
+# The same code without google-services.json (git-ignored, so CI doesn't have it):
+without-google-services=3a41d626fc7cb5716cba3d24f62bf0ebcf00e536

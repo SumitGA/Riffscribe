@@ -1236,7 +1236,9 @@ fingerprint too.
 
 **What we did.** `apps/mobile/android-runtime.txt` holds the fingerprint of the Android build on
 Google Play; `scripts/android-runtime.js` (in `make mobile-check`, so CI) fails when the code's
-Android fingerprint differs. iOS work that touches native config waits on its branch and lands
+Android fingerprint differs. `google-services.json` (push) counts towards the fingerprint and is
+git-ignored (EAS gets it from a file variable), so the file records the fingerprint both with it
+(EAS, a Mac with the file) and without it (CI). iOS work that touches native config waits on its branch and lands
 together with a new Android build, whose fingerprint then goes in the file.
 
 **Pros**

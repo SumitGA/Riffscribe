@@ -24,13 +24,26 @@ if (process.argv.includes('--print')) {
   console.log(current);
   process.exit(0);
 }
-const live = fs.readFileSync(path.join(root, 'android-runtime.txt'), 'utf8').trim();
+// google-services.json (push) counts towards the fingerprint, and it is git-ignored: EAS gets
+// it from a file variable, CI doesn't have it. The file records the fingerprint both ways.
+const key = fs.existsSync(path.join(root, 'google-services.json'))
+  ? 'with-google-services'
+  : 'without-google-services';
+const recorded = Object.fromEntries(
+  fs
+    .readFileSync(path.join(root, 'android-runtime.txt'), 'utf8')
+    .split('\n')
+    .filter((line) => line.includes('=') && !line.startsWith('#'))
+    .map((line) => line.trim().split('=')),
+);
+const live = recorded[key];
 if (current !== live) {
   console.error(
     `Android fingerprint ${current} differs from the build on Google Play (${live}, android-runtime.txt).\n` +
       'Installed Android apps would get no over-the-air updates from this code. If that is intended, ' +
-      'build and upload a new Android app and record its fingerprint in android-runtime.txt.',
+      'build and upload a new Android app and record its fingerprints in android-runtime.txt\n' +
+      '(`node scripts/android-runtime.js --print`, with and without google-services.json).',
   );
   process.exit(1);
 }
-console.log(`Android fingerprint matches the build on Google Play (${live.slice(0, 8)})`);
+console.log(`Android fingerprint matches the build on Google Play (${key}: ${live.slice(0, 8)})`);
