@@ -8,8 +8,11 @@
     "userInterfaceStyle": "dark",
     "scheme": "riffscribe",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.sumitga.riffscribe"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sumitga.riffscribe",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
