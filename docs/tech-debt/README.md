@@ -45,6 +45,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-35](#td-35-beat-model-converted-and-quantized-by-us) | Beat model converted and quantized by us | Pipeline | Upstream ships ONNX or a newer model; beat step shows in job latency |
 | [TD-36](#td-36-guitar-note-model-converted-and-quantized-by-us) | Guitar note model converted and quantized by us; two note models run | Pipeline / legal | Job latency matters; GPU workers; real guitar recordings with corrections |
 | [TD-37](#td-37-admin-section-read-only-numbers-from-two-sources) | Admin section: read-only numbers from two sources | Backend / ops | Retention needs app opens; many users; phases B and C |
+| [TD-38](#td-38-one-app-config-for-android-and-ios-so-ios-changes-need-a-new-android-build) | One app config for Android and iOS, so iOS changes need a new Android build | Mobile | iOS ships; a second Android fix is needed during an iOS change |
 
 ---
 
@@ -1224,3 +1225,29 @@ transcription. Access is Cloudflare Access plus an allowlist of Clerk user IDs i
 **Revisit when** retention needs app opens (record a daily "seen" per user, with phase B's
 migration), when users reach the tens of thousands (cache the Clerk list, or keep a copy in our
 database via Clerk webhooks), or when a second person needs admin access (Clerk roles).
+
+## TD-38: One app config for Android and iOS, so iOS changes need a new Android build
+
+**Concept.** An *over-the-air update* (`eas update`) changes the app's JavaScript without a store
+release, but only on installed builds with the same *native fingerprint*: a hash of everything
+native (modules, plugins, the whole `app.json`). Expo hashes the whole config for each platform,
+so an iOS-only setting (`ios.supportsTablet`, Sign in with Apple's plugin) changes the Android
+fingerprint too.
+
+**What we did.** `apps/mobile/android-runtime.txt` holds the fingerprint of the Android build on
+Google Play; `scripts/android-runtime.js` (in `make mobile-check`, so CI) fails when the code's
+Android fingerprint differs. iOS work that touches native config waits on its branch and lands
+together with a new Android build, whose fingerprint then goes in the file.
+
+**Pros**
+- Testers' Android app can't be cut off from updates by accident, by a change meant for iOS.
+- JavaScript-only changes (including iOS-only code paths) keep flowing to Android as updates.
+
+**Cons**
+- iOS native changes are batched behind an Android build (a few minutes on EAS, plus a Play
+  upload).
+- One more CI step (~10 s).
+
+**Revisit when** iOS ships (both platforms then take native changes together), or if an Android
+fix must go out while an iOS native change is pending (then: publish the Android update from a
+release branch cut at the live build's commit).
