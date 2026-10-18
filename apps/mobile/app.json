@@ -58,7 +58,8 @@
           "imageWidth": 160,
           "backgroundColor": "#0D0E11"
         }
-      ]
+      ],
+      "./plugins/with-scene-lifecycle"
     ],
     "experiments": {
       "typedRoutes": true
