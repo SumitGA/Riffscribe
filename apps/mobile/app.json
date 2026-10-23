@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.sumitga.riffscribe",
       "config": {
         "usesNonExemptEncryption": false
-      }
+      },
+      "appleTeamId": "73B6SX3Z9M"
     },
     "android": {
       "adaptiveIcon": {
