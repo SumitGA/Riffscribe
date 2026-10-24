@@ -21,7 +21,10 @@ from pipeline.version import pipeline_version
 pytestmark = pytest.mark.accuracy
 
 BASELINE = Path(__file__).parent / "accuracy_baseline.json"
-TOLERANCE = 0.02  # absorbs tiny numeric differences between machines (e.g. macOS vs Linux CI)
+# Absorbs tiny numeric differences between machines (macOS vs Linux, and CI runners with different
+# CPUs: the int8 model rounds slightly differently per instruction set). 0.025 is one note in the
+# smallest clip (43 matched notes in 05_BN1-129-Eb_solo), where one note moving was 0.023.
+TOLERANCE = 0.025
 CLIPS = clips()
 
 
