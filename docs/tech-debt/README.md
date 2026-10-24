@@ -46,6 +46,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-36](#td-36-guitar-note-model-converted-and-quantized-by-us) | Guitar note model converted and quantized by us; two note models run | Pipeline / legal | Job latency matters; GPU workers; real guitar recordings with corrections |
 | [TD-37](#td-37-admin-section-read-only-numbers-from-two-sources) | Admin section: read-only numbers from two sources | Backend / ops | Retention needs app opens; many users; phases B and C |
 | [TD-39](#td-39-ios-scene-life-cycle-patched-into-expo-sdk-57) | iOS scene life cycle patched into Expo SDK 57 | Mobile | Moving to Expo SDK 58 |
+| [TD-40](#td-40-sign-in-with-apple-on-ios-only) | Sign in with Apple on iOS only | Mobile / auth | iPhone users who hid their email also use Android |
 
 ---
 
@@ -1249,3 +1250,28 @@ the window start-up from the generated app delegate, the same change SDK 58 make
 - Like any app config change, it changes the Android fingerprint (TD-38).
 
 **When to revisit.** Moving to Expo SDK 58: delete the plugin and its `app.json` entry.
+
+---
+
+## TD-40: Sign in with Apple on iOS only
+
+**Concept.** iPhones sign in with Apple natively (Face ID, no web page). Android has no such
+feature: Apple sign-in there is a web sign-in that needs Apple web credentials (a Services ID and
+a private key) in Clerk.
+
+**What we did.** Native Apple sign-in on iOS only (`appleSignIn` in the `@clerk/expo` plugin,
+App ID and bundle registered under Clerk's Native applications). No web credentials, so Clerk's
+Android sign-in screen shows no Apple button (checked on the emulator).
+
+**Pros**
+- Meets App Review guideline 4.8 (Google sign-in requires an Apple option on iOS) with two
+  dashboard steps and no keys to store or rotate.
+- Google Play has no such rule, and Android users have email and Google.
+
+**Cons**
+- Someone who signs up on iPhone with Apple's "Hide my email" gets a relay address and can't
+  sign in to that account on Android. Those who share their real email can, with email codes.
+
+**When to revisit.** iPhone users who hid their email ask for Android access: add the Apple web
+credentials to the production Clerk instance, and Android shows a working Apple button.
+
