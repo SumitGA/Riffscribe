@@ -45,6 +45,8 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-35](#td-35-beat-model-converted-and-quantized-by-us) | Beat model converted and quantized by us | Pipeline | Upstream ships ONNX or a newer model; beat step shows in job latency |
 | [TD-36](#td-36-guitar-note-model-converted-and-quantized-by-us) | Guitar note model converted and quantized by us; two note models run | Pipeline / legal | Job latency matters; GPU workers; real guitar recordings with corrections |
 | [TD-37](#td-37-admin-section-read-only-numbers-from-two-sources) | Admin section: read-only numbers from two sources | Backend / ops | Retention needs app opens; many users; phases B and C |
+| [TD-39](#td-39-ios-scene-life-cycle-patched-into-expo-sdk-57) | iOS scene life cycle patched into Expo SDK 57 | Mobile | Moving to Expo SDK 58 |
+| [TD-40](#td-40-sign-in-with-apple-on-ios-only) | Sign in with Apple on iOS only | Mobile / auth | iPhone users who hid their email also use Android |
 
 ---
 
@@ -1224,3 +1226,52 @@ transcription. Access is Cloudflare Access plus an allowlist of Clerk user IDs i
 **Revisit when** retention needs app opens (record a daily "seen" per user, with phase B's
 migration), when users reach the tens of thousands (cache the Clerk list, or keep a copy in our
 database via Clerk webhooks), or when a second person needs admin access (Clerk roles).
+
+---
+
+## TD-39: iOS scene life cycle patched into Expo SDK 57
+
+**Concept.** An iOS app starts either the old way (the *app delegate* makes the one window) or
+the newer *scene* way (a *scene delegate* makes a window per screen the app shows on). Apps built
+with the iOS 27 SDK (Xcode 27) must use scenes: iOS stops the old way at launch with a crash.
+
+**What we did.** Expo SDK 57 still generates the old-style app delegate, though it already ships
+a scene delegate (`ExpoAppSceneDelegate`); SDK 58's template uses it. Our config plugin
+`apps/mobile/plugins/with-scene-lifecycle.js` names that delegate in `Info.plist` and removes
+the window start-up from the generated app delegate, the same change SDK 58 makes.
+
+**Pros**
+- The app runs on iOS 27 without upgrading the Expo SDK during Android's closed test.
+- iOS only: Android's native code doesn't change.
+
+**Cons**
+- The plugin edits generated Swift by text matching; it fails the build loudly if a patch
+  release changes the template, rather than silently doing nothing.
+- Like any app config change, it changes the Android fingerprint (TD-38).
+
+**When to revisit.** Moving to Expo SDK 58: delete the plugin and its `app.json` entry.
+
+---
+
+## TD-40: Sign in with Apple on iOS only
+
+**Concept.** iPhones sign in with Apple natively (Face ID, no web page). Android has no such
+feature: Apple sign-in there is a web sign-in that needs Apple web credentials (a Services ID and
+a private key) in Clerk.
+
+**What we did.** Native Apple sign-in on iOS only (`appleSignIn` in the `@clerk/expo` plugin,
+App ID and bundle registered under Clerk's Native applications). No web credentials, so Clerk's
+Android sign-in screen shows no Apple button (checked on the emulator).
+
+**Pros**
+- Meets App Review guideline 4.8 (Google sign-in requires an Apple option on iOS) with two
+  dashboard steps and no keys to store or rotate.
+- Google Play has no such rule, and Android users have email and Google.
+
+**Cons**
+- Someone who signs up on iPhone with Apple's "Hide my email" gets a relay address and can't
+  sign in to that account on Android. Those who share their real email can, with email codes.
+
+**When to revisit.** iPhone users who hid their email ask for Android access: add the Apple web
+credentials to the production Clerk instance, and Android shows a working Apple button.
+

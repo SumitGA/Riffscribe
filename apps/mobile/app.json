@@ -8,8 +8,12 @@
     "userInterfaceStyle": "dark",
     "scheme": "riffscribe",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.sumitga.riffscribe"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sumitga.riffscribe",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "appleTeamId": "73B6SX3Z9M"
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +31,7 @@
       [
         "@clerk/expo",
         {
-          "appleSignIn": false,
+          "appleSignIn": true,
           "theme": "./assets/clerk-theme.json"
         }
       ],
@@ -55,7 +59,8 @@
           "imageWidth": 160,
           "backgroundColor": "#0D0E11"
         }
-      ]
+      ],
+      "./plugins/with-scene-lifecycle"
     ],
     "experiments": {
       "typedRoutes": true
