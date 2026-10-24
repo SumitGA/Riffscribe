@@ -47,7 +47,8 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-37](#td-37-admin-section-read-only-numbers-from-two-sources) | Admin section: read-only numbers from two sources | Backend / ops | Retention needs app opens; many users; phases B and C |
 | [TD-38](#td-38-one-app-config-for-android-and-ios-so-ios-changes-need-a-new-android-build) | One app config for Android and iOS, so iOS changes need a new Android build | Mobile | iOS ships; a second Android fix is needed during an iOS change |
 | [TD-39](#td-39-ios-scene-life-cycle-patched-into-expo-sdk-57) | iOS scene life cycle patched into Expo SDK 57 | Mobile | Moving to Expo SDK 58 |
-| [TD-40](#td-40-sign-in-with-apple-on-ios-only) | Sign in with Apple on iOS only | Mobile / auth | iPhone users who hid their email also use Android |
+| [TD-40](#td-40-sign-in-with-apple-on-ios-only) | Sign in with Apple on iOS only (production: Android too, untested) | Mobile / auth | Test Apple sign-in end to end on an Android phone |
+| [TD-41](#td-41-apple-tokens-not-revoked-on-account-deletion) | Apple tokens not revoked on account deletion | Backend / auth | App Review asks for it; Clerk documents revocation |
 
 ---
 
@@ -1303,4 +1304,39 @@ Android sign-in screen shows no Apple button (checked on the emulator).
 
 **When to revisit.** iPhone users who hid their email ask for Android access: add the Apple web
 credentials to the production Clerk instance, and Android shows a working Apple button.
+
+**Update 2026-10-24.** Clerk's production instance requires those web credentials even for
+native iOS sign-in, so they are in place (Services ID `com.sumitga.riffscribe.signin`). Since
+then production's Android sign-in screen also shows Apple, and tapping it opens Apple's sign-in
+page for Riffscribe. Untested end to end: signing in on the emulator failed at Apple's own
+login (passkey-only Apple ID). Staging (Clerk's shared credentials) still shows no Apple button
+on Android. Revisit: complete an Apple sign-in on a real Android phone; if it fails, Android
+users still have Google and email.
+
+---
+
+## TD-41: Apple tokens not revoked on account deletion
+
+**Concept.** When someone signs in with Apple, Apple keeps a record that the app is connected to
+their Apple ID (Settings > Apple ID > Sign in with Apple). Apple's account-deletion guidance says
+apps *should* call Apple's revoke API when the account is deleted, which removes that
+connection.
+
+**What we did.** Delete account (`DELETE /account`, `api/account.py`) deletes our data and the
+Clerk user. Clerk doesn't document revoking Apple tokens, and its iOS guide implies it doesn't
+(it says deleting the Clerk user doesn't reset Apple's side). We don't call the revoke API.
+
+**Pros**
+- Account deletion, which Apple *requires* (guideline 5.1.1(v)), works today.
+- No Apple tokens or signing key on our server.
+
+**Cons**
+- After deletion, Riffscribe stays listed under the user's Apple ID until they remove it. Signing
+  in again creates a fresh account, but Apple won't share the name a second time.
+- An App Review may ask for revocation.
+
+**When to revisit.** App Review asks for it, or Clerk documents revocation. Then: fetch the
+user's Apple token from Clerk (`getUserOauthAccessToken`, if it exposes Apple's) and call
+`https://appleid.apple.com/auth/revoke` with a client secret signed by the Apple key, before
+deleting the Clerk user.
 
