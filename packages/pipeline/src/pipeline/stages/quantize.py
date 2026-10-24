@@ -15,6 +15,7 @@ from pipeline.chords import ChordSpan, recognize_chords
 from pipeline.midi import write_notes
 from pipeline.rhythm import (
     BEATS_PER_BAR,
+    BeatMap,
     StrumParams,
     TimedNote,
     beat_frames_to_times,
@@ -24,6 +25,7 @@ from pipeline.rhythm import (
 )
 from pipeline.score import ChordSymbol, KeySignature, Score, ScoreNote, Strum
 from pipeline.stage import Stage, StageContext, StageInputs
+from pipeline.stages.normalize import NormalizedAudio
 from pipeline.stages.transcribe import GM_PROGRAM, Note, NoteEvents, NoteList
 from pipeline.types import ArtifactRef, StageName, StageOutput
 
@@ -47,9 +49,9 @@ class QuantizeStage(Stage[QuantizedScore]):
     # 2: simplest grid that fits (quarters, eighths) before sixteenths; 3: strums as chords;
     # 4: chord names; 5: whole strums (StrumParams) with their direction; 6: beats tracked over
     # Beat This! beat probabilities, bars from its downbeat probabilities; 7: strums retuned for
-    # GAPS notes
-    version = "7"
-    requires = (NoteEvents,)
+    # GAPS notes; 8: end_beats, so the score runs to the end of the recording
+    version = "8"
+    requires = (NormalizedAudio, NoteEvents)
     output_type = QuantizedScore
 
     def run(self, inputs: StageInputs, ctx: StageContext) -> QuantizedScore:
@@ -93,6 +95,7 @@ class QuantizeStage(Stage[QuantizedScore]):
             ],
             chords=chord_symbols(spans),
             strums=[Strum(onset_beats=s.onset_beats, direction=s.direction) for s in rhythm.strums],
+            end_beats=end_beats(rhythm.beat_times_s, tempo, inputs.get(NormalizedAudio).duration_s),
         )
         ctx.path("quantized.json").write_text(score.model_dump_json(indent=1))
 
@@ -181,3 +184,14 @@ def chord_symbols(spans: list[list[ChordSpan | None]]) -> list[ChordSymbol]:
                     )
                 )
     return symbols
+
+
+def end_beats(beat_times_s: Sequence[float], tempo_bpm: float, duration_s: float) -> Fraction:
+    """Where the recording ends, in the score's beats (to a 48th): beats past the tracked ones
+    continue at the last tempo; with fewer than two beats, the score tempo from the first."""
+    if len(beat_times_s) >= 2:
+        beat = BeatMap(beat_times_s).beat_at(duration_s)
+    else:
+        start = beat_times_s[0] if beat_times_s else 0.0
+        beat = (duration_s - start) * tempo_bpm / 60.0
+    return Fraction(round(max(beat, 0.0) * 48), 48)

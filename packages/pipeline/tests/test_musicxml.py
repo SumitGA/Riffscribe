@@ -262,3 +262,26 @@ def test_printed_and_playback_tempo_are_the_same_whole_number() -> None:
     assert direction is not None
     assert direction.findtext("direction-type/metronome/per-minute") == "133"
     assert direction.find("sound").get("tempo") == "133"  # type: ignore[union-attr]
+
+
+def test_the_score_runs_to_the_end_of_the_recording_after_the_last_note() -> None:
+    # A take with one note at the start and silence after it (or a voice, which gives few notes):
+    # rest bars follow, so playback and the cursor cover the whole recording.
+    short = make_score([(64, 0, 1)])
+    assert len(measures(write_score(short, Instrument.GUITAR))) == 1
+    covered = short.model_copy(update={"end_beats": Fraction(37, 4)})  # into the third bar
+    bars = measures(write_score(covered, Instrument.GUITAR))
+    assert len(bars) == 3
+    assert all(staff_durations(bar) == staff_durations(bars[0]) for bar in bars)  # full bars
+    assert len(bar_starts_ms(covered, trim_start_s=0.0)) == 3
+    # Notes past end_beats still win; old documents without it keep their length.
+    assert (
+        len(
+            measures(
+                write_score(
+                    covered.model_copy(update={"end_beats": Fraction(1)}), Instrument.GUITAR
+                )
+            )
+        )
+        == 1
+    )
