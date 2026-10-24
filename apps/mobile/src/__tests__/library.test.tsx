@@ -6,11 +6,13 @@ import type { ReactNode } from 'react';
 import { ApiError, type Api, type JobList } from '@/api/client';
 import { useApi } from '@/api/provider';
 import Library from '@/app/(tabs)/index';
+import { hasSeenWelcome } from '@/welcome/seen';
 
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
 // No Link here on purpose: <Link asChild> drops a Pressable's style function, which broke the
 // cards' layout; the Library navigates with router.push.
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('@/welcome/seen', () => ({ hasSeenWelcome: jest.fn(() => true) }));
 
 const me = jest.fn<ReturnType<Api['me']>, []>();
 const listJobs = jest.fn<Promise<JobList>, []>();
@@ -69,6 +71,24 @@ beforeEach(() => {
 });
 
 describe('Library', () => {
+  it('opens the welcome guide on a phone that has never shown it, and only then', async () => {
+    me.mockResolvedValue({
+      user_id: 'u',
+      jobs_this_month: 0,
+      jobs_per_month: 10,
+      terms_version: 'v',
+      terms_accepted: true,
+    });
+    listJobs.mockResolvedValue({ jobs: [], next_cursor: null });
+    jest.mocked(useApi).mockReturnValue({ me, listJobs } as unknown as Api);
+    jest.mocked(hasSeenWelcome).mockReturnValueOnce(false);
+    await renderLibrary();
+    expect(router.push).toHaveBeenCalledWith('/welcome');
+    jest.mocked(router.push).mockClear();
+    await renderLibrary();
+    expect(router.push).not.toHaveBeenCalledWith('/welcome');
+  });
+
   it("shows this month's quota and an empty state", async () => {
     await renderLibrary();
     expect(await screen.findByText('3 of 10 transcriptions')).toBeTruthy();

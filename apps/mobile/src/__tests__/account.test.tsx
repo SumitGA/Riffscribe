@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { useClerk, useUser } from '@clerk/expo';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
@@ -85,5 +85,26 @@ describe('Account', () => {
     expect(deleteAccount).toHaveBeenCalled();
     expect(signOut).toHaveBeenCalled();
     expect(queryClient.getQueryData(['jobs'])).toBeUndefined();
+  });
+
+  it('opens an email for feedback, or says where to write without an email app', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValueOnce(true);
+    await renderAccount();
+    await screen.findByText(/3 of 10 transcriptions this month/);
+    await fireEvent.press(screen.getByRole('button', { name: 'Send feedback' }));
+    expect(openURL.mock.calls[0]?.[0]).toMatch(/^mailto:sumitga\.playstore@gmail\.com\?/);
+
+    const alert = jest.spyOn(Alert, 'alert');
+    openURL.mockRejectedValueOnce(new Error('no mail app'));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Send feedback' })));
+    expect(alert).toHaveBeenCalledWith(
+      'No email app',
+      expect.stringContaining('sumitga.playstore'),
+    );
+  });
+
+  it('links to the welcome guide', async () => {
+    await renderAccount();
+    expect(screen.getByRole('link', { name: 'How Riffscribe works' })).toBeTruthy();
   });
 });
