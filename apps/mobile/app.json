@@ -31,7 +31,7 @@
       [
         "@clerk/expo",
         {
-          "appleSignIn": false,
+          "appleSignIn": true,
           "theme": "./assets/clerk-theme.json"
         }
       ],
