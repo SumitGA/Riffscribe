@@ -248,3 +248,13 @@ def test_piano_at_100_bpm_through_the_whole_pipeline(tmp_path: Path) -> None:
     on_beat = sum(n.onset_beats.denominator == 1 for n in score.notes)
     assert on_beat / len(score.notes) >= 0.9
     assert score.pickup_beats == 0
+
+
+def test_end_beats_extends_the_beat_grid_to_the_end_of_the_recording() -> None:
+    from pipeline.stages.quantize import end_beats
+
+    beats = [1.0, 1.5, 2.0, 2.5]  # 120 bpm from 1 s
+    assert end_beats(beats, 120.0, 2.5) == 3  # the last tracked beat
+    assert end_beats(beats, 120.0, 4.0) == 6  # beyond it, at the last tempo
+    assert end_beats([1.0], 60.0, 3.5) == Fraction(5, 2)  # one beat: the score tempo
+    assert end_beats([], 120.0, 0.0) == 0

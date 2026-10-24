@@ -66,3 +66,6 @@ class Score(Frozen):
     notes: list[ScoreNote]
     chords: list[ChordSymbol] = Field(default_factory=list)  # gaps mean no chord
     strums: list[Strum] = Field(default_factory=list)  # chords at these onsets were strummed
+    # Where the recording ends, in beats: the score runs at least this far (rest bars after the
+    # last note), so playback covers the whole take. None in documents written before it existed.
+    end_beats: Fraction | None = None

@@ -163,6 +163,7 @@ def bar_lines(score: Score) -> list[Fraction]:
 def _bar_lines(score: Score, staves: Sequence[Sequence[ScoreNote]]) -> list[Fraction]:
     """Bar start positions in beats, plus the end of the last bar."""
     end = max((n.onset_beats + n.duration_beats for s in staves for n in s), default=Fraction(0))
+    end = max(end, score.end_beats or Fraction(0))
     bars = [Fraction(0), Fraction(score.pickup_beats or score.beats_per_bar)]
     while bars[-1] < end:
         bars.append(bars[-1] + score.beats_per_bar)
