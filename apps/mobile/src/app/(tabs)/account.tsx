@@ -3,11 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import { Link } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApi } from '@/api/provider';
 import { forgetAllTakes } from '@/audio/takes';
+import { deviceInfo, FEEDBACK_EMAIL, feedbackMailto } from '@/feedback';
 import { disablePush, enablePush, pushState, turnOffPush } from '@/push';
 import { colors, fonts, space } from '@/theme';
 import { Button, Card, ProgressBar, Row, Text, Toggle } from '@/ui';
@@ -63,6 +64,11 @@ export default function Account() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => deleteAccount.mutate() },
       ],
+    );
+
+  const sendFeedback = () =>
+    Linking.openURL(feedbackMailto(deviceInfo())).catch(() =>
+      Alert.alert('No email app', `Write to us at ${FEEDBACK_EMAIL}.`),
     );
 
   const onSignOut = async () => {
@@ -123,6 +129,18 @@ export default function Account() {
           <Row label="Version">
             <Text variant="mono">{Constants.expoConfig?.version ?? '–'}</Text>
           </Row>
+          <Link href="/welcome" asChild>
+            <Pressable accessibilityRole="link">
+              <Row label="How Riffscribe works">
+                <ChevronRight color={colors.muted} size={18} />
+              </Row>
+            </Pressable>
+          </Link>
+          <Pressable accessibilityRole="button" onPress={sendFeedback}>
+            <Row label="Send feedback">
+              <ChevronRight color={colors.muted} size={18} />
+            </Row>
+          </Pressable>
           <Link href="/acknowledgements" asChild>
             <Pressable accessibilityRole="link">
               <Row label="Acknowledgements" last>

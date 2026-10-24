@@ -68,6 +68,10 @@ function Screens() {
         />
         <Stack.Screen name="jobs/[id]" options={{ headerTitle: '' }} />
         <Stack.Screen name="acknowledgements" options={{ headerTitle: 'Acknowledgements' }} />
+        <Stack.Screen
+          name="welcome"
+          options={{ headerShown: false, presentation: 'fullScreenModal' }}
+        />
       </Stack.Protected>
       <Stack.Protected guard={!isSignedIn}>
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />

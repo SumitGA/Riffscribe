@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Guitar, Piano } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -17,6 +17,7 @@ import { useApi } from '@/api/provider';
 import { formatWhen, isFinished } from '@/jobs/status';
 import { colors, fonts, radius, space } from '@/theme';
 import { Card, Chip, ProgressBar, Text } from '@/ui';
+import { hasSeenWelcome } from '@/welcome/seen';
 
 type Filter = 'all' | Instrument;
 const FILTERS: { value: Filter; label: string }[] = [
@@ -37,6 +38,12 @@ const STATUS: Record<JobStatus, { label: string; color: string }> = {
 export default function Library() {
   const api = useApi();
   const [filter, setFilter] = useState<Filter>('all');
+  // First launch on this phone: the welcome guide, once.
+  useEffect(() => {
+    if (!hasSeenWelcome()) {
+      router.push('/welcome');
+    }
+  }, []);
   const me = useQuery({ queryKey: ['me'], queryFn: api.me });
   const jobs = useQuery({
     queryKey: ['jobs'],
