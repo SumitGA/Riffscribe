@@ -49,6 +49,14 @@ const ASSETS = [
     license: 'CC-BY-4.0',
     copyright: ['Copyright (c) 2020 Qiuqiang Kong et al. (zenodo.org/record/4034264)'],
   },
+  {
+    // Not in the app: credited because its recordings appear in our store screenshots.
+    name: 'GuitarSet (demo recordings in our store screenshots)',
+    license: 'CC-BY-4.0',
+    copyright: [
+      'Copyright (c) 2018 Qingyang Xi, Rachel M. Bittner, Johan Pauwels, Xuzhou Ye, Juan P. Bello (zenodo.org/records/3371780)',
+    ],
+  },
 ];
 
 function productionPackages() {

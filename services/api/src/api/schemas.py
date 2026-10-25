@@ -59,6 +59,15 @@ class CreateJobRequest(JobOptions):
         return name.strip() or None if name is not None else None
 
 
+class RenameJobRequest(BaseModel):
+    name: str | None = Field(max_length=JOB_NAME_MAX, description="New title; blank clears it")
+
+    @field_validator("name")
+    @classmethod
+    def _blank_name_is_none(cls, name: str | None) -> str | None:
+        return name.strip() or None if name is not None else None
+
+
 class PresignedRequestOut(BaseModel):
     method: str
     url: str

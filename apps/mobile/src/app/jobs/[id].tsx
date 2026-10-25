@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Check, History, Pencil, Share2, Trash2, Undo2, X } from 'lucide-react-native';
+import { Check, History, Pencil, PencilLine, Share2, Trash2, Undo2, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { CreateVersionRequest, Job } from '@/api/client';
 import { useApi } from '@/api/provider';
 import { findTake, forgetTake } from '@/audio/takes';
+import { RenameSheet } from '@/jobs/RenameSheet';
 import { formatWhen, isFinished, type StageState, stageStates } from '@/jobs/status';
 import { AddNoteSheet } from '@/score/AddNoteSheet';
 import { type Edit, type TappedBeat, type TappedNote, upsertEdit } from '@/score/edits';
@@ -36,6 +37,15 @@ export default function JobScreen() {
     },
     onError: (error) => Alert.alert("Couldn't delete it", error.message),
   });
+  const [renaming, setRenaming] = useState(false);
+  const rename = useMutation({
+    mutationFn: (name: string) => api.renameJob(id, name),
+    onSuccess: (renamed) => {
+      queryClient.setQueryData(['job', id], renamed);
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      setRenaming(false);
+    },
+  });
   const job = useQuery({
     queryKey: ['job', id],
     queryFn: () => api.getJob(id),
@@ -52,7 +62,8 @@ export default function JobScreen() {
   }
 
   const instrument = job.data.options.instrument === 'guitar' ? 'Guitar' : 'Piano';
-  const title = job.data.name ?? `${instrument} take`;
+  const defaultTitle = `${instrument} take`;
+  const title = job.data.name ?? defaultTitle;
   const confirmDelete = () =>
     Alert.alert(
       `Delete “${title}”?`,
@@ -67,7 +78,23 @@ export default function JobScreen() {
     <SafeAreaView edges={['bottom']} style={styles.screen}>
       <Stack.Screen
         options={{
-          headerTitle: title,
+          // Tap the title to rename the transcription.
+          headerTitle: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Rename “${title}”`}
+              onPress={() => {
+                rename.reset();
+                setRenaming(true);
+              }}
+              style={styles.titleButton}
+            >
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+              <PencilLine color={colors.muted} size={16} />
+            </Pressable>
+          ),
           headerRight: () => (
             <View style={styles.headerActions}>
               {hasScore && (
@@ -86,6 +113,16 @@ export default function JobScreen() {
           ),
         }}
       />
+      {renaming && (
+        <RenameSheet
+          name={job.data.name ?? ''}
+          placeholder={defaultTitle}
+          onSave={(name) => rename.mutate(name)}
+          onClose={() => setRenaming(false)}
+          busy={rename.isPending}
+          error={rename.error?.message}
+        />
+      )}
       {job.data.outputs ? (
         <Score
           job={job.data}
@@ -449,5 +486,7 @@ const styles = StyleSheet.create({
   markWaiting: { borderWidth: 2, borderColor: colors.faint },
   score: { flex: 1 },
   headerActions: { flexDirection: 'row' },
+  titleButton: { flexDirection: 'row', alignItems: 'center', gap: space.xs, maxWidth: 220 },
+  title: { fontFamily: fonts.display, fontSize: 18, flexShrink: 1 },
   subtitle: { textAlign: 'center', paddingBottom: space.md },
 });

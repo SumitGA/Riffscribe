@@ -60,9 +60,13 @@ repeated):
 > Riffscribe is for your own practice and study. Please only upload recordings you made or
 > have the right to use.
 
-**Screenshots**: 6.9" iPhone (1320 × 2868), 3 to 10, portrait: Library, a score with tab,
-recording a take, the note editor, export. iPad screenshots aren't needed (`supportsTablet`
-is false).
+**Screenshots**: App Store Connect offered one iPhone slot, "6.1" or 6.3" displays", which
+takes **1206 × 2622** (or 1179 × 2556), portrait, as **JPEG or PNG without an alpha channel**
+(simulator PNGs have one: convert with `sips -s format jpeg`). 3 to 10: a score with tab,
+playback, the note editor, recording a take, the Library, Account. Taken from a production
+release build in the simulator (`xcrun simctl status_bar booted override --time 9:41`), signed
+in as the reviewer account, with GuitarSet clips as demo audio (CC BY 4.0, credited in the app's
+Acknowledgements). iPad screenshots aren't needed (`supportsTablet` is false).
 
 **Copyright**: `2026 Sumit Gautam`
 
@@ -72,11 +76,12 @@ is false).
   (`play-store.md`, App access): an email + password user in Clerk's **production** instance.
   Check it signs in without an emailed code before every submission.
 - **Notes**:
-  > Sign in with email and the password above (no code is needed). Tap + to record a few
-  > seconds of guitar or piano with the microphone, or upload an audio file, then tap
-  > Transcribe. The score is usually ready within a minute or two; open it to see the tab,
-  > play it back, tap a note to edit it, or export. Account deletion: Account tab > Delete
-  > account. Sign in with Apple is offered on the sign-in screen.
+  > Sign in with email and the password above (no code is needed). Tap the microphone tab to
+  > record a few seconds of guitar or piano, or tap the folder icon to upload an audio file,
+  > then tap Transcribe. The score is usually ready within a minute or two; open it to see the
+  > tab, play it back, tap the pencil and then a note to edit it, or use the share icon to
+  > export. Account deletion: Account tab > Delete account. Sign in with Apple is offered on
+  > the sign-in screen.
 - Contact: Sumit Gautam, `sumitga.playstore@gmail.com`
 
 ## App Privacy (nutrition label)

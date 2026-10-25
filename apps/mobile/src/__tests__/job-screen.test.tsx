@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { Alert } from 'react-native';
 import type { ReactNode } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { Api, Job } from '@/api/client';
 import { useApi } from '@/api/provider';
@@ -11,13 +12,21 @@ import JobScreen from '@/app/jobs/[id]';
 import { stageStates } from '@/jobs/status';
 
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
-// Renders the screen's header buttons, so tests can press them.
+// Renders the screen's header (title and buttons), so tests can press them.
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: 'job-1' }),
   router: { back: jest.fn() },
   Stack: {
-    Screen: ({ options }: { options: { headerRight?: () => unknown } }) =>
-      options.headerRight?.() ?? null,
+    Screen: ({
+      options,
+    }: {
+      options: { headerTitle?: unknown; headerRight?: () => ReactNode };
+    }) => (
+      <>
+        {typeof options.headerTitle === 'function' ? options.headerTitle() : null}
+        {options.headerRight?.()}
+      </>
+    ),
   },
 }));
 jest.mock('@/score/exports', () => ({ fileName: jest.fn() }));
@@ -63,17 +72,28 @@ const job = (overrides: Partial<Job>): Job =>
   }) as Job;
 
 const deleteJob = jest.fn(async () => {});
+const renameJob = jest.fn(async (_id: string, name: string) =>
+  job({ name: name.trim() || null, status: 'failed' }),
+);
 
 async function renderJob(data: Job) {
-  jest.mocked(useApi).mockReturnValue({ getJob: async () => data, deleteJob } as unknown as Api);
+  jest
+    .mocked(useApi)
+    .mockReturnValue({ getJob: async () => data, deleteJob, renameJob } as unknown as Api);
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: Infinity, refetchInterval: false },
       mutations: { gcTime: Infinity },
     },
   });
+  const metrics = {
+    frame: { x: 0, y: 0, width: 390, height: 844 },
+    insets: { top: 0, left: 0, right: 0, bottom: 0 },
+  };
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <SafeAreaProvider initialMetrics={metrics}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </SafeAreaProvider>
   );
   await render(<JobScreen />, { wrapper });
 }
@@ -221,5 +241,14 @@ describe('JobScreen', () => {
     await act(async () => confirm?.onPress?.());
     expect(deleteJob).toHaveBeenCalledWith('job-1');
     expect(router.back).toHaveBeenCalled();
+  });
+
+  it('renames the job from its title', async () => {
+    await renderJob(job({ name: 'Strummed0chords', status: 'failed' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Rename “Strummed0chords”' }));
+    await fireEvent.changeText(screen.getByLabelText('Name'), 'Strummed chords');
+    await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
+    expect(renameJob).toHaveBeenCalledWith('job-1', 'Strummed chords');
+    expect(await screen.findByRole('button', { name: 'Rename “Strummed chords”' })).toBeTruthy();
   });
 });

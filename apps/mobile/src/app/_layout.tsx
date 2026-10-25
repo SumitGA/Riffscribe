@@ -1,7 +1,8 @@
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, router, Stack, ThemeProvider } from 'expo-router';
+import { X } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 
@@ -9,6 +10,7 @@ import { ApiProvider } from '@/api/provider';
 import { UpdateBanner } from '@/updates/UpdateBanner';
 import { clerkPublishableKey } from '@/config';
 import { colors, fonts } from '@/theme';
+import { IconButton } from '@/ui';
 import { useAppFonts } from '@/theme/useAppFonts';
 
 const navigationTheme = {
@@ -64,7 +66,16 @@ function Screens() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="new"
-          options={{ headerTitle: 'New take', presentation: 'fullScreenModal' }}
+          options={{
+            headerTitle: 'New take',
+            presentation: 'fullScreenModal',
+            // A full-screen modal has no back button of its own.
+            headerLeft: () => (
+              <IconButton label="Close" onPress={() => router.back()}>
+                <X color={colors.text} size={22} />
+              </IconButton>
+            ),
+          }}
         />
         <Stack.Screen name="jobs/[id]" options={{ headerTitle: '' }} />
         <Stack.Screen name="acknowledgements" options={{ headerTitle: 'Acknowledgements' }} />

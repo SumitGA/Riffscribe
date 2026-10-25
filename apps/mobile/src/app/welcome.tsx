@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radius, space, TOUCH } from '@/theme';
 import { Button, Text } from '@/ui';
@@ -43,6 +43,9 @@ const PAGES: Page[] = [
 /** A short guide on first launch (and from Account): three pages, skippable. */
 export default function Welcome() {
   const { width } = useWindowDimensions();
+  // Insets from the hook, not SafeAreaView: in a full-screen modal on iOS the view measured no
+  // top inset, which put Skip under the status bar.
+  const insets = useSafeAreaInsets();
   const scroller = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
   const last = page === PAGES.length - 1;
@@ -67,7 +70,7 @@ export default function Welcome() {
     setPage(Math.round(event.nativeEvent.contentOffset.x / width));
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.top}>
         {!last && (
           <Pressable accessibilityRole="button" onPress={done} hitSlop={12} style={styles.skip}>
@@ -103,7 +106,7 @@ export default function Welcome() {
         </View>
         <Button title={last ? 'Get started' : 'Next'} onPress={next} />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

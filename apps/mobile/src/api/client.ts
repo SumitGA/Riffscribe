@@ -87,6 +87,9 @@ export function createApi({ baseUrl, getToken, fetch }: ApiOptions) {
       ok(await client.PUT('/me/terms', { body: { version } })),
     createJob: (body: CreateJobRequest) => unwrap(client.POST('/jobs', { body })),
     submitJob: (jobId: string) => unwrap(client.POST('/jobs/{job_id}/submit', jobPath(jobId))),
+    /** A blank name goes back to the default title. */
+    renameJob: (jobId: string, name: string) =>
+      unwrap(client.PATCH('/jobs/{job_id}', { ...jobPath(jobId), body: { name } })),
     getJob: (jobId: string) => unwrap(client.GET('/jobs/{job_id}', jobPath(jobId))),
     listJobs: (query: { cursor?: string; limit?: number } = {}) =>
       unwrap(client.GET('/jobs', { params: { query } })),
