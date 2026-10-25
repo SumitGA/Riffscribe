@@ -413,6 +413,7 @@ export interface components {
         MeOut: {
             /** User Id */
             user_id: string;
+            plan: components["schemas"]["Plan"];
             /** Jobs This Month */
             jobs_this_month: number;
             /** Jobs Per Month */
@@ -422,6 +423,13 @@ export interface components {
             /** Terms Accepted */
             terms_accepted: boolean;
         };
+        /**
+         * Plan
+         * @description What a user may do. Free has the monthly limit; unlimited (granted in the admin section for
+         *     now, by subscriptions later) has none.
+         * @enum {string}
+         */
+        Plan: "free" | "unlimited";
         /** PresignedRequestOut */
         PresignedRequestOut: {
             /** Method */

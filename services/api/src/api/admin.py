@@ -1,6 +1,7 @@
-"""The admin section's API (ADR-0015): sign-ups, activity, retention and each user's jobs, read
-only. The page is `infra/site/admin.html`, served by Caddy at /admin; these routes sit under
-/admin/api so one Cloudflare Access rule guards both.
+"""The admin section's API (ADR-0015): sign-ups, activity, retention and each user's jobs, and
+each user's plan (free or unlimited), whose changes go to an audit log (admin_actions). The
+page is `infra/site/admin.html`, served by Caddy at /admin; these routes sit under /admin/api so
+one Cloudflare Access rule guards both.
 
 Only the Clerk user IDs in ADMIN_USER_IDS get past `require_admin`; anyone else signed in gets
 403 with their own ID, which is how the operator finds the ID to add. Accounts come from Clerk's
@@ -10,6 +11,7 @@ are left out of the OpenAPI document: the app never calls them (TD-21).
 
 import base64
 import json
+import logging
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
@@ -17,15 +19,25 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import case, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from api.account import CLERK_API, USER_AGENT
 from api.auth import AuthSettings, CurrentUser, CurrentUserDep, get_auth_settings
 from api.deps import ApiSettingsDep, QueueDep, SessionDep
-from tabscribe_platform.db import Job, JobStatus, PushToken, StageRun, StageStatus, User
+from tabscribe_platform.db import (
+    AdminAction,
+    Job,
+    JobStatus,
+    Plan,
+    PushToken,
+    StageRun,
+    StageStatus,
+    User,
+)
 
 # Clerk's browser SDK, served by each instance's Frontend API (the page loads it from there):
 # the client, and since clerk-js 6 its sign-in screens as a separate package, released with it.
@@ -42,6 +54,9 @@ def require_admin(user: CurrentUserDep, settings: ApiSettingsDep) -> CurrentUser
         )
     return user
 
+
+logger = logging.getLogger(__name__)
+AdminDep = Annotated[CurrentUser, Depends(require_admin)]
 
 router = APIRouter(
     prefix="/admin/api", include_in_schema=False, dependencies=[Depends(require_admin)]
@@ -382,6 +397,8 @@ class UserRow(BaseModel):
     failed: int
     last_transcription: datetime | None
     notification_devices: int
+    plan: Plan
+    plan_changed_at: datetime | None
 
 
 class UserList(BaseModel):
@@ -407,9 +424,11 @@ def users(session: SessionDep, accounts_source: AccountsDep) -> UserList:
     devices = dict(
         session.execute(select(PushToken.user_id, func.count()).group_by(PushToken.user_id)).all()
     )
-    terms = {
-        user_id: version is not None
-        for user_id, version in session.execute(select(User.id, User.terms_version)).all()
+    known = {
+        row.id: row
+        for row in session.execute(
+            select(User.id, User.terms_version, User.plan, User.plan_changed_at)
+        ).all()
     }
     rows = []
     for a in sorted(accounts, key=lambda a: a.joined, reverse=True):
@@ -421,14 +440,98 @@ def users(session: SessionDep, accounts_source: AccountsDep) -> UserList:
                 method=a.method,
                 joined=a.joined,
                 last_active=a.last_active,
-                terms_accepted=terms.get(a.id, False),
+                terms_accepted=a.id in known and known[a.id].terms_version is not None,
                 transcriptions=n,
                 failed=f,
                 last_transcription=_utc(last) if last else None,
                 notification_devices=devices.get(a.id, 0),
+                plan=known[a.id].plan if a.id in known else Plan.FREE,
+                plan_changed_at=(
+                    _utc(changed)
+                    if a.id in known and (changed := known[a.id].plan_changed_at)
+                    else None
+                ),
             )
         )
     return UserList(users=rows)
+
+
+class SetPlanRequest(BaseModel):
+    plan: Plan
+    note: str | None = Field(default=None, max_length=200)  # why, e.g. "paid for October"
+
+
+class UserPlan(BaseModel):
+    id: str
+    plan: Plan
+    plan_changed_at: datetime
+
+
+@router.put("/users/{user_id}/plan")
+def set_plan(
+    user_id: Annotated[str, Path(max_length=128)],
+    body: SetPlanRequest,
+    admin: AdminDep,
+    session: SessionDep,
+) -> UserPlan:
+    """Grant (unlimited) or take back (free) a user's plan, recorded in the audit log. Works for
+    someone who signed up but never transcribed: their row is created."""
+    before = session.scalar(select(User.plan).where(User.id == user_id)) or Plan.FREE
+    now = datetime.now(UTC)
+    values = {"plan": body.plan, "plan_changed_at": now, "plan_changed_by": admin.id}
+    session.execute(
+        insert(User)
+        .values(id=user_id, **values)
+        .on_conflict_do_update(index_elements=[User.id], set_=values)
+    )
+    session.add(
+        AdminAction(
+            admin_id=admin.id,
+            action="set_plan",
+            target_user_id=user_id,
+            detail={"from": before.value, "to": body.plan.value, "note": body.note},
+        )
+    )
+    session.commit()
+    logger.info(
+        "plan changed",
+        extra={"target_user_id": user_id, "from": before.value, "to": body.plan.value},
+    )
+    return UserPlan(id=user_id, plan=body.plan, plan_changed_at=now)
+
+
+class AdminActionRow(BaseModel):
+    at: datetime
+    admin_id: str
+    action: str
+    target_user_id: str
+    detail: dict[str, Any]
+
+
+class AdminActionList(BaseModel):
+    actions: list[AdminActionRow]
+
+
+@router.get("/actions")
+def actions(
+    session: SessionDep, limit: Annotated[int, Query(ge=1, le=500)] = 100
+) -> AdminActionList:
+    """The audit log, newest first."""
+    rows = session.scalars(
+        select(AdminAction).order_by(AdminAction.created_at.desc()).limit(limit)
+    ).all()
+    return AdminActionList(
+        actions=[
+            AdminActionRow(
+                at=_utc(r.created_at),
+                admin_id=r.admin_id,
+                action=r.action,
+                target_user_id=r.target_user_id,
+                detail=r.detail,
+            )
+            for r in rows
+        ]
+    )
 
 
 class JobRow(BaseModel):

@@ -62,6 +62,7 @@ beforeEach(() => {
   jest.mocked(useApi).mockReturnValue({ me, listJobs } as unknown as Api);
   me.mockResolvedValue({
     user_id: 'user_1',
+    plan: 'free',
     jobs_this_month: 3,
     jobs_per_month: 10,
     terms_version: '2026-10-11',
@@ -74,6 +75,7 @@ describe('Library', () => {
   it('opens the welcome guide on a phone that has never shown it, and only then', async () => {
     me.mockResolvedValue({
       user_id: 'u',
+      plan: 'free',
       jobs_this_month: 0,
       jobs_per_month: 10,
       terms_version: 'v',
@@ -93,6 +95,21 @@ describe('Library', () => {
     await renderLibrary();
     expect(await screen.findByText('3 of 10 transcriptions')).toBeTruthy();
     expect(await screen.findByText('Nothing here yet')).toBeTruthy();
+  });
+
+  it('shows the unlimited plan without a limit', async () => {
+    me.mockResolvedValue({
+      user_id: 'user_1',
+      plan: 'unlimited',
+      jobs_this_month: 23,
+      jobs_per_month: 10,
+      terms_version: '2026-10-11',
+      terms_accepted: true,
+    });
+    await renderLibrary();
+    expect(await screen.findByText('23 transcriptions this month')).toBeTruthy();
+    expect(screen.getByText('Unlimited plan')).toBeTruthy();
+    expect(screen.queryByText(/of 10/)).toBeNull();
   });
 
   it("lists the user's transcriptions with their status", async () => {

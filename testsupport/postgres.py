@@ -71,4 +71,9 @@ def db(db_engine: Engine) -> Iterator[Engine]:
     """The migrated database, emptied after each test."""
     yield db_engine
     with db_engine.begin() as conn:
-        conn.execute(text("TRUNCATE users, jobs, stage_runs, score_versions, result_cache CASCADE"))
+        conn.execute(
+            text(
+                "TRUNCATE users, jobs, stage_runs, score_versions, result_cache, admin_actions"
+                " CASCADE"
+            )
+        )

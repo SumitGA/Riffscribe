@@ -1140,6 +1140,9 @@
             "type": "string",
             "title": "User Id"
           },
+          "plan": {
+            "$ref": "#/components/schemas/Plan"
+          },
           "jobs_this_month": {
             "type": "integer",
             "title": "Jobs This Month"
@@ -1160,12 +1163,22 @@
         "type": "object",
         "required": [
           "user_id",
+          "plan",
           "jobs_this_month",
           "jobs_per_month",
           "terms_version",
           "terms_accepted"
         ],
         "title": "MeOut"
+      },
+      "Plan": {
+        "type": "string",
+        "enum": [
+          "free",
+          "unlimited"
+        ],
+        "title": "Plan",
+        "description": "What a user may do. Free has the monthly limit; unlimited (granted in the admin section for\nnow, by subscriptions later) has none."
       },
       "PresignedRequestOut": {
         "properties": {

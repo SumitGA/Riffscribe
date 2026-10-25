@@ -63,6 +63,7 @@ def me(
     """Who the bearer token belongs to, this month's quota, and whether the terms are accepted."""
     return MeOut(
         user_id=user.id,
+        plan=account.plan_of(session, user.id),
         jobs_this_month=limiter.monthly_jobs_used(user.id),
         jobs_per_month=limits.free_jobs_per_month,
         terms_version=account.TERMS_VERSION,

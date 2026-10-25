@@ -32,6 +32,17 @@ operator gets in.
 - **Later phases:** blocking users with an audit log (B), then targeted notifications sent by
   the worker (C). Each needs its own plan, a migration and a sentence in the legal pages.
 
+## Update 2026-10-25: plans (phase B, first part)
+
+The admin section can now change one thing: a user's **plan**. `PUT /admin/api/users/{id}/plan`
+sets `free` or `unlimited` (migration 0008: `users.plan`, `plan_changed_at`, `plan_changed_by`).
+Unlimited skips the monthly limit in `POST /jobs/{id}/submit`; the job is still counted, so usage
+stays visible and counts against the free limit if the plan goes back mid-month. The 5-minute
+clip limit, rate limits and queue priority are the same for both plans. Every change is written
+to `admin_actions` (who, whom, when, from, to, an optional note), shown on the page; deleting an
+account deletes the actions about it, as the privacy policy promises. The app shows "Unlimited
+plan" from `/me`. Manual grants stand in for subscriptions until billing exists (TD-42).
+
 ## Consequences
 
 - The operator sees the closed test's progress from any browser, with no server access.

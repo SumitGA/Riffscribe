@@ -54,6 +54,7 @@ beforeEach(() => {
   jest.mocked(useApi).mockReturnValue({
     me: async () => ({
       user_id: 'u',
+      plan: 'free',
       jobs_this_month: 3,
       jobs_per_month: 10,
       terms_version: '2026-10-11',

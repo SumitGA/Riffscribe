@@ -54,6 +54,10 @@ svg text { fill: var(--muted); font-size: 11px; }
 .bad { color: var(--bad); }
 .good { color: var(--good); }
 .muted { color: var(--muted); }
+.plan { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.plan.unlimited { background: var(--accent); color: var(--on-accent); }
+.plan.free { background: var(--surface-2); color: var(--muted); }
+button.small { padding: 3px 10px; font-size: 13px; }
 .center { max-width: 480px; margin: 12vh auto; text-align: center; }
 .center p { color: var(--muted); }
 code { background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-size: 13px; word-break: break-all; }
@@ -104,8 +108,13 @@ code { background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-
     </div>
 
     <h2>Users</h2>
-    <p class="note">Newest first. Click a user to see their transcriptions.</p>
+    <p class="note">Newest first. Click a user to see their transcriptions. Unlimited users have no
+      monthly limit; their transcriptions are still counted.</p>
     <div class="panel scroll"><table id="users"></table></div>
+
+    <h2>Admin actions</h2>
+    <p class="note">Every plan change, newest first.</p>
+    <div class="panel scroll"><table id="actions"></table></div>
   </main>
 </div>
 <script>
@@ -129,10 +138,14 @@ const when = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" }) : "–");
 const pct = (part, whole) => (whole ? Math.round((100 * part) / whole) + "%" : "–");
 
-async function api(path) {
+async function api(path, method = "GET", body = undefined) {
   const token = await getToken();
+  const headers = token ? { Authorization: "Bearer " + token } : {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch("/admin/api/" + path, {
-    headers: token ? { Authorization: "Bearer " + token } : {},
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
   });
   if (!response.ok) {
@@ -247,11 +260,49 @@ function others(o) {
     [2, 3, 4]);
 }
 
+async function setPlan(user, plan) {
+  const who = user.email || user.id;
+  const question = plan === "unlimited"
+    ? `Give ${who} unlimited transcriptions?`
+    : `Move ${who} back to the free plan? Transcriptions they made this month count towards its limit.`;
+  if (!confirm(question)) return;
+  const note = prompt("Note for the audit log (optional), e.g. \"paid for October\":", "");
+  if (note === null) return;
+  try {
+    await api("users/" + encodeURIComponent(user.id) + "/plan", "PUT", { plan, note: note.trim() || null });
+    await loadDashboard();
+  } catch (error) {
+    alert("Couldn't change the plan: " + error.message);
+  }
+}
+
+function planCell(u) {
+  const unlimited = u.plan === "unlimited";
+  const button = el("button", { class: "small", type: "button" }, unlimited ? "Back to free" : "Grant unlimited");
+  button.addEventListener("click", (e) => { e.stopPropagation(); setPlan(u, unlimited ? "free" : "unlimited"); });
+  button.addEventListener("keydown", (e) => e.stopPropagation());
+  return el("td", { title: u.plan_changed_at ? "Changed " + when(u.plan_changed_at) : "" },
+    el("span", { class: "plan " + u.plan }, unlimited ? "Unlimited" : "Free"), " ", button);
+}
+
+function actions(list, byId) {
+  const name = (id) => byId.get(id)?.email || id;
+  const rows = list.map((a) => el("tr", {},
+    el("td", {}, when(a.at)),
+    el("td", {}, name(a.admin_id)),
+    el("td", {}, name(a.target_user_id)),
+    el("td", {}, a.action === "set_plan" ? `${a.detail.from} → ${a.detail.to}` : a.action),
+    el("td", { class: "muted" }, a.detail.note || ""),
+  ));
+  table("actions", ["When", "By", "User", "Change", "Note"], rows);
+}
+
 function users(list) {
-  const head = ["Email", "Sign-in", "Joined", "Last active", "Terms", "Transcriptions", "Failed", "Last transcription", "Notifications"];
+  const head = ["Email", "Plan", "Sign-in", "Joined", "Last active", "Terms", "Transcriptions", "Failed", "Last transcription", "Notifications"];
   const rows = list.map((u) => {
     const row = el("tr", { class: "click", tabindex: "0", title: u.id },
       el("td", {}, u.email || u.id),
+      planCell(u),
       el("td", {}, u.method),
       el("td", {}, day(u.joined)),
       el("td", {}, day(u.last_active)),
@@ -266,7 +317,7 @@ function users(list) {
     row.addEventListener("keydown", (e) => { if (e.key === "Enter") toggle(); });
     return row;
   });
-  table("users", head, rows, [5, 6, 8]);
+  table("users", head, rows, [6, 7, 9]);
 }
 
 async function showJobs(user, row, span) {
@@ -304,7 +355,7 @@ async function showJobs(user, row, span) {
 async function loadDashboard() {
   $("refresh").disabled = true;
   try {
-    const [overview, ret, list] = await Promise.all([api("overview"), api("retention"), api("users")]);
+    const [overview, ret, list, log] = await Promise.all([api("overview"), api("retention"), api("users"), api("actions")]);
     $("gate").hidden = true;
     $("main").hidden = false;
     $("refresh").hidden = false;
@@ -313,6 +364,7 @@ async function loadDashboard() {
     retention(ret.cohorts);
     others(overview);
     users(list.users);
+    actions(log.actions, new Map(list.users.map((u) => [u.id, u])));
   } catch (error) {
     if (error.status === 403) {
       gate(el("h2", {}, "This account isn't an admin"), el("p", {}, error.message));

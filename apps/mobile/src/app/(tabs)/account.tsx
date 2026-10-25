@@ -20,6 +20,7 @@ export default function Account() {
   const { signOut } = useClerk();
   const queryClient = useQueryClient();
   const me = useQuery({ queryKey: ['me'], queryFn: api.me });
+  const unlimited = me.data?.plan === 'unlimited';
 
   const email = user?.primaryEmailAddress?.emailAddress;
   const name = user?.fullName || email || 'Signed in';
@@ -99,13 +100,19 @@ export default function Account() {
 
         <Card style={styles.plan}>
           <View style={styles.planRow}>
-            <Text variant="label">Free plan</Text>
+            <Text variant="label">{unlimited ? 'Unlimited plan' : 'Free plan'}</Text>
           </View>
-          <ProgressBar fraction={me.data ? me.data.jobs_this_month / me.data.jobs_per_month : 0} />
+          {!unlimited && (
+            <ProgressBar
+              fraction={me.data ? me.data.jobs_this_month / me.data.jobs_per_month : 0}
+            />
+          )}
           <Text variant="muted">
-            {me.data
-              ? `${me.data.jobs_this_month} of ${me.data.jobs_per_month} transcriptions this month · up to 5 min each`
-              : ' '}
+            {!me.data
+              ? ' '
+              : unlimited
+                ? `${me.data.jobs_this_month} transcriptions this month · no monthly limit · up to 5 min each`
+                : `${me.data.jobs_this_month} of ${me.data.jobs_per_month} transcriptions this month · up to 5 min each`}
           </Text>
         </Card>
 

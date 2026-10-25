@@ -21,6 +21,7 @@ describe('ApiProvider', () => {
         new Response(
           JSON.stringify({
             user_id: 'u',
+            plan: 'free',
             jobs_this_month: 0,
             jobs_per_month: 10,
             terms_version: '2026-10-11',
