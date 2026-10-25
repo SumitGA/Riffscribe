@@ -84,6 +84,14 @@ class StageStatus(StrEnum):
     CACHED = "cached"  # reused from an identical earlier job (dedup cache); nothing ran
 
 
+class Plan(StrEnum):
+    """What a user may do. Free has the monthly limit; unlimited (granted in the admin section for
+    now, by subscriptions later) has none."""
+
+    FREE = "free"
+    UNLIMITED = "unlimited"
+
+
 class User(Base):
     """A user known to the auth provider. `id` is the JWT `sub`; no passwords are stored here."""
 
@@ -95,6 +103,23 @@ class User(Base):
     # right to use their recordings), and when.
     terms_version: Mapped[str | None] = mapped_column(String(32))
     terms_accepted_at: Mapped[datetime | None]
+    plan: Mapped[Plan] = mapped_column(_enum(Plan), default=Plan.FREE, server_default="free")
+    plan_changed_at: Mapped[datetime | None]
+    plan_changed_by: Mapped[str | None] = mapped_column(String(128))  # the admin's user ID
+
+
+class AdminAction(Base):
+    """Audit log of what admins changed. No foreign key to users: the record outlives the user."""
+
+    __tablename__ = "admin_actions"
+    __table_args__ = (Index(None, "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    admin_id: Mapped[str] = mapped_column(String(128))
+    action: Mapped[str] = mapped_column(String(32))  # e.g. "set_plan"
+    target_user_id: Mapped[str] = mapped_column(String(128))
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
 
 
 class Job(Base):

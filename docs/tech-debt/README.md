@@ -49,6 +49,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-39](#td-39-ios-scene-life-cycle-patched-into-expo-sdk-57) | iOS scene life cycle patched into Expo SDK 57 | Mobile | Moving to Expo SDK 58 |
 | [TD-40](#td-40-sign-in-with-apple-on-ios-only) | Sign in with Apple on iOS only (production: Android too, untested) | Mobile / auth | Test Apple sign-in end to end on an Android phone |
 | [TD-41](#td-41-apple-tokens-not-revoked-on-account-deletion) | Apple tokens not revoked on account deletion | Backend / auth | App Review asks for it; Clerk documents revocation |
+| [TD-42](#td-42-unlimited-plans-granted-by-hand) | Unlimited plans granted by hand | Backend / billing | Subscriptions (RevenueCat); more than a handful of paying users |
 
 ---
 
@@ -1339,4 +1340,29 @@ Clerk user. Clerk doesn't document revoking Apple tokens, and its iOS guide impl
 user's Apple token from Clerk (`getUserOauthAccessToken`, if it exposes Apple's) and call
 `https://appleid.apple.com/auth/revoke` with a client secret signed by the Apple key, before
 deleting the Clerk user.
+
+---
+
+## TD-42: Unlimited plans granted by hand
+
+**Concept.** A *plan* decides what a user may do: free has a monthly limit of transcriptions,
+unlimited has none. Normally a payment system (RevenueCat for in-app subscriptions) switches the
+plan when someone subscribes, renews or cancels.
+
+**What we did.** No billing yet. The operator switches plans in the admin section
+(`PUT /admin/api/users/{id}/plan`), with a note, and every change goes to an audit log
+(`admin_actions`). Unlimited users are still counted (`Limiter.count_monthly_job`).
+
+**Pros**
+- People who pay outside the app (or testers, friends) get unlimited access today, with no
+  billing code or store setup.
+- Who changed what, when and why is on record.
+
+**Cons**
+- Nothing expires: when someone stops paying, the operator has to remember to move them back.
+- Payments outside the app stores may not be allowed for digital features sold in the iOS and
+  Android apps; fine for gifts and testers, not as the business model.
+
+**When to revisit.** When subscriptions arrive: RevenueCat's webhook sets the plan (source
+"subscription", alongside today's "admin"), with an expiry date.
 

@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, SessionDep, StoreDep
 from api.schemas import AcceptTermsRequest
-from tabscribe_platform.db import User
+from tabscribe_platform.db import AdminAction, Plan, User
 from tabscribe_platform.storage import user_prefix
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -39,6 +39,11 @@ USER_AGENT = "riffscribe-api/1.0"
 def terms_accepted(session: Session, user_id: str) -> bool:
     accepted = session.scalar(select(User.terms_version).where(User.id == user_id))
     return accepted == TERMS_VERSION
+
+
+def plan_of(session: Session, user_id: str) -> Plan:
+    """The user's plan; free for anyone without a row yet (no terms accepted, nothing granted)."""
+    return session.scalar(select(User.plan).where(User.id == user_id)) or Plan.FREE
 
 
 @router.put("/terms", status_code=status.HTTP_204_NO_CONTENT)
@@ -64,8 +69,10 @@ def delete_account(
     user: CurrentUserDep, session: SessionDep, store: StoreDep, settings: ApiSettingsDep
 ) -> None:
     # The database first (jobs, versions and push tokens cascade from the user), then files: a
-    # failure afterwards can leave unreachable files, never a user without theirs.
+    # failure afterwards can leave unreachable files, never a user without theirs. Admin actions
+    # about the user go too: the privacy policy promises everything is deleted.
     session.execute(delete(User).where(User.id == user.id))
+    session.execute(delete(AdminAction).where(AdminAction.target_user_id == user.id))
     session.commit()
     try:
         removed = store.delete_prefix(user_prefix(user.id))

@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from tabscribe_platform.db import JOB_NAME_MAX, JobStatus, StageStatus, VersionStatus
+from tabscribe_platform.db import JOB_NAME_MAX, JobStatus, Plan, StageStatus, VersionStatus
 
 # Upload types the API accepts, and the file extension the stored upload gets. The normalize
 # stage decodes with ffmpeg and rejects anything that isn't really audio.
@@ -137,8 +137,9 @@ class JobList(BaseModel):
 
 class MeOut(BaseModel):
     user_id: str
+    plan: Plan
     jobs_this_month: int
-    jobs_per_month: int
+    jobs_per_month: int  # the free plan's limit; unlimited plans have none
     # The current terms of use, and whether this user has accepted them (needed to upload).
     terms_version: str
     terms_accepted: bool

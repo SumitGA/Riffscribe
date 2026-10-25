@@ -48,7 +48,7 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 - **Quotas and rate limits.** Enforce per-user limits in Redis. Priority queue for the paid tier.
 - **Tenant isolation.** Scope every DB query by `user_id`. Prefix every object key with the user ID. Presigned URLs expire in 15 minutes or less.
 - **Lean database.** Postgres holds metadata only; blobs go to object storage. Index `jobs(user_id, created_at)` and `jobs(status)`.
-- **Admin section** (ADR-0015, `docs/admin.md`): `/admin` page (`infra/site/admin.html`) and `/admin/api` routes (`api/admin.py`), behind Cloudflare Access and the `ADMIN_USER_IDS` allowlist. Read-only so far.
+- **Admin section** (ADR-0015, `docs/admin.md`): `/admin` page (`infra/site/admin.html`) and `/admin/api` routes (`api/admin.py`), behind Cloudflare Access and the `ADMIN_USER_IDS` allowlist. Read-only except users' plans (free/unlimited), which are audited (`admin_actions`).
 - **Observability.** Use structured JSON logs and OpenTelemetry traces, both carrying `job_id`. Track these metrics: queue depth, per-stage duration, failure rate and GPU utilisation. Metrics are Prometheus: API `/metrics` (queue depth, request latency) and worker `:9100` (TD-20).
 - **12-factor config.** All configuration comes from environment variables. No secrets in the repo.
 

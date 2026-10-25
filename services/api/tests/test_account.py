@@ -13,7 +13,7 @@ from api import account as account_module
 from api.account import TERMS_VERSION
 from api.deps import get_api_settings
 from api.main import app
-from tabscribe_platform.db import Job, PushToken, User
+from tabscribe_platform.db import AdminAction, Job, PushToken, User
 from tabscribe_platform.storage import ObjectStore, job_key
 from testsupport.api import LIMITS, auth
 
@@ -47,9 +47,15 @@ def test_deleting_an_account_removes_everything_and_is_safe_to_repeat(
     )
     (tmp_path / "f").write_text("score")
     object_store.upload_file(tmp_path / "f", job_key(alice, job_id, "notation", "score.musicxml"))
+    with Session(db) as session:  # an admin once changed her plan, and someone else's
+        for target in (alice, f"{alice}-bob"):
+            session.add(AdminAction(admin_id="admin", action="set_plan", target_user_id=target))
+        session.commit()
 
     assert api.delete("/me", headers=auth(alice)).status_code == 204
     with Session(db) as session:
+        targets = session.scalars(select(AdminAction.target_user_id)).all()
+        assert alice not in targets and f"{alice}-bob" in targets
         assert session.get(User, alice) is None
     assert jobs_of(db, alice) == 0 and tokens_of(db, alice) == 0
     assert object_store.list_keys(f"users/{alice}/") == []

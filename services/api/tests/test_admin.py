@@ -14,7 +14,7 @@ from api.auth import AuthSettings, get_auth_settings
 from api.deps import get_api_settings
 from api.main import app
 from tabscribe_platform.db import Job, JobStatus, PushToken, StageRun, StageStatus, User
-from testsupport.api import LIMITS, auth
+from testsupport.api import LIMITS, NEW_JOB, auth
 
 pytestmark = pytest.mark.integration
 
@@ -253,3 +253,69 @@ def test_clerk_users_are_read_page_by_page(monkeypatch: pytest.MonkeyPatch) -> N
         ("user_1", "u1@x", "google"),
         ("user_2", "u2@x", "email"),
     ]
+
+
+def submit_one(api: TestClient, user_id: str) -> int:
+    created = api.post("/jobs", json=NEW_JOB, headers=auth(user_id)).json()
+    up = created["upload"]
+    request = urllib.request.Request(up["url"], data=b"audio", headers=up["headers"], method="PUT")
+    urllib.request.urlopen(request, timeout=10).close()
+    return api.post(f"/jobs/{created['job']['id']}/submit", headers=auth(user_id)).status_code
+
+
+def test_an_admin_grants_and_takes_back_unlimited_transcriptions(as_admin: TestClient) -> None:
+    accounts(account("user_a", 3))
+    user = "user_a"  # signed up, never transcribed: no row in our database yet
+    assert as_admin.get("/me", headers=auth(user)).json()["plan"] == "free"
+    grant = {"plan": "unlimited", "note": "paid for October"}
+    assert (
+        as_admin.put(f"/admin/api/users/{user}/plan", json=grant, headers=auth(user)).status_code
+        == 403
+    )
+    granted = as_admin.put(f"/admin/api/users/{user}/plan", json=grant, headers=auth(ADMIN))
+    assert granted.status_code == 200, granted.text
+    assert granted.json()["plan"] == "unlimited"
+
+    # Past the free limit (2 in tests), and still counted.
+    assert [submit_one(as_admin, user) for _ in range(LIMITS.free_jobs_per_month + 1)] == [200] * 3
+    me = as_admin.get("/me", headers=auth(user)).json()
+    assert (me["plan"], me["jobs_this_month"]) == ("unlimited", 3)
+    listed = as_admin.get("/admin/api/users", headers=auth(ADMIN)).json()["users"]
+    assert (listed[0]["id"], listed[0]["plan"]) == (user, "unlimited")
+    assert listed[0]["plan_changed_at"] is not None
+
+    revoke = {"plan": "free", "note": "didn't renew"}
+    assert (
+        as_admin.put(f"/admin/api/users/{user}/plan", json=revoke, headers=auth(ADMIN)).status_code
+        == 200
+    )
+    assert submit_one(as_admin, user) == 429  # this month's 3 count against the free 2
+
+    log = as_admin.get("/admin/api/actions", headers=auth(ADMIN)).json()["actions"]
+    assert [(a["action"], a["target_user_id"], a["admin_id"]) for a in log] == [
+        ("set_plan", user, ADMIN),
+        ("set_plan", user, ADMIN),
+    ]
+    assert log[0]["detail"] == {
+        "from": "unlimited",
+        "to": "free",
+        "note": "didn't renew",
+    }  # newest first
+    assert log[1]["detail"] == {"from": "free", "to": "unlimited", "note": "paid for October"}
+
+
+def test_plan_changes_are_validated(as_admin: TestClient) -> None:
+    path = "/admin/api/users/user_a/plan"
+    assert as_admin.put(path, json={"plan": "gold"}, headers=auth(ADMIN)).status_code == 422
+    assert (
+        as_admin.put(
+            path, json={"plan": "free", "note": "x" * 201}, headers=auth(ADMIN)
+        ).status_code
+        == 422
+    )
+    assert (
+        as_admin.put(
+            "/admin/api/users/" + "u" * 129 + "/plan", json={"plan": "free"}, headers=auth(ADMIN)
+        ).status_code
+        == 422
+    )

@@ -16,7 +16,7 @@ from sqlalchemy import Select, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from api.account import TERMS_REQUIRED, terms_accepted
+from api.account import TERMS_REQUIRED, plan_of, terms_accepted
 from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, LimiterDep, QueueDep, SessionDep, StoreDep
 from api.schemas import (
@@ -33,7 +33,15 @@ from api.schemas import (
     RenameJobRequest,
     StageOut,
 )
-from tabscribe_platform.db import Job, JobStatus, ScoreVersion, StageRun, User, VersionStatus
+from tabscribe_platform.db import (
+    Job,
+    JobStatus,
+    Plan,
+    ScoreVersion,
+    StageRun,
+    User,
+    VersionStatus,
+)
 from tabscribe_platform.jobqueue import STAGES, Priority, StageMessage, queue_for_stage
 from tabscribe_platform.observability import inject_trace
 from tabscribe_platform.storage import ObjectStore, PresignedRequest, job_key, job_prefix
@@ -190,7 +198,9 @@ def submit_job(
         _log(job.id, "upload larger than the limit", logging.WARNING)
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, job.error_message)
 
-    if not limiter.take_monthly_job(user.id, limits.free_jobs_per_month):
+    if plan_of(session, user.id) is Plan.UNLIMITED:
+        limiter.count_monthly_job(user.id)
+    elif not limiter.take_monthly_job(user.id, limits.free_jobs_per_month):
         _log(job.id, "monthly quota used up")
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,

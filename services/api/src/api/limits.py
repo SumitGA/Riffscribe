@@ -28,6 +28,15 @@ class Limiter:
             return False
         return True
 
+    def count_monthly_job(self, user_id: str, *, now: datetime | None = None) -> None:
+        """Count one job without a limit (unlimited plan): usage stays visible, and counts if the
+        plan goes back to free this month."""
+        key = self._month_key(user_id, now)
+        with self._redis.pipeline() as pipe:
+            pipe.incr(key)
+            pipe.expire(key, _MONTH_TTL_S)
+            pipe.execute()
+
     def refund_monthly_job(self, user_id: str, *, now: datetime | None = None) -> None:
         self._redis.decr(self._month_key(user_id, now))
 

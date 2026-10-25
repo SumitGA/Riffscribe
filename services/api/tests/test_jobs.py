@@ -61,6 +61,7 @@ def test_create_upload_submit_poll(api: TestClient, alice: str, job_queue: JobQu
     assert job_queue.receive(QueueName.CPU, "test", wait_s=0.05) is None
     assert api.get("/me", headers=auth(alice)).json() == {
         "user_id": alice,
+        "plan": "free",
         "jobs_this_month": 1,
         "jobs_per_month": LIMITS.free_jobs_per_month,
         "terms_version": TERMS_VERSION,

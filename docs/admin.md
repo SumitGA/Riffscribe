@@ -39,3 +39,17 @@ gives 302 (to `*.cloudflareaccess.com`), while `/readyz` still gives 200.
 4. Reload the page.
 
 Staging and production have different Clerk instances, so your user ID differs between them.
+
+## 3. Plans: unlimited transcriptions
+
+In **Users**, each person has a plan badge, **Free** (the monthly limit, 10 transcriptions) or
+**Unlimited** (no monthly limit), and a button to switch it:
+
+- **Grant unlimited** asks for confirmation and an optional note for the audit log (e.g. "paid
+  for October"). It works for someone who signed up but never transcribed.
+- **Back to free** takes it away. Transcriptions they made this month count towards the free
+  limit, so they may be blocked until next month.
+
+Clips stay limited to 5 minutes on both plans. **Admin actions** lists every change, newest first.
+The app shows "Unlimited plan" in the Library and Account tabs.
+

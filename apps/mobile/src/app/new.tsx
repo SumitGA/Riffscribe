@@ -193,7 +193,11 @@ function Review({
     }
   };
   const progress = playback.duration > 0 ? playback.currentTime / playback.duration : 0;
-  const remaining = me.data ? me.data.jobs_per_month - me.data.jobs_this_month : undefined;
+  // Unlimited plans have no count to show.
+  const remaining =
+    me.data && me.data.plan !== 'unlimited'
+      ? me.data.jobs_per_month - me.data.jobs_this_month
+      : undefined;
 
   return (
     <KeyboardAvoidingView

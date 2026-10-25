@@ -45,6 +45,7 @@ export default function Library() {
     }
   }, []);
   const me = useQuery({ queryKey: ['me'], queryFn: api.me });
+  const unlimited = me.data?.plan === 'unlimited';
   const jobs = useQuery({
     queryKey: ['jobs'],
     queryFn: () => api.listJobs(),
@@ -85,15 +86,19 @@ export default function Library() {
                 <>
                   <View style={styles.quotaRow}>
                     <Text style={styles.quotaText} testID="quota">
-                      {me.data
-                        ? `${me.data.jobs_this_month} of ${me.data.jobs_per_month} transcriptions`
-                        : ' '}
+                      {!me.data
+                        ? ' '
+                        : unlimited
+                          ? `${me.data.jobs_this_month} transcriptions this month`
+                          : `${me.data.jobs_this_month} of ${me.data.jobs_per_month} transcriptions`}
                     </Text>
-                    <Text variant="muted">Free plan</Text>
+                    <Text variant="muted">{unlimited ? 'Unlimited plan' : 'Free plan'}</Text>
                   </View>
-                  <ProgressBar
-                    fraction={me.data ? me.data.jobs_this_month / me.data.jobs_per_month : 0}
-                  />
+                  {!unlimited && (
+                    <ProgressBar
+                      fraction={me.data ? me.data.jobs_this_month / me.data.jobs_per_month : 0}
+                    />
+                  )}
                 </>
               )}
             </Card>
