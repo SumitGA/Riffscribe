@@ -30,6 +30,7 @@ from api.schemas import (
     JobOutputs,
     JobSummary,
     PresignedRequestOut,
+    RenameJobRequest,
     StageOut,
 )
 from tabscribe_platform.db import Job, JobStatus, ScoreVersion, StageRun, User, VersionStatus
@@ -229,6 +230,23 @@ def get_job(
     job = session.scalars(_own_job(user.id, job_id)).first()
     if job is None:
         raise _NOT_FOUND
+    return _job_out(session, store, job)
+
+
+@router.patch("/{job_id}")
+def rename_job(
+    job_id: uuid.UUID,
+    body: RenameJobRequest,
+    user: CurrentUserDep,
+    session: SessionDep,
+    store: StoreDep,
+) -> JobOut:
+    """Rename a job (its title in the library and on exports); blank goes back to the default."""
+    job = session.scalars(_own_job(user.id, job_id)).first()
+    if job is None:
+        raise _NOT_FOUND
+    job.name = body.name
+    session.commit()
     return _job_out(session, store, job)
 
 

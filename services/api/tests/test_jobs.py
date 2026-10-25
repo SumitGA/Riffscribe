@@ -182,6 +182,21 @@ def test_delete_job_removes_it_and_its_files(
     assert [j["id"] for j in listed] == [kept]
 
 
+def test_rename_job_changes_its_title_for_its_owner_only(api: TestClient, alice: str) -> None:
+    job_id = create(api, alice, name="Strummed0chords")["job"]["id"]
+    path = f"/jobs/{job_id}"
+    assert api.patch(path, json={"name": "Hi"}, headers=auth("mallory")).status_code == 404
+    renamed = api.patch(path, json={"name": "  Strummed chords "}, headers=auth(alice))
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "Strummed chords"
+    listed = api.get("/jobs", headers=auth(alice)).json()["jobs"]
+    assert listed[0]["name"] == "Strummed chords"
+    cleared = api.patch(path, json={"name": "  "}, headers=auth(alice))
+    assert cleared.json()["name"] is None  # back to the default title
+    too_long = api.patch(path, json={"name": "x" * 500}, headers=auth(alice))
+    assert too_long.status_code == 422
+
+
 def test_list_jobs_pages_newest_first(api: TestClient, alice: str) -> None:
     ids = [create(api, alice)["job"]["id"] for _ in range(3)]
     first = api.get("/jobs", params={"limit": 2}, headers=auth(alice)).json()

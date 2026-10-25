@@ -75,7 +75,11 @@ export interface paths {
         delete: operations["delete_job_jobs__job_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rename Job
+         * @description Rename a job (its title in the library and on exports); blank goes back to the default.
+         */
+        patch: operations["rename_job_jobs__job_id__patch"];
         trace?: never;
     };
     "/me/push-tokens": {
@@ -441,6 +445,14 @@ export interface components {
              */
             platform: "ios" | "android";
         };
+        /** RenameJobRequest */
+        RenameJobRequest: {
+            /**
+             * Name
+             * @description New title; blank clears it
+             */
+            name: string | null;
+        };
         /** StageOut */
         StageOut: {
             /** Stage */
@@ -655,6 +667,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_job_jobs__job_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameJobRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
             };
             /** @description Validation Error */
             422: {
