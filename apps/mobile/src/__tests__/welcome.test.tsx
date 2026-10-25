@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import Welcome from '@/app/welcome';
 import { markWelcomeSeen } from '@/welcome/seen';
@@ -11,9 +12,20 @@ jest.mock('@/welcome/seen', () => ({ markWelcomeSeen: jest.fn() }));
 
 beforeEach(() => jest.clearAllMocks());
 
+const metrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+const renderWelcome = () =>
+  render(
+    <SafeAreaProvider initialMetrics={metrics}>
+      <Welcome />
+    </SafeAreaProvider>,
+  );
+
 describe('Welcome guide', () => {
   it('walks through the three pages, then remembers it was shown and closes', async () => {
-    await render(<Welcome />);
+    await renderWelcome();
     expect(screen.getByText('Record or upload')).toBeTruthy();
     expect(screen.getByText('Get tab and sheet music')).toBeTruthy();
     expect(screen.getByText('Play, fix and export')).toBeTruthy();
@@ -31,7 +43,7 @@ describe('Welcome guide', () => {
   });
 
   it('can be skipped from the first page', async () => {
-    await render(<Welcome />);
+    await renderWelcome();
     await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
     expect(markWelcomeSeen).toHaveBeenCalled();
     expect(router.back).toHaveBeenCalled();
@@ -39,7 +51,7 @@ describe('Welcome guide', () => {
 
   it('goes to the library when there is nothing to go back to', async () => {
     jest.mocked(router.canGoBack).mockReturnValueOnce(false);
-    await render(<Welcome />);
+    await renderWelcome();
     await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
     expect(router.replace).toHaveBeenCalledWith('/');
   });
