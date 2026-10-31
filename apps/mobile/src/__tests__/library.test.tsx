@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 
@@ -144,6 +144,30 @@ describe('Library', () => {
     expect(screen.queryByText('Guitar take')).toBeNull();
     expect(screen.queryByText('Blues riff in A')).toBeNull();
     expect(screen.getByText('Piano take')).toBeTruthy();
+  });
+
+  it('shows the refresh spinner only while the user pulls, not during background polling', async () => {
+    listJobs.mockResolvedValue(jobList); // job "a" is still transcribing, so the list polls
+    await renderLibrary();
+    await screen.findByText('Transcribing');
+    const list = screen.getByTestId('library-list');
+    expect(list.props.refreshControl.props.refreshing).toBe(false);
+
+    // The 3 s poll is running (its request still pending): no spinner.
+    let finish: (value: JobList) => void = () => {};
+    listJobs.mockClear();
+    listJobs.mockReturnValue(new Promise<JobList>((resolve) => (finish = resolve)));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 3200)));
+    expect(listJobs).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('library-list').props.refreshControl.props.refreshing).toBe(false);
+    await act(async () => finish(jobList));
+
+    // A pull does show it, until the list is back.
+    listJobs.mockReturnValue(new Promise<JobList>((resolve) => (finish = resolve)));
+    await act(() => list.props.refreshControl.props.onRefresh());
+    expect(screen.getByTestId('library-list').props.refreshControl.props.refreshing).toBe(true);
+    await act(async () => finish(jobList));
+    expect(screen.getByTestId('library-list').props.refreshControl.props.refreshing).toBe(false);
   });
 
   it("says so when the API can't be reached", async () => {

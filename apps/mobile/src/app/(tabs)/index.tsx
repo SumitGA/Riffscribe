@@ -53,6 +53,13 @@ export default function Library() {
     refetchInterval: (query) =>
       query.state.data?.jobs.some((job) => !isFinished(job.status)) ? 3000 : false,
   });
+  // Only a pull shows the spinner: tied to isRefetching, every background poll (every 3 s while a
+  // take is transcribing) opened the pull-to-refresh area on iOS and pushed the Library down.
+  const [pulling, setPulling] = useState(false);
+  const onRefresh = () => {
+    setPulling(true);
+    void jobs.refetch().finally(() => setPulling(false));
+  };
   const shown = (jobs.data?.jobs ?? []).filter(
     (job) => filter === 'all' || job.instrument === filter,
   );
@@ -60,13 +67,14 @@ export default function Library() {
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
       <FlatList
+        testID="library-list"
         contentContainerStyle={styles.list}
         data={shown}
         keyExtractor={(job) => job.id}
         refreshControl={
           <RefreshControl
-            refreshing={jobs.isRefetching}
-            onRefresh={() => void jobs.refetch()}
+            refreshing={pulling}
+            onRefresh={onRefresh}
             tintColor={colors.accent}
             colors={[colors.accent]}
             progressBackgroundColor={colors.surface}
