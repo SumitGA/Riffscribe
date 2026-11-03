@@ -50,3 +50,8 @@ work/
 
 # Editor swap files
 *.swp
+
+# graphify knowledge graph (local only, rebuilt by its git hooks)
+graphify-out/
+# Claude Code personal settings
+.claude/settings.local.json

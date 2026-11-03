@@ -53,22 +53,8 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 - **12-factor config.** All configuration comes from environment variables. No secrets in the repo.
 
 ## Repo layout (monorepo)
-```
-apps/mobile/            Expo app
-services/api/           FastAPI app
-services/worker/        Queue consumer; thin wrapper around packages/pipeline
-packages/platform/      Infra code shared by api and worker (settings, DB, storage, queue); imports as `tabscribe_platform`
-packages/pipeline/      Transcription library — NO infra dependencies
-  src/pipeline/           Python package (stages, runner, CLI)
-  rust/                   Rust crate built into pipeline._tabcore (maturin)
-tools/preview/           Dev-only page: `make view` renders out/ with alphaTab (notation + tab, playback, exports)
-infra/terraform/
-docs/adr/               Architecture decision records
-docs/tech-debt/README.md  Deliberate trade-offs: concept, pros, cons, when to revisit
-docker-compose.yml
-pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
-```
-- `packages/pipeline` must run standalone, for example `python -m pipeline transcribe in.wav --out out/`, so model work can be iterated without the app or infra.
+- `services/worker` is a thin wrapper around `packages/pipeline`; infra code shared by api and worker lives in `packages/platform` (imports as `tabscribe_platform`).
+- `packages/pipeline` has NO infra dependencies and must run standalone, for example `python -m pipeline transcribe in.wav --out out/`, so model work can be iterated without the app or infra.
 
 ## Conventions
 - `make check` runs every CI check (lint, types, tests, Rust); `make help` lists all shortcuts. `make up` / `make down` start and stop the local Docker services.
@@ -92,3 +78,14 @@ pyproject.toml          uv workspace root + shared ruff/mypy/pytest config
 
 ## Out of scope for now
 Transcribing vocals, bass and drums; telling several guitars apart and guitar techniques (bends, slides, hammer-ons) until step C; real-time transcription; public sharing of transcriptions.
+
+## graphify
+
+If graphify is installed, this project has a local knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- graphify-out/ is local and git-ignored (each machine builds its own graph); never commit it.
