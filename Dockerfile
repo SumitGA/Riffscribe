@@ -24,13 +24,21 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential curl ca-certificates nasm xz-utils \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-# Retries: a DNS or network blip on the build machine shouldn't fail the build; the checksum
-# still verifies whatever arrives.
-RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
-        "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" -o ffmpeg.tar.xz \
-    && echo "${FFMPEG_SHA256}  ffmpeg.tar.xz" | sha256sum -c - \
-    && tar -xJf ffmpeg.tar.xz --strip-components=1 \
-    && rm ffmpeg.tar.xz
+# The release tarball from ffmpeg.org, or, when ffmpeg.org can't be reached (it was down for
+# hours on 2026-11-04), GitHub's archive of the same release tag. Each source has its own
+# pinned checksum. Retries cover a network blip; the short connect timeout stops a dead host
+# from taking minutes per attempt.
+ARG FFMPEG_GITHUB_SHA256=6e374ed621e48faa40639307dff48ba6fe574a509977956d2cce9669b7cc27e9
+RUN fetch() { curl -fsSL --connect-timeout 20 --retry 3 --retry-all-errors --retry-delay 5 "$1" -o "$2"; } \
+    && if fetch "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" ffmpeg.tar.xz; then \
+        echo "${FFMPEG_SHA256}  ffmpeg.tar.xz" | sha256sum -c - \
+        && tar -xJf ffmpeg.tar.xz --strip-components=1 && rm ffmpeg.tar.xz; \
+    else \
+        echo "ffmpeg.org unreachable, using GitHub's archive of n${FFMPEG_VERSION}" \
+        && fetch "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n${FFMPEG_VERSION}.tar.gz" ffmpeg.tar.gz \
+        && echo "${FFMPEG_GITHUB_SHA256}  ffmpeg.tar.gz" | sha256sum -c - \
+        && tar -xzf ffmpeg.tar.gz --strip-components=1 && rm ffmpeg.tar.gz; \
+    fi
 RUN ./configure \
         --prefix=/opt/ffmpeg \
         --disable-autodetect --disable-everything --disable-doc --disable-debug \
