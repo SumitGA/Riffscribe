@@ -1,4 +1,5 @@
-# Android build for Google Play: versionCode 6, built from this code (TD-38). Until it is live,
+# Android build for Google Play: versionCode 7 (EAS build 8a30f451), built from this code (TD-38),
+# sent to production review on 2026-11-03. Until it is live,
 # installed apps (versionCode 4, fingerprint 8991bffc…) get over-the-air updates only from a branch
 # cut at 6317672.
 # Its fingerprint, as EAS computes it (with google-services.json, from the EAS file variable):
