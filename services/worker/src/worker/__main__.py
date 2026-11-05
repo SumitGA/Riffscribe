@@ -27,13 +27,12 @@ logger = logging.getLogger("worker")
 def serve(
     worker: StageWorker, queue: JobQueue, settings: WorkerSettings, stop: threading.Event
 ) -> None:
+    # One wait on all the queues: waiting on them in turn held each stage up to `poll_s`
+    # whenever the next stage was on the other queue (about 6 s per job).
     while not stop.is_set():
-        for name in settings.queues:
-            delivery = queue.receive(name, settings.id, wait_s=settings.poll_s)
-            if delivery is not None:
-                worker.handle(delivery)
-            if stop.is_set():
-                break
+        delivery = queue.receive(settings.queues, settings.id, wait_s=settings.poll_s)
+        if delivery is not None:
+            worker.handle(delivery)
 
 
 def main() -> None:

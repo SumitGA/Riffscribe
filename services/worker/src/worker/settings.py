@@ -24,7 +24,7 @@ class WorkerSettings(BaseSettings):
     )
     # Consumer name in the queue; unique per process.
     id: str = Field(default_factory=_default_worker_id)
-    # How long one receive call blocks before trying the next queue.
+    # How long one receive call blocks (on all the queues) before checking for shutdown.
     poll_s: float = Field(default=2.0, gt=0)
     # Prometheus metrics on http://<host>:<port>/metrics; 0 turns the server off.
     metrics_port: int = Field(default=9100, ge=0, le=65535)

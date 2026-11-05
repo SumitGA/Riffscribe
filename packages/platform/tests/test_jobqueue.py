@@ -89,6 +89,46 @@ def test_high_priority_first(job_queue: RedisJobQueue) -> None:
 
 
 @pytest.mark.integration
+def test_receive_from_several_queues(job_queue: RedisJobQueue) -> None:
+    message = _message("transcribe")
+    job_queue.enqueue(QueueName.ML, message)
+
+    delivery = job_queue.receive([QueueName.CPU, QueueName.ML], "w1", wait_s=0.1)
+    assert delivery is not None
+    assert delivery.message == message
+    assert delivery.queue is QueueName.ML
+    job_queue.ack(delivery)
+    assert job_queue.receive([QueueName.CPU, QueueName.ML], "w1", wait_s=0.05) is None
+
+
+@pytest.mark.integration
+def test_high_priority_first_across_queues(job_queue: RedisJobQueue) -> None:
+    free, paid = _message(), _message("transcribe")
+    job_queue.enqueue(QueueName.CPU, free)
+    job_queue.enqueue(QueueName.ML, paid, priority=Priority.HIGH)
+
+    both = [QueueName.CPU, QueueName.ML]
+    received = [job_queue.receive(both, "w1", wait_s=0.1) for _ in range(2)]
+    assert [d.message if d else None for d in received] == [paid, free]
+
+
+@pytest.mark.integration
+def test_blocking_receive_on_several_queues_wakes_up_on_either(
+    job_queue: RedisJobQueue, redis_client: "redis.Redis", key_prefix: str
+) -> None:
+    both = [QueueName.CPU, QueueName.ML]
+    job_queue.receive(both, "w1", wait_s=0.01)  # creates the streams and group
+    other = RedisJobQueue(redis_client, visibility_timeout_s=0.2, prefix=key_prefix)
+    timer = threading.Timer(0.2, other.enqueue, (QueueName.ML, _message("transcribe")))
+    timer.start()
+    start = time.monotonic()
+    delivery = job_queue.receive(both, "w1", wait_s=5)  # CPU is empty: no wait on it first
+    timer.join()
+    assert delivery is not None and delivery.queue is QueueName.ML
+    assert time.monotonic() - start < 2
+
+
+@pytest.mark.integration
 def test_blocking_receive_wakes_up_on_enqueue(
     job_queue: RedisJobQueue, redis_client: "redis.Redis", key_prefix: str
 ) -> None:
