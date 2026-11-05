@@ -13,6 +13,7 @@ import { formatWhen, isFinished, type StageState, stageStates } from '@/jobs/sta
 import { AddNoteSheet } from '@/score/AddNoteSheet';
 import { type Edit, type TappedBeat, type TappedNote, upsertEdit } from '@/score/edits';
 import { ExportSheet } from '@/score/ExportSheet';
+import { markScore, startScoreTimer } from '@/score/loadTimer';
 import { NoteEditSheet } from '@/score/NoteEditSheet';
 import { VersionsSheet } from '@/score/VersionsSheet';
 import { type ExportFormat, fileName, shareBase64, shareDownload, sharePdf } from '@/score/exports';
@@ -238,6 +239,7 @@ function Score({
   subtitle: string;
 }) {
   const scoreView = useRef<ScoreHandle>(null);
+  useEffect(() => startScoreTimer(), []); // before the queries below start fetching
   const api = useApi();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -318,7 +320,9 @@ function Score({
       if (!response.ok) {
         throw new Error(`couldn't download the score (HTTP ${response.status})`);
       }
-      return response.text();
+      const text = await response.text();
+      markScore('scoreFetched');
+      return text;
     },
     staleTime: Infinity,
   });
@@ -337,6 +341,7 @@ function Score({
         return null;
       }
       const { bar_starts_ms } = (await response.json()) as { bar_starts_ms: number[] };
+      markScore('syncFetched');
       return { uri: findTake(job.id)?.uri ?? null, barStartsMs: bar_starts_ms };
     },
     staleTime: Infinity,

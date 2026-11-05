@@ -9,6 +9,7 @@ import { colors, fonts, radius, space } from '@/theme';
 import { IconButton, ProgressBar, Segmented, Text } from '@/ui';
 
 import type { Edit, TappedBeat, TappedNote } from './edits';
+import { markScore, scoreMarks } from './loadTimer';
 import { prepareViewer, type ViewerFiles } from './prepareViewer';
 import {
   command,
@@ -116,7 +117,9 @@ export function ScoreView({
   // may read. The take is fixed for the life of the view (the screen waits for it).
   useEffect(() => {
     const prepare = async () => {
+      markScore('viewerMounted');
       const prepared = await prepareViewer();
+      markScore('filesPrepared');
       if (take?.uri) {
         try {
           const file = await copyTake(take.uri, prepared.folder);
@@ -129,6 +132,7 @@ export function ScoreView({
       } else if (take) {
         setPageTake({ file: null, barStartsMs: take.barStartsMs });
       }
+      markScore('takeCopied');
       setFiles(prepared);
     };
     prepare().catch((e: unknown) => setError(String(e)));
@@ -148,10 +152,19 @@ export function ScoreView({
     const message = JSON.parse(event.nativeEvent.data) as ViewerMessage;
     switch (message.type) {
       case 'ready':
+        markScore('pageReady');
         setReady(true);
         break;
       case 'playerReady':
+        markScore('playerReady');
         setPlayerReady(true);
+        break;
+      case 'timings':
+        // One line per score opened: where the wait before Play went (docs/performance.md).
+        console.info(
+          'score load timings',
+          JSON.stringify({ app: scoreMarks(), page: message.timing, source: message.source }),
+        );
         break;
       case 'playing':
         setPlaying(message.playing);
