@@ -46,6 +46,10 @@ export const VIEWER_PAGE = `<!doctype html>
 <script src="alphaTab.min.js"></script>
 <script>
   const post = (message) => window.ReactNativeWebView?.postMessage(JSON.stringify(message));
+  // When each loading step finished, in ms since the page started loading; sent with
+  // playerReady so the app can log where the wait before Play goes (docs/performance.md).
+  let timing = { pageScript: Math.round(performance.now()) };
+  const mark = (name) => { timing[name] = Math.round(performance.now()); };
   window.onerror = (message) => post({ type: "error", message: String(message) });
   const PROFILES = {
     both: alphaTab.StaveProfile.ScoreTab,
@@ -226,12 +230,16 @@ export const VIEWER_PAGE = `<!doctype html>
       },
     });
     api.error.on((error) => post({ type: "error", message: String(error?.message ?? error) }));
-    api.renderFinished.on(() => post({ type: "rendered" }));
+    api.renderFinished.on(() => { mark("rendered"); post({ type: "rendered" }); });
     api.renderFinished.on(() => drawMarks());
     if (!window.__tapsReady) { setupTaps(); window.__tapsReady = true; }
     // Each note used to sound twice (oneStaff); keep synth playback as loud as it was.
     if (source !== "recording") api.masterVolume = 2;
-    api.playerReady.on(() => post({ type: "playerReady" }));
+    api.playerReady.on(() => {
+      mark("playerReady");
+      post({ type: "playerReady" });
+      post({ type: "timings", source, timing });
+    });
     api.playerStateChanged.on((e) =>
       post({ type: "playing", playing: e.state === alphaTab.synth.PlayerState.Playing }));
     api.playerPositionChanged.on((e) => {
@@ -319,12 +327,21 @@ export const VIEWER_PAGE = `<!doctype html>
   // or null when this phone doesn't have it (the bar timings still steer the synthesizer).
   async function show(musicXml, profile, take, source) {
     current = { musicXml, profile, take, source };
+    timing = { pageScript: timing.pageScript };
+    mark("show");
     createApi(profile, source);
+    mark("api");
+    const sonivox = await readBytes("sonivox.sf2");
+    const guitars = await readBytes("musescore-guitars.sf3");
+    mark("fontsRead");
     // Synchronous without workers, so the player is ready once, with both fonts.
-    api.loadSoundFont(new Uint8Array(await readBytes("sonivox.sf2")), false);
-    api.loadSoundFont(new Uint8Array(await readBytes("musescore-guitars.sf3")), true);
+    api.loadSoundFont(new Uint8Array(sonivox), false);
+    mark("sonivoxLoaded");
+    api.loadSoundFont(new Uint8Array(guitars), true);
+    mark("guitarsLoaded");
     const bytes = new TextEncoder().encode(musicXml);
     const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, api.settings);
+    mark("scoreParsed");
     oneStaff(score);
     oneTempo(score);
     strum(score);
@@ -335,6 +352,7 @@ export const VIEWER_PAGE = `<!doctype html>
     }
     score.backingTrack = new alphaTab.model.BackingTrack();
     score.backingTrack.rawAudioFile = new Uint8Array(await readBytes(take.file));
+    mark("takeRead");
     score.masterBars.forEach((bar, i) => {
       const ms = take.barStartsMs[i];
       if (ms === undefined) return; // bars past the timings play at the last bar's pace
@@ -483,6 +501,7 @@ export type ViewerMessage =
   | { type: 'ready' }
   | { type: 'rendered' }
   | { type: 'playerReady' }
+  | { type: 'timings'; source: PlaybackSource; timing: Record<string, number> }
   | { type: 'playing'; playing: boolean }
   | { type: 'position'; currentMs: number; endMs: number }
   | { type: 'error'; message: string }
