@@ -2,6 +2,8 @@
 
 import json
 import logging
+import threading
+import time
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -138,9 +140,7 @@ def drain(stage_worker: StageWorker, queue: RedisJobQueue, limit: int = 20) -> i
     """Handle messages from both queues until none are left; returns how many were handled."""
     handled = 0
     while handled < limit:
-        delivery = queue.receive(QueueName.CPU, "w", wait_s=0.01) or queue.receive(
-            QueueName.ML, "w", wait_s=0.01
-        )
+        delivery = queue.receive([QueueName.CPU, QueueName.ML], "w", wait_s=0.01)
         if delivery is None:
             return handled
         stage_worker.handle(delivery)
@@ -189,6 +189,57 @@ def test_guitar_job_runs_every_stage(
     assert not [k for k in keys if "/source/" in k or k.endswith("/normalize/audio.flac")]
     assert any(k.endswith("/quantize/quantized.json") for k in keys)
     assert notifier.sent == [(s3_user, job_id, JobStatus.SUCCEEDED)]
+
+
+def test_storage_transfers_run_in_parallel(
+    stage_worker: StageWorker,
+    queue: RedisJobQueue,
+    submit_job: SubmitJob,
+    db: Engine,
+    object_store: ObjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each transfer is a round trip to R2; one after another they took most of a job."""
+    lock = threading.Lock()
+    running = 0
+    most = 0
+    uploaded: list[str] = []
+
+    def slow(move: Callable[..., None]) -> Callable[..., None]:
+        def wrapper(*args: Any, **kwargs: Any) -> None:
+            nonlocal running, most
+            with lock:
+                running += 1
+                most = max(most, running)
+            time.sleep(0.05)
+            try:
+                move(*args, **kwargs)
+            finally:
+                with lock:
+                    running -= 1
+
+        return wrapper
+
+    upload = object_store.upload_file
+
+    def record_upload(path: Path, key: str, content_type: str | None = None) -> None:
+        upload(path, key, content_type)
+        with lock:
+            uploaded.append(key)
+
+    monkeypatch.setattr(object_store, "download_file", slow(object_store.download_file))
+    monkeypatch.setattr(object_store, "upload_file", slow(record_upload))
+    job_id = submit_job()
+    assert drain(stage_worker, queue) == 6
+
+    job, _ = load(db, job_id)
+    assert job.status is JobStatus.SUCCEEDED
+    assert most > 1
+    # A manifest in storage means its stage's files are all there: it's uploaded last.
+    for i, key in enumerate(uploaded):
+        if key.endswith("/manifest.json"):
+            stage_dir = key.rsplit("/", 1)[0] + "/"
+            assert not [k for k in uploaded[i + 1 :] if k.startswith(stage_dir)]
 
 
 def test_piano_job_skips_tab(

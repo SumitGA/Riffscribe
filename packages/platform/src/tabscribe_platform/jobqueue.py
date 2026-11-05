@@ -9,7 +9,7 @@ import json
 import time
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, cast
@@ -107,8 +107,14 @@ class JobQueue(ABC):
     ) -> None: ...
 
     @abstractmethod
-    def receive(self, queue: QueueName, consumer: str, *, wait_s: float) -> Delivery | None:
-        """Next message, high priority first, waiting up to `wait_s`. None if there was none.
+    def receive(
+        self, queues: QueueName | Sequence[QueueName], consumer: str, *, wait_s: float
+    ) -> Delivery | None:
+        """Next message from any of `queues`, waiting up to `wait_s`. None if there was none.
+
+        High priority comes first across all the queues, then the queues in the order given.
+        A worker serving several queues waits on all of them at once, so a message on one queue
+        is never held up by a wait on another (`Delivery.queue` says where it came from).
 
         The message stays invisible to other consumers until it is acked or failed, or until
         the visibility timeout passes without `extend` (the consumer is presumed dead, and
@@ -220,23 +226,24 @@ class RedisJobQueue(JobQueue):
         member = json.dumps({"stream": stream, "body": body, "nonce": uuid.uuid4().hex})
         client.zadd(self._delayed_key, {member: self._clock() + delay_s})
 
-    def receive(self, queue: QueueName, consumer: str, *, wait_s: float) -> Delivery | None:
-        streams = [self._stream(queue, p) for p in (Priority.HIGH, Priority.NORMAL)]
+    def receive(
+        self, queues: QueueName | Sequence[QueueName], consumer: str, *, wait_s: float
+    ) -> Delivery | None:
+        names = [queues] if isinstance(queues, str) else list(queues)
+        streams = [self._stream(q, p) for p in (Priority.HIGH, Priority.NORMAL) for q in names]
         for stream in streams:
             self._ensure_group(stream)
         self._promote_due(keys=[self._delayed_key], args=[self._clock()])
         for stream in streams:
-            self._reclaim_stale(queue, stream, consumer)
+            self._reclaim_stale(stream, consumer)
 
-        # Non-blocking pass, high priority first; then block on both.
+        # Non-blocking pass in priority order; then one blocking read on every stream.
         for stream in streams:
-            if delivery := self._read(queue, consumer, [stream], block_ms=None):
+            if delivery := self._read(consumer, [stream], block_ms=None):
                 return delivery
-        return self._read(queue, consumer, streams, block_ms=max(1, int(wait_s * 1000)))
+        return self._read(consumer, streams, block_ms=max(1, int(wait_s * 1000)))
 
-    def _read(
-        self, queue: QueueName, consumer: str, streams: list[str], block_ms: int | None
-    ) -> Delivery | None:
+    def _read(self, consumer: str, streams: list[str], block_ms: int | None) -> Delivery | None:
         response = cast(
             list[tuple[str, list[tuple[str, dict[str, str]]]]] | None,
             self._redis.xreadgroup(
@@ -252,7 +259,7 @@ class RedisJobQueue(JobQueue):
         ]
         if not entries:
             return None
-        # A blocking read over two streams can return one entry from each. Keep the first and
+        # A blocking read over several streams can return one entry from each. Keep the first and
         # put the others back at the end of their stream, so they don't sit with this consumer
         # until the visibility timeout.
         for stream, entry_id, fields in entries[1:]:
@@ -260,9 +267,9 @@ class RedisJobQueue(JobQueue):
                 pipe.xadd(stream, {"body": fields["body"]})
                 self._remove(pipe, stream, entry_id)
                 pipe.execute()
-        return self._delivery(queue, consumer, entries[0])
+        return self._delivery(consumer, entries[0])
 
-    def _delivery(self, queue: QueueName, consumer: str, entry: _Entry) -> Delivery | None:
+    def _delivery(self, consumer: str, entry: _Entry) -> Delivery | None:
         stream, entry_id, fields = entry
         body = fields.get("body", "")
         try:
@@ -270,10 +277,13 @@ class RedisJobQueue(JobQueue):
         except ValidationError as exc:
             self._dead_letter(stream, entry_id, body, f"unreadable message: {exc}")
             return None
-        priority = Priority(stream.rsplit(":", 1)[1])
-        return Delivery(queue, priority, message, f"{stream} {entry_id} {consumer}")
+        # Stream keys are `{prefix}:{queue}:{priority}`.
+        _, queue, priority = stream.rsplit(":", 2)
+        return Delivery(
+            QueueName(queue), Priority(priority), message, f"{stream} {entry_id} {consumer}"
+        )
 
-    def _reclaim_stale(self, queue: QueueName, stream: str, consumer: str) -> None:
+    def _reclaim_stale(self, stream: str, consumer: str) -> None:
         """Messages whose consumer stopped responding count as a failed attempt."""
         response = self._redis.xautoclaim(
             stream, _GROUP, consumer, min_idle_time=self._visibility_ms, count=10
@@ -281,7 +291,7 @@ class RedisJobQueue(JobQueue):
         for entry_id, fields in response[1]:
             if fields is None:  # deleted from the stream meanwhile
                 continue
-            delivery = self._delivery(queue, consumer, (stream, entry_id, fields))
+            delivery = self._delivery(consumer, (stream, entry_id, fields))
             if delivery is None:
                 continue
             # Never dead-lettered here: the worker must see the message to fail its job, so

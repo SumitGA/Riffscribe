@@ -11,7 +11,8 @@ import shutil
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -57,6 +58,10 @@ from worker.dedup import full_pipeline_version, result_cache_key
 from worker.metrics import JOBS_FINISHED, STAGE_RUNS, STAGE_SECONDS
 from worker.notify import Notifier
 from worker.render import VersionRenderer
+
+# Object-storage transfers run in parallel, up to this many at once (botocore keeps 10
+# connections per client).
+_TRANSFER_THREADS = 8
 
 logger = logging.getLogger(__name__)
 _tracer = trace.get_tracer("tabscribe.worker")
@@ -186,28 +191,42 @@ class StageWorker:
         target = stages[: names.index(message.stage) + 1]
         with tempfile.TemporaryDirectory(prefix="tabscribe-") as tmp:
             source = Path(tmp) / "upload" / Path(source_key).name
-            self._store.download_file(source_key, source)
             workdir = Path(tmp) / "work"
+            downloads = [(source_key, source)]
             for key in self._store.list_keys(prefix):
                 relative = key.removeprefix(prefix)
                 # source/ holds the upload; the source stage copies it locally on every run
                 # rather than storing a second copy.
                 if not relative.startswith(f"{StageName.SOURCE}/"):
-                    self._store.download_file(key, workdir / relative)
+                    downloads.append((key, workdir / relative))
+            self._transfer(lambda d: self._store.download_file(*d), downloads)
 
             result = run_pipeline(source, workdir, config, target)
 
-            for stage_result in result.stages:
-                if stage_result.status == "ran" and stage_result.stage is not StageName.SOURCE:
-                    self._upload_dir(workdir, str(stage_result.stage), prefix)
+            ran = [
+                str(r.stage)
+                for r in result.stages
+                if r.status == "ran" and r.stage is not StageName.SOURCE
+            ]
+            files = [p for stage in ran for p in (workdir / stage).iterdir() if p.is_file()]
+            # Manifests go last: a manifest in storage means the stage's files are all there.
+            for batch in (
+                [p for p in files if p.name != "manifest.json"],
+                [p for p in files if p.name == "manifest.json"],
+            ):
+                self._transfer(
+                    lambda p: self._store.upload_file(p, f"{prefix}{p.parent.name}/{p.name}"),
+                    batch,
+                )
             return result
 
-    def _upload_dir(self, workdir: Path, stage: str, prefix: str) -> None:
-        # The manifest goes last: a manifest in storage means the stage's files are all there.
-        files = sorted((workdir / stage).iterdir(), key=lambda p: p.name == "manifest.json")
-        for path in files:
-            if path.is_file():
-                self._store.upload_file(path, f"{prefix}{stage}/{path.name}")
+    @staticmethod
+    def _transfer[T](move: Callable[[T], None], items: Iterable[T]) -> None:
+        """Run object-storage transfers side by side: each is one round trip (about 0.4 s
+        from the home lab to R2), and one after another they took most of a job's time."""
+        with ThreadPoolExecutor(max_workers=_TRANSFER_THREADS) as pool:
+            for _ in pool.map(move, items):  # re-raises the first failure
+                pass
 
     def _advance(self, delivery: Delivery, result: RunResult) -> str:
         message = delivery.message
