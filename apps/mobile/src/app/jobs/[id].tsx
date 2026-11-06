@@ -50,9 +50,10 @@ export default function JobScreen() {
   const job = useQuery({
     queryKey: ['job', id],
     queryFn: () => api.getJob(id),
-    // Poll every 2 s while the worker runs it; stop once it's finished.
+    // Poll every second while the worker runs it, so the score shows soon after it's done
+    // (TD-44); stop once it's finished. The push notification also refreshes it.
     refetchInterval: (query) =>
-      query.state.data && isFinished(query.state.data.status) ? false : 2000,
+      query.state.data && isFinished(query.state.data.status) ? false : 1000,
   });
 
   if (job.isPending) {
