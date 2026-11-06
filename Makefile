@@ -1,7 +1,7 @@
 # Developer shortcuts. Run `make` (or `make help`) to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-separation run view up stack e2e e2e-staging deploy deploy-staging stats down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check check lint fmt typecheck test test-accuracy test-separation rust clean
+.PHONY: help setup setup-separation run view up stack e2e e2e-staging deploy deploy-staging stats down migrate api worker token api-types mobile mobile-ios mobile-android mobile-usb mobile-check mobile-update mobile-release check lint fmt typecheck test test-accuracy test-separation rust clean
 
 PIPELINE_DIR := packages/pipeline
 FILE ?=
@@ -121,11 +121,25 @@ api-types: ## Regenerate the app's API types from the API's OpenAPI schema (afte
 	uv run --quiet python -m api.openapi $(MOBILE_DIR)/src/api/openapi.json
 	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false
 
-mobile-check: ## App: API types and licence notices current, Android fingerprint unchanged (TD-38), TypeScript, ESLint + Prettier, Jest, iOS + Android bundle
+mobile-check: ## App: API types and licence notices current, store builds' fingerprints unchanged (TD-38), TypeScript, ESLint + Prettier, Jest, iOS + Android bundle
 	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false --check \
-		&& node scripts/licenses.js --check && node scripts/android-runtime.js \
+		&& node scripts/licenses.js --check && node scripts/store-runtimes.js \
 		&& npx tsc --noEmit && CI=1 npx expo lint && npx jest --ci \
 		&& CI=1 npx expo export --platform ios --platform android --output-dir dist >/dev/null
+
+# App releases go to Android and iOS together (TD-43, docs/releasing.md).
+mobile-update: ## Over-the-air update to the production apps, Android and iOS together: MESSAGE="what changed"
+	@test -n "$(MESSAGE)" || { echo 'MESSAGE="what changed" is required'; exit 1; }
+	cd $(MOBILE_DIR) && node scripts/store-runtimes.js \
+		&& EXPO_NO_DOTENV=1 npx eas-cli update --platform all --channel production \
+			--environment production --message "$(MESSAGE)"
+
+mobile-release: ## Store builds for Android and iOS together, after a native change: VERSION=1.1.0 (= app.json's version)
+	@test -n "$(VERSION)" || { echo 'VERSION=x.y.z is required (bump it in app.json first, in a PR)'; exit 1; }
+	@test "$$(node -p "require('./$(MOBILE_DIR)/app.json').expo.version")" = "$(VERSION)" \
+		|| { echo "app.json's version isn't $(VERSION): bump it in a PR first"; exit 1; }
+	@test -z "$$(git status --porcelain)" || { echo 'commit or stash your changes first'; exit 1; }
+	cd $(MOBILE_DIR) && npx eas-cli build --platform all --profile production
 
 lint: ## Ruff lint and format check
 	uv run ruff check .
