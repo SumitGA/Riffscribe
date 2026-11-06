@@ -1,0 +1,13 @@
+# The native fingerprints of the app builds in the stores (TD-38). Over-the-air updates
+# (`make mobile-update`) reach only installed builds with the same fingerprint, so
+# scripts/store-runtimes.js (make mobile-check, CI) fails when the code's fingerprint for
+# either platform differs from these. After a native release (`make mobile-release`) goes live
+# in both stores, record the new values here (`node scripts/store-runtimes.js --print`).
+#
+# Android 1.0.0 (versionCode 7, EAS build 8a30f451), on Google Play since 2026-11-04.
+# google-services.json (push) counts towards the Android fingerprint and is git-ignored (EAS
+# gets it from a file variable, CI doesn't have it), so it's recorded both ways.
+android-with-google-services=ac3a2108bbbba2091369a41ec0c9d0d45f293f9c
+android-without-google-services=51e17250911b9e1534833ea249b82dd177689712
+# iOS 1.0.0 (build 3), on the App Store since 2026-11-05.
+ios=1281ebddcb8b0bbfe7ff7945c0995689293ec35c

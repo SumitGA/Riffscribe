@@ -45,11 +45,12 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-35](#td-35-beat-model-converted-and-quantized-by-us) | Beat model converted and quantized by us | Pipeline | Upstream ships ONNX or a newer model; beat step shows in job latency |
 | [TD-36](#td-36-guitar-note-model-converted-and-quantized-by-us) | Guitar note model converted and quantized by us; two note models run | Pipeline / legal | Job latency matters; GPU workers; real guitar recordings with corrections |
 | [TD-37](#td-37-admin-section-read-only-numbers-from-two-sources) | Admin section: read-only numbers from two sources | Backend / ops | Retention needs app opens; many users; phases B and C |
-| [TD-38](#td-38-one-app-config-for-android-and-ios-so-ios-changes-need-a-new-android-build) | One app config for Android and iOS, so iOS changes need a new Android build | Mobile | iOS ships; a second Android fix is needed during an iOS change |
+| [TD-38](#td-38-one-app-config-for-android-and-ios-so-ios-changes-need-a-new-android-build) | One app config for Android and iOS, so iOS changes need a new Android build | Mobile | Done for both stores (store-runtimes.txt); see TD-43 |
 | [TD-39](#td-39-ios-scene-life-cycle-patched-into-expo-sdk-57) | iOS scene life cycle patched into Expo SDK 57 | Mobile | Moving to Expo SDK 58 |
 | [TD-40](#td-40-sign-in-with-apple-on-ios-only) | Sign in with Apple on iOS only (production: Android too, untested) | Mobile / auth | Test Apple sign-in end to end on an Android phone |
 | [TD-41](#td-41-apple-tokens-not-revoked-on-account-deletion) | Apple tokens not revoked on account deletion | Backend / auth | App Review asks for it; Clerk documents revocation |
 | [TD-42](#td-42-unlimited-plans-granted-by-hand) | Unlimited plans granted by hand | Backend / billing | Subscriptions (RevenueCat); more than a handful of paying users |
+| [TD-43](#td-43-app-releases-go-to-android-and-ios-together) | App releases go to Android and iOS together | Mobile / releases | One platform needs an urgent native fix the other can't wait for |
 
 ---
 
@@ -1238,12 +1239,15 @@ native (modules, plugins, the whole `app.json`). Expo hashes the whole config fo
 so an iOS-only setting (`ios.supportsTablet`, Sign in with Apple's plugin) changes the Android
 fingerprint too.
 
-**What we did.** `apps/mobile/android-runtime.txt` holds the fingerprint of the Android build on
-Google Play; `scripts/android-runtime.js` (in `make mobile-check`, so CI) fails when the code's
-Android fingerprint differs. `google-services.json` (push) counts towards the fingerprint and is
+**What we did.** `apps/mobile/store-runtimes.txt` holds the fingerprints of the Android build on
+Google Play and, since iOS shipped (2026-11-05), the iOS build on the App Store;
+`scripts/store-runtimes.js` (in `make mobile-check`, so CI, and in `make mobile-update`) fails
+when the code's fingerprint for either platform differs. (Until 2026-11-06 it guarded Android
+only, as `android-runtime.txt`.) `google-services.json` (push) counts towards the fingerprint and is
 git-ignored (EAS gets it from a file variable), so the file records the fingerprint both with it
-(EAS, a Mac with the file) and without it (CI). iOS work that touches native config waits on its branch and lands
-together with a new Android build, whose fingerprint then goes in the file.
+(EAS, a Mac with the file) and without it (CI); the iOS fingerprint doesn't depend on it. A
+native change now ships as new builds for both platforms (TD-43, `docs/releasing.md`), whose
+fingerprints then go in the file.
 
 **Pros**
 - Testers' Android app can't be cut off from updates by accident, by a change meant for iOS.
@@ -1254,9 +1258,8 @@ together with a new Android build, whose fingerprint then goes in the file.
   upload).
 - One more CI step (~10 s).
 
-**Revisit when** iOS ships (both platforms then take native changes together), or if an Android
-fix must go out while an iOS native change is pending (then: publish the Android update from a
-release branch cut at the live build's commit).
+**Revisit when** iOS shipped on 2026-11-05: both platforms now take native changes together
+(TD-43), and the guard covers both. Revisit if the two apps ever need different native code.
 
 ---
 
@@ -1366,3 +1369,31 @@ plan when someone subscribes, renews or cancels.
 **When to revisit.** When subscriptions arrive: RevenueCat's webhook sets the plan (source
 "subscription", alongside today's "admin"), with an expiry date.
 
+---
+
+## TD-43: App releases go to Android and iOS together
+
+**Concept.** The app is one codebase for two stores. Each store build has a *native
+fingerprint*, and an over-the-air update only reaches builds with the same one (TD-38). If the
+platforms are released separately, Android and iOS end up on different native code, and every
+over-the-air update has to be published per platform from different commits.
+
+**What we did.** Since both apps went live (Google Play 2026-11-04, App Store 2026-11-05), every
+app release goes to both: JavaScript changes as one update for both platforms
+(`make mobile-update`, no single-platform option), native changes as new builds for both with
+the same version number (`make mobile-release`). `store-runtimes.txt` and CI keep the two in step;
+`docs/releasing.md` is the checklist, and every GitHub release has a Store builds table.
+
+**Pros**
+- Android and iPhone users have the same app; bug reports and support refer to one version.
+- One update command, one set of release notes, one fingerprint pair to track.
+- No release branches per platform.
+
+**Cons**
+- A native change waits for both stores' reviews (Google is usually 1-3 days, Apple 1-2 days,
+  longer after an information request).
+- A native fix one platform needs urgently also has to go through the other's review.
+
+**When to revisit.** If one platform needs an urgent native fix that can't wait for the other:
+ship a JavaScript workaround over the air if possible; otherwise build that platform alone and
+record the split in `store-runtimes.txt` until the other catches up.
