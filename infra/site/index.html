@@ -36,6 +36,8 @@ header span { font-weight: 700; font-size: 20px; letter-spacing: -0.3px; }
 .hero p.lead { color: var(--muted); font-size: 19px; margin: 0 0 28px; max-width: 34em; }
 .stores { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
 .stores a.play img { height: 60px; width: auto; margin: -9px; }
+/* Apple's badge has no padding; at 42px it lines up with Google's (60px with its padding). */
+.stores a.apple img { height: 42px; width: auto; display: block; }
 .pill {
   display: inline-block; border: 1px solid var(--line); border-radius: 999px;
   padding: 8px 16px; color: var(--muted); font-size: 15px;
@@ -88,13 +90,14 @@ footer nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
       <h1>Play it.<br>Get the <em>tab</em>.</h1>
       <p class="lead">Record yourself playing solo guitar or piano, and Riffscribe writes it out as guitar tab and sheet music you can play along with, fix and export.</p>
       <div class="stores">
-        <a class="play" href="/beta">
+        <a class="play" href="https://play.google.com/store/apps/details?id=com.sumitga.riffscribe">
           <img src="/img/google-play-badge.png" alt="Get it on Google Play">
         </a>
-        <span class="pill">iPhone: coming soon</span>
+        <a class="apple" href="https://apps.apple.com/app/riffscribe/id6826506414">
+          <img src="/img/app-store-badge.svg" alt="Download on the App Store">
+        </a>
       </div>
-      <p class="beta">Riffscribe for Android is in testing.
-        <a href="/beta">Join the beta</a> and try it first.</p>
+      <p class="beta">Free on Android and iPhone.</p>
     </div>
     <div class="phone">
       <img src="/img/2-score-notation-and-tab.jpg" alt="A jazz guitar transcription in Riffscribe: sheet music with guitar tab underneath, strum arrows and a play button" width="500" height="1111">
@@ -149,7 +152,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
       <details><summary>Is it accurate?</summary><p>It gets most notes right on clear recordings, but transcription is automatic and can make mistakes. The editor is there to fix them quickly.</p></details>
       <details><summary>Does it cost anything?</summary><p>Riffscribe is free, with a monthly number of transcriptions.</p></details>
       <details><summary>What happens to my recordings?</summary><p>They’re used only to make your transcription and are deleted from our servers right after. Your transcriptions are private: nothing is published or shared. You can delete your account and everything in it at any time. See the <a href="/privacy">privacy policy</a>.</p></details>
-      <details><summary>When is the iPhone version coming?</summary><p>After the Android launch. The page will link to the App Store as soon as it’s there.</p></details>
+      <details><summary>Which phones does it run on?</summary><p>Android phones, from <a href="https://play.google.com/store/apps/details?id=com.sumitga.riffscribe">Google Play</a>, and iPhone, from the <a href="https://apps.apple.com/app/riffscribe/id6826506414">App Store</a>. There’s no iPad version yet.</p></details>
     </div>
   </section>
 </main>
