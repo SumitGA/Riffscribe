@@ -51,6 +51,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-41](#td-41-apple-tokens-not-revoked-on-account-deletion) | Apple tokens not revoked on account deletion | Backend / auth | App Review asks for it; Clerk documents revocation |
 | [TD-42](#td-42-unlimited-plans-granted-by-hand) | Unlimited plans granted by hand | Backend / billing | Subscriptions (RevenueCat); more than a handful of paying users |
 | [TD-43](#td-43-app-releases-go-to-android-and-ios-together) | App releases go to Android and iOS together | Mobile / releases | One platform needs an urgent native fix the other can't wait for |
+| [TD-44](#td-44-the-job-screen-polls-every-second) | The job screen polls every second | Mobile / API | Many jobs running at once, or API request rate matters |
 
 ---
 
@@ -1397,3 +1398,27 @@ the same version number (`make mobile-release`). `store-runtimes.txt` and CI kee
 **When to revisit.** If one platform needs an urgent native fix that can't wait for the other:
 ship a JavaScript workaround over the air if possible; otherwise build that platform alone and
 record the split in `store-runtimes.txt` until the other catches up.
+
+## TD-44: The job screen polls every second
+
+**Concept.** While a job runs, its screen asks the API for the job's status on a timer. The
+score can only appear at the next check after the worker finishes, so the timer adds up to one
+interval to every transcription. Production jobs take about 15 s, so a 2 s timer was a
+noticeable share of the wait (`docs/performance.md`).
+
+**What we did.** The job screen checks every 1 s instead of every 2 s while the job runs, and
+stops once it has finished. The completion push notification still refreshes the job as soon
+as it arrives, when notifications are on. The Library keeps its 3 s timer.
+
+**Pros**
+- The score appears about 0.5 s sooner on average, at most 1 s after the job finishes.
+- No server change: the status endpoint is one indexed lookup.
+
+**Cons**
+- Twice the status requests while a job is open: about 15 per job instead of 8.
+- Still polling: the app learns about the end of the job up to 1 s late.
+
+**When to revisit.** If many users run jobs at once and status requests show up in the API's
+request rate or latency, or if the remaining second matters: have the API hold the request
+open until the status changes (long polling), or push status over a WebSocket or
+server-sent events.
