@@ -130,9 +130,13 @@ mobile-check: ## App: API types and licence notices current, store builds' finge
 # App releases go to Android and iOS together (TD-43, docs/releasing.md).
 mobile-update: ## Over-the-air update to the production apps, Android and iOS together: MESSAGE="what changed"
 	@test -n "$(MESSAGE)" || { echo 'MESSAGE="what changed" is required'; exit 1; }
-	cd $(MOBILE_DIR) && node scripts/store-runtimes.js \
-		&& EXPO_NO_DOTENV=1 npx eas-cli update --platform all --channel production \
-			--environment production --message "$(MESSAGE)"
+	@# Bundles iOS and Android only: app.json lists no platforms (adding them would change the
+	@# store builds' fingerprints), so a plain `eas update --platform all` also builds web.
+	cd $(MOBILE_DIR) && node scripts/store-runtimes.js && rm -rf dist \
+		&& EXPO_NO_DOTENV=1 npx eas-cli env:exec production \
+			'npx expo export --output-dir dist --platform ios --platform android --dump-sourcemap --dump-assetmap --clear' \
+		&& EXPO_NO_DOTENV=1 npx eas-cli update --skip-bundler --input-dir dist --platform all \
+			--channel production --environment production --message "$(MESSAGE)"
 
 mobile-release: ## Store builds for Android and iOS together, after a native change: VERSION=1.1.0 (= app.json's version)
 	@test -n "$(VERSION)" || { echo 'VERSION=x.y.z is required (bump it in app.json first, in a PR)'; exit 1; }
