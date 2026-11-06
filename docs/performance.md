@@ -24,6 +24,59 @@ Staging has a faster CPU than production, so compare compute only on the same ma
 Overhead and gaps don't depend on the CPU: both VMs reach R2 over the same home-lab
 connection.
 
+## 2026-11: the wait before Play on the phone
+
+After a transcription finished, the Play button seemed to take about 5 s to become available
+on the phone, with a spinner on it the whole time.
+
+### How I measured it
+
+The app logs one `score load timings` line each time a score opens (`src/score/loadTimer.ts`,
+PR #58). All times are milliseconds since the score screen opened. The app's own steps
+(score and sync data fetched, viewer mounted, viewer files ready, recording copied, page
+ready, player ready) come from React Native. The viewer page's steps (alphaTab loaded,
+soundfonts read, score parsed, player ready) come from the WebView, on the page's own clock.
+I read it over USB:
+
+```sh
+adb logcat -v time ReactNativeJS:V '*:S' | grep 'score load timings'
+```
+
+Before the phone run, I loaded the viewer page in desktop Chrome at 6x CPU throttle. It was
+ready in 0.3 s playing back the recording and 1.4 s with the synth sound, so I suspected the
+phone itself (WebView start-up, parsing the 1.1 MB alphaTab script, Android audio).
+
+### What I saw
+
+Production app (Play Store build 1.0.0 (7) with update `847f0c9f`), on a Redmi 10 Prime
+(Xiaomi 21061119BI), recording playback:
+
+| Step | Reopened from the Library | Just after the job finished |
+|---|---|---|
+| Score data fetched | 0.35 s | 0.30 s |
+| Viewer mounted | 0.40 s | 0.39 s |
+| Recording copied for the viewer | 0.56 s | 0.43 s |
+| Viewer page ready | 1.28 s | 0.74 s |
+| Play available | 1.65 s | 1.14 s |
+
+Inside the viewer page, the soundfonts take about 15 ms and parsing the score about 80 ms.
+Most of the page's time is the WebView starting and loading alphaTab (0.2-0.4 s before the
+page's script runs at all).
+
+### What it means
+
+On this phone, the spinner on the Play button lasts 1.1-1.7 s, not 5 s. The measured steps
+don't account for the rest. What they don't cover is the time between the worker finishing
+and the score appearing: the app checks the job every 2 s (up to 2 s, about 1 s on average),
+plus the last pipeline stages.
+
+### Still open
+
+- Measure the iPhone (Console.app; store builds may not log `console.info`).
+- Measure the synth sound on the phone; in Chrome it was the slower of the two.
+- If the wait before the score appears matters, check the job more often near the end, or
+  use the completion push notification to refresh it.
+
 ## 2026-11: transcription took 35-40 s for a 20-second clip
 
 ### What I saw
@@ -104,4 +157,4 @@ Production, v1.0.9, a 20-second job from the Play Store app:
   it already has them, about 1 s per stage; check where the R2 bucket is, since 0.4 s per
   request is slow for a bucket in the same region.
 - **On the phone, the Play button takes about 5 s to become available** after the score
-  appears (see the next section once measured).
+  appears. Measured since: 1.1-1.7 s on a mid-range Android phone (the section above).
