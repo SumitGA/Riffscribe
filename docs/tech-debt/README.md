@@ -52,6 +52,8 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-42](#td-42-unlimited-plans-granted-by-hand) | Unlimited plans granted by hand | Backend / billing | Subscriptions (RevenueCat); more than a handful of paying users |
 | [TD-43](#td-43-app-releases-go-to-android-and-ios-together) | App releases go to Android and iOS together | Mobile / releases | One platform needs an urgent native fix the other can't wait for |
 | [TD-44](#td-44-the-job-screen-polls-every-second) | The job screen polls every second | Mobile / API | Many jobs running at once, or API request rate matters |
+| [TD-45](#td-45-pro-has-a-monthly-cap) | Pro has a monthly cap | Backend / billing | Subscribers hit the cap, or the lab gets more CPU |
+| [TD-46](#td-46-plan-limits-are-fixed-when-a-job-is-submitted) | Plan limits are fixed when a job is submitted | Backend / billing | Users complain after upgrading with a job waiting |
 
 ---
 
@@ -1422,3 +1424,46 @@ as it arrives, when notifications are on. The Library keeps its 3 s timer.
 request rate or latency, or if the remaining second matters: have the API hold the request
 open until the status changes (long polling), or push status over a WebSocket or
 server-sent events.
+
+## TD-45: Pro has a monthly cap
+
+**Concept.** A paid plan can be *unlimited* or have a *cap*. An unlimited plan is easier to sell,
+but one heavy user can fill the queue: every transcription takes CPU time on a single home-lab
+VM, and a 15-minute clip takes about 3 minutes of it.
+
+**What we did.** Pro allows 100 transcriptions a month (ADR-0016), a setting
+(`PRO_JOBS_PER_MONTH`) that changes with a deploy. The admin-only `unlimited` plan stays for
+the operator's own use and special cases.
+
+**Pros**
+- One subscriber can use at most about 5 hours of CPU a month at the longest clip length, so
+  the cost of a subscriber has a ceiling.
+- 100 a month is far more than practising guitarists use (about 3 a day).
+
+**Cons**
+- "100 a month" has to be explained on the paywall; "unlimited" wouldn't.
+- A user who reaches it is blocked until next month, with nothing to buy.
+
+**When to revisit.** If subscribers reach the cap, or once the lab has more CPU (or GPU workers):
+raise the cap, or make Pro unlimited with a fair-use rate limit instead.
+
+## TD-46: Plan limits are fixed when a job is submitted
+
+**Concept.** A job can wait in the queue, or be retried, after the user's plan changed. Its limits
+can come from the plan *when it was submitted*, or be looked up *again whenever a stage runs*.
+
+**What we did.** On submit, the API stores the plan's clip limit on the job (`jobs.max_duration_s`)
+and queues it at the plan's priority; the worker uses those and never looks at the plan.
+
+**Pros**
+- The worker doesn't depend on plans, users or billing, and a job behaves the same on every
+  retry.
+- No race between a subscription ending and a job that is already running.
+
+**Cons**
+- A free user who submits a 7-minute clip and then upgrades still has that job fail; they have to
+  submit it again.
+- A plan that ends while its job waits still gets that job's Pro limits (at most one job's worth).
+
+**When to revisit.** If users complain after upgrading with a job waiting: offer "try again" on jobs
+that failed only because of the clip length.

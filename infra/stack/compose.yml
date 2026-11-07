@@ -52,6 +52,9 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:?set in .env}
       JWT_JWKS_URL: ${JWT_ISSUER}/.well-known/jwks.json
       FREE_JOBS_PER_MONTH: ${FREE_JOBS_PER_MONTH:-10}
+      # Pro's limits (ADR-0016); clip lengths in seconds.
+      PRO_JOBS_PER_MONTH: ${PRO_JOBS_PER_MONTH:-100}
+      PRO_MAX_CLIP_S: ${PRO_MAX_CLIP_S:-900}
       # Deletes a user's Clerk sign-in with their account (DELETE /me); empty skips that step.
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
       # Clerk user IDs allowed into the admin section (/admin), comma-separated; empty: nobody.

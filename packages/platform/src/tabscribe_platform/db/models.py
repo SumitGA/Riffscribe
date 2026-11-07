@@ -85,10 +85,14 @@ class StageStatus(StrEnum):
 
 
 class Plan(StrEnum):
-    """What a user may do. Free has the monthly limit; unlimited (granted in the admin section for
-    now, by subscriptions later) has none."""
+    """What a user may do (ADR-0016). Each plan's limits are API settings (`api.plans`).
+
+    Free is the default. Pro is the paid plan (a store subscription, or granted in the admin
+    section); unlimited is granted in the admin section only, never sold.
+    """
 
     FREE = "free"
+    PRO = "pro"
     UNLIMITED = "unlimited"
 
 
@@ -141,6 +145,11 @@ class Job(Base):
     source_key: Mapped[str] = mapped_column(String(512))
     source_content_type: Mapped[str] = mapped_column(String(128))
     source_size_bytes: Mapped[int] = mapped_column(BigInteger)
+    # The longest audio the user's plan allowed when they submitted it (ADR-0016), read by the
+    # normalize stage. Not part of the job's config: a limit doesn't change the result, so it
+    # stays out of the dedup cache key. None (jobs from before plans had limits): the pipeline's
+    # default.
+    max_duration_s: Mapped[int | None]
 
     # Set by the worker: sha256 of the normalized audio, and the pipeline that produced the
     # result (CLAUDE.md: results always record their pipeline version).

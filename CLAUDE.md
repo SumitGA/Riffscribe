@@ -3,9 +3,9 @@
 ## Product
 Mobile app. A user uploads or records audio and gets back editable sheet music and guitar tab, exportable as PDF, MusicXML, MIDI and Guitar Pro.
 - **Goal: upload a song and get tabs for the guitar parts in it** (strummed chords, lead and riffs, fingerpicking) (ADR-0009). Built in steps: **A** make solo guitar transcription good (chords, fingering, sound; current); **B** song mode (separate the guitar from a full mix); **C** several guitars in one song, distortion, techniques.
-- Until song mode ships, uploads are **solo guitar or solo piano** recordings, max 5 min (free tier).
+- Until song mode ships, uploads are **solo guitar or solo piano** recordings, max 5 min (free) or 15 min (Pro).
 - **Personal use only** (ADR-0009): a transcription is private to its uploader. No public song pages, sharing links or catalogue; uploaded audio is deleted after processing; separated stems are never downloadable. Public sharing would need publisher licensing.
-- Monetisation later: free tier with monthly quota; paid tier with longer clips, more jobs, priority queue.
+- **Plans** (ADR-0016, `api/plans.py`): free (10 jobs a month, 5 min clips), Pro (100 a month, 15 min, priority queue; store subscriptions through RevenueCat, being built) and unlimited (admin grant only). Limits are API settings that `GET /me` returns.
 
 ## Tech stack (defaults — ask before changing)
 - **Mobile:** Expo (React Native, TypeScript strict), expo-router, TanStack Query, alphaTab rendered in a WebView (renders both standard notation and tab).
@@ -48,7 +48,7 @@ Mobile ──► API (stateless) ──► Postgres (jobs, users, scores)
 - **Quotas and rate limits.** Enforce per-user limits in Redis. Priority queue for the paid tier.
 - **Tenant isolation.** Scope every DB query by `user_id`. Prefix every object key with the user ID. Presigned URLs expire in 15 minutes or less.
 - **Lean database.** Postgres holds metadata only; blobs go to object storage. Index `jobs(user_id, created_at)` and `jobs(status)`.
-- **Admin section** (ADR-0015, `docs/admin.md`): `/admin` page (`infra/site/admin.html`) and `/admin/api` routes (`api/admin.py`), behind Cloudflare Access and the `ADMIN_USER_IDS` allowlist. Read-only except users' plans (free/unlimited), which are audited (`admin_actions`).
+- **Admin section** (ADR-0015, `docs/admin.md`): `/admin` page (`infra/site/admin.html`) and `/admin/api` routes (`api/admin.py`), behind Cloudflare Access and the `ADMIN_USER_IDS` allowlist. Read-only except users' plans (free/pro/unlimited), which are audited (`admin_actions`).
 - **Observability.** Use structured JSON logs and OpenTelemetry traces, both carrying `job_id`. Track these metrics: queue depth, per-stage duration, failure rate and GPU utilisation. Metrics are Prometheus: API `/metrics` (queue depth, request latency) and worker `:9100` (TD-20).
 - **12-factor config.** All configuration comes from environment variables. No secrets in the repo.
 

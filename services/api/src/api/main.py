@@ -9,7 +9,9 @@ from api import account, admin, jobs, push, versions
 from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, LimiterDep, QueueDep, RedisDep, SessionDep
 from api.observability import metrics_response, time_requests
-from api.schemas import MeOut
+from api.plans import plan_of
+from api.schemas import MeOut, PlanLimitsOut
+from tabscribe_platform.jobqueue import Priority
 from tabscribe_platform.observability import configure_logging, configure_tracing
 
 
@@ -60,12 +62,21 @@ def metrics(queue: QueueDep) -> Response:
 def me(
     user: CurrentUserDep, limiter: LimiterDep, limits: ApiSettingsDep, session: SessionDep
 ) -> MeOut:
-    """Who the bearer token belongs to, this month's quota, and whether the terms are accepted."""
+    """Who the bearer token belongs to, their plan and its limits, this month's usage, and whether
+    the terms are accepted."""
+    plan = plan_of(session, user.id, limits)
     return MeOut(
         user_id=user.id,
-        plan=account.plan_of(session, user.id),
+        plan=plan.plan,
+        plan_source=plan.source,
+        limits=PlanLimitsOut(
+            jobs_per_month=plan.limits.jobs_per_month,
+            max_clip_s=plan.limits.max_clip_s,
+            max_upload_bytes=plan.limits.max_upload_bytes,
+            priority=plan.limits.priority is Priority.HIGH,
+        ),
         jobs_this_month=limiter.monthly_jobs_used(user.id),
-        jobs_per_month=limits.free_jobs_per_month,
+        jobs_per_month=plan.limits.jobs_per_month or limits.free_jobs_per_month,
         terms_version=account.TERMS_VERSION,
         terms_accepted=account.terms_accepted(session, user.id),
     )

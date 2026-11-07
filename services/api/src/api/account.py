@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, SessionDep, StoreDep
 from api.schemas import AcceptTermsRequest
-from tabscribe_platform.db import AdminAction, Plan, User
+from tabscribe_platform.db import AdminAction, User
 from tabscribe_platform.storage import user_prefix
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -39,11 +39,6 @@ USER_AGENT = "riffscribe-api/1.0"
 def terms_accepted(session: Session, user_id: str) -> bool:
     accepted = session.scalar(select(User.terms_version).where(User.id == user_id))
     return accepted == TERMS_VERSION
-
-
-def plan_of(session: Session, user_id: str) -> Plan:
-    """The user's plan; free for anyone without a row yet (no terms accepted, nothing granted)."""
-    return session.scalar(select(User.plan).where(User.id == user_id)) or Plan.FREE
 
 
 @router.put("/terms", status_code=status.HTTP_204_NO_CONTENT)

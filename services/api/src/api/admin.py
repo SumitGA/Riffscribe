@@ -1,5 +1,5 @@
 """The admin section's API (ADR-0015): sign-ups, activity, retention and each user's jobs, and
-each user's plan (free or unlimited), whose changes go to an audit log (admin_actions). The
+each user's plan (free, pro or unlimited), whose changes go to an audit log (admin_actions). The
 page is `infra/site/admin.html`, served by Caddy at /admin; these routes sit under /admin/api so
 one Cloudflare Access rule guards both.
 
@@ -474,8 +474,8 @@ def set_plan(
     admin: AdminDep,
     session: SessionDep,
 ) -> UserPlan:
-    """Grant (unlimited) or take back (free) a user's plan, recorded in the audit log. Works for
-    someone who signed up but never transcribed: their row is created."""
+    """Set a user's plan (free, pro or unlimited), recorded in the audit log. Works for someone
+    who signed up but never transcribed: their row is created."""
     before = session.scalar(select(User.plan).where(User.id == user_id)) or Plan.FREE
     now = datetime.now(UTC)
     values = {"plan": body.plan, "plan_changed_at": now, "plan_changed_by": admin.id}

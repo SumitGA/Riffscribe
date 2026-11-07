@@ -7,10 +7,16 @@ class ApiSettings(BaseSettings):
 
     model_config = SettingsConfigDict(frozen=True, extra="ignore")
 
-    # 5 minutes of 16-bit 48 kHz stereo WAV is ~58 MB; compressed uploads are far smaller.
+    # Plan limits (ADR-0016, `api.plans`). Jobs count per calendar month (UTC); clip lengths are
+    # checked by the normalize stage once the audio is decoded.
+    # Free: 5 minutes of 16-bit 48 kHz stereo WAV is ~58 MB; compressed uploads are far smaller.
     max_upload_bytes: int = Field(default=64 * 1024 * 1024, gt=0)
-    # Free tier (CLAUDE.md): jobs submitted per calendar month (UTC).
     free_jobs_per_month: int = Field(default=10, ge=0)
+    free_max_clip_s: int = Field(default=300, gt=0)
+    # Pro (and unlimited, which has no monthly limit): 15 minutes of the same WAV is ~173 MB.
+    pro_max_upload_bytes: int = Field(default=192 * 1024 * 1024, gt=0)
+    pro_jobs_per_month: int = Field(default=100, ge=0)
+    pro_max_clip_s: int = Field(default=900, gt=0)
     # Rate limit on POST /jobs, per user.
     job_creates_per_minute: int = Field(default=10, gt=0)
     # Clerk Backend API key, to delete a user's sign-in with their account (DELETE /me).
