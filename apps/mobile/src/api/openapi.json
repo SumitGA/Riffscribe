@@ -599,7 +599,7 @@
     "/me": {
       "get": {
         "summary": "Me",
-        "description": "Who the bearer token belongs to, this month's quota, and whether the terms are accepted.",
+        "description": "Who the bearer token belongs to, their plan and its limits, this month's usage, and whether\nthe terms are accepted.",
         "operationId": "me_me_get",
         "responses": {
           "200": {
@@ -1143,6 +1143,12 @@
           "plan": {
             "$ref": "#/components/schemas/Plan"
           },
+          "plan_source": {
+            "$ref": "#/components/schemas/PlanSource"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/PlanLimitsOut"
+          },
           "jobs_this_month": {
             "type": "integer",
             "title": "Jobs This Month"
@@ -1164,6 +1170,8 @@
         "required": [
           "user_id",
           "plan",
+          "plan_source",
+          "limits",
           "jobs_this_month",
           "jobs_per_month",
           "terms_version",
@@ -1175,10 +1183,56 @@
         "type": "string",
         "enum": [
           "free",
+          "pro",
           "unlimited"
         ],
         "title": "Plan",
-        "description": "What a user may do. Free has the monthly limit; unlimited (granted in the admin section for\nnow, by subscriptions later) has none."
+        "description": "What a user may do (ADR-0016). Each plan's limits are API settings (`api.plans`).\n\nFree is the default. Pro is the paid plan (a store subscription, or granted in the admin\nsection); unlimited is granted in the admin section only, never sold."
+      },
+      "PlanLimitsOut": {
+        "properties": {
+          "jobs_per_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jobs Per Month"
+          },
+          "max_clip_s": {
+            "type": "integer",
+            "title": "Max Clip S"
+          },
+          "max_upload_bytes": {
+            "type": "integer",
+            "title": "Max Upload Bytes"
+          },
+          "priority": {
+            "type": "boolean",
+            "title": "Priority"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobs_per_month",
+          "max_clip_s",
+          "max_upload_bytes",
+          "priority"
+        ],
+        "title": "PlanLimitsOut",
+        "description": "What the user's plan allows (ADR-0016)."
+      },
+      "PlanSource": {
+        "type": "string",
+        "enum": [
+          "default",
+          "admin"
+        ],
+        "title": "PlanSource",
+        "description": "Why the user has their plan."
       },
       "PresignedRequestOut": {
         "properties": {

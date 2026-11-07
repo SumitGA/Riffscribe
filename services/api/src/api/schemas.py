@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from api.plans import PlanSource
 from tabscribe_platform.db import JOB_NAME_MAX, JobStatus, Plan, StageStatus, VersionStatus
 
 # Upload types the API accepts, and the file extension the stored upload gets. The normalize
@@ -135,11 +136,26 @@ class JobList(BaseModel):
     next_cursor: str | None
 
 
+class PlanLimitsOut(BaseModel):
+    """What the user's plan allows (ADR-0016)."""
+
+    jobs_per_month: int | None  # None: no monthly limit
+    max_clip_s: int  # the longest recording, in seconds
+    max_upload_bytes: int
+    priority: bool  # jobs go ahead of free ones in the queue
+
+
 class MeOut(BaseModel):
     user_id: str
     plan: Plan
+    # Why the user has it: `default` (free, nobody changed it) or `admin` (set in the admin
+    # section). Store subscriptions will add their own values.
+    plan_source: PlanSource
+    limits: PlanLimitsOut
     jobs_this_month: int
-    jobs_per_month: int  # the free plan's limit; unlimited plans have none
+    # Kept for app builds from before `limits`: the plan's monthly limit, or the free one for
+    # plans without a limit (those apps don't show a count for unlimited).
+    jobs_per_month: int
     # The current terms of use, and whether this user has accepted them (needed to upload).
     terms_version: str
     terms_accepted: bool

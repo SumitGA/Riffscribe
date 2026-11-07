@@ -192,7 +192,8 @@ export interface paths {
         };
         /**
          * Me
-         * @description Who the bearer token belongs to, this month's quota, and whether the terms are accepted.
+         * @description Who the bearer token belongs to, their plan and its limits, this month's usage, and whether
+         *     the terms are accepted.
          */
         get: operations["me_me_get"];
         put?: never;
@@ -414,6 +415,8 @@ export interface components {
             /** User Id */
             user_id: string;
             plan: components["schemas"]["Plan"];
+            plan_source: components["schemas"]["PlanSource"];
+            limits: components["schemas"]["PlanLimitsOut"];
             /** Jobs This Month */
             jobs_this_month: number;
             /** Jobs Per Month */
@@ -425,11 +428,33 @@ export interface components {
         };
         /**
          * Plan
-         * @description What a user may do. Free has the monthly limit; unlimited (granted in the admin section for
-         *     now, by subscriptions later) has none.
+         * @description What a user may do (ADR-0016). Each plan's limits are API settings (`api.plans`).
+         *
+         *     Free is the default. Pro is the paid plan (a store subscription, or granted in the admin
+         *     section); unlimited is granted in the admin section only, never sold.
          * @enum {string}
          */
-        Plan: "free" | "unlimited";
+        Plan: "free" | "pro" | "unlimited";
+        /**
+         * PlanLimitsOut
+         * @description What the user's plan allows (ADR-0016).
+         */
+        PlanLimitsOut: {
+            /** Jobs Per Month */
+            jobs_per_month: number | null;
+            /** Max Clip S */
+            max_clip_s: number;
+            /** Max Upload Bytes */
+            max_upload_bytes: number;
+            /** Priority */
+            priority: boolean;
+        };
+        /**
+         * PlanSource
+         * @description Why the user has their plan.
+         * @enum {string}
+         */
+        PlanSource: "default" | "admin";
         /** PresignedRequestOut */
         PresignedRequestOut: {
             /** Method */

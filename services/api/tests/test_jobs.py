@@ -62,6 +62,13 @@ def test_create_upload_submit_poll(api: TestClient, alice: str, job_queue: JobQu
     assert api.get("/me", headers=auth(alice)).json() == {
         "user_id": alice,
         "plan": "free",
+        "plan_source": "default",
+        "limits": {
+            "jobs_per_month": LIMITS.free_jobs_per_month,
+            "max_clip_s": LIMITS.free_max_clip_s,
+            "max_upload_bytes": LIMITS.max_upload_bytes,
+            "priority": False,
+        },
         "jobs_this_month": 1,
         "jobs_per_month": LIMITS.free_jobs_per_month,
         "terms_version": TERMS_VERSION,

@@ -27,11 +27,11 @@ header { display: flex; align-items: center; gap: 12px; padding: 16px 0; flex-wr
 header img { width: 32px; height: 32px; border-radius: 8px; }
 header h1 { font-size: 18px; margin: 0; flex: 1; }
 header .who { color: var(--muted); font-size: 13px; }
-button {
+button, select {
   font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--line);
   border-radius: 8px; padding: 6px 12px; cursor: pointer;
 }
-button:hover { border-color: var(--accent); }
+button:hover, select:hover { border-color: var(--accent); }
 h2 { font-size: 16px; margin: 32px 0 12px; }
 .note { color: var(--muted); font-size: 13px; margin: -6px 0 12px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
@@ -56,8 +56,9 @@ svg text { fill: var(--muted); font-size: 11px; }
 .muted { color: var(--muted); }
 .plan { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .plan.unlimited { background: var(--accent); color: var(--on-accent); }
+.plan.pro { background: var(--good); color: var(--on-accent); }
 .plan.free { background: var(--surface-2); color: var(--muted); }
-button.small { padding: 3px 10px; font-size: 13px; }
+button.small, select.small { padding: 3px 10px; font-size: 13px; }
 .center { max-width: 480px; margin: 12vh auto; text-align: center; }
 .center p { color: var(--muted); }
 code { background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-size: 13px; word-break: break-all; }
@@ -260,29 +261,40 @@ function others(o) {
     [2, 3, 4]);
 }
 
+const PLAN_NAMES = { free: "Free", pro: "Pro", unlimited: "Unlimited" };
+
 async function setPlan(user, plan) {
   const who = user.email || user.id;
-  const question = plan === "unlimited"
-    ? `Give ${who} unlimited transcriptions?`
-    : `Move ${who} back to the free plan? Transcriptions they made this month count towards its limit.`;
-  if (!confirm(question)) return;
-  const note = prompt("Note for the audit log (optional), e.g. \"paid for October\":", "");
-  if (note === null) return;
+  const question = {
+    free: `Move ${who} back to the free plan? Transcriptions they made this month count towards its limit.`,
+    pro: `Give ${who} Pro (the paid plan's limits) without a subscription?`,
+    unlimited: `Give ${who} unlimited transcriptions?`,
+  }[plan];
+  if (!confirm(question)) return false;
+  const note = prompt("Note for the audit log (optional), e.g. \"tester\":", "");
+  if (note === null) return false;
   try {
     await api("users/" + encodeURIComponent(user.id) + "/plan", "PUT", { plan, note: note.trim() || null });
     await loadDashboard();
+    return true;
   } catch (error) {
     alert("Couldn't change the plan: " + error.message);
+    return false;
   }
 }
 
 function planCell(u) {
-  const unlimited = u.plan === "unlimited";
-  const button = el("button", { class: "small", type: "button" }, unlimited ? "Back to free" : "Grant unlimited");
-  button.addEventListener("click", (e) => { e.stopPropagation(); setPlan(u, unlimited ? "free" : "unlimited"); });
-  button.addEventListener("keydown", (e) => e.stopPropagation());
+  const picker = el("select", { class: "small", "aria-label": "Change plan" },
+    ...Object.entries(PLAN_NAMES).map(([value, name]) => el("option", { value }, name)));
+  picker.value = u.plan;
+  picker.addEventListener("click", (e) => e.stopPropagation());
+  picker.addEventListener("keydown", (e) => e.stopPropagation());
+  picker.addEventListener("change", async (e) => {
+    e.stopPropagation();
+    if (!(await setPlan(u, picker.value))) picker.value = u.plan;
+  });
   return el("td", { title: u.plan_changed_at ? "Changed " + when(u.plan_changed_at) : "" },
-    el("span", { class: "plan " + u.plan }, unlimited ? "Unlimited" : "Free"), " ", button);
+    el("span", { class: "plan " + u.plan }, PLAN_NAMES[u.plan] || u.plan), " ", picker);
 }
 
 function actions(list, byId) {

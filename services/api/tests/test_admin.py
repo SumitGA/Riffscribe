@@ -304,6 +304,18 @@ def test_an_admin_grants_and_takes_back_unlimited_transcriptions(as_admin: TestC
     assert log[1]["detail"] == {"from": "free", "to": "unlimited", "note": "paid for October"}
 
 
+def test_an_admin_grants_pro(as_admin: TestClient) -> None:
+    accounts(account("user_a", 3))
+    grant = {"plan": "pro", "note": "tester"}
+    granted = as_admin.put("/admin/api/users/user_a/plan", json=grant, headers=auth(ADMIN))
+    assert granted.status_code == 200, granted.text
+    me = as_admin.get("/me", headers=auth("user_a")).json()
+    assert (me["plan"], me["plan_source"]) == ("pro", "admin")
+    assert me["limits"]["jobs_per_month"] == LIMITS.pro_jobs_per_month
+    log = as_admin.get("/admin/api/actions", headers=auth(ADMIN)).json()["actions"]
+    assert log[0]["detail"] == {"from": "free", "to": "pro", "note": "tester"}
+
+
 def test_plan_changes_are_validated(as_admin: TestClient) -> None:
     path = "/admin/api/users/user_a/plan"
     assert as_admin.put(path, json={"plan": "gold"}, headers=auth(ADMIN)).status_code == 422

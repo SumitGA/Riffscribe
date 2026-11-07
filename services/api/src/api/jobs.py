@@ -16,9 +16,10 @@ from sqlalchemy import Select, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from api.account import TERMS_REQUIRED, plan_of, terms_accepted
+from api.account import TERMS_REQUIRED, terms_accepted
 from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, LimiterDep, QueueDep, SessionDep, StoreDep
+from api.plans import plan_of
 from api.schemas import (
     AUDIO_TYPES,
     CreateJobRequest,
@@ -36,13 +37,12 @@ from api.schemas import (
 from tabscribe_platform.db import (
     Job,
     JobStatus,
-    Plan,
     ScoreVersion,
     StageRun,
     User,
     VersionStatus,
 )
-from tabscribe_platform.jobqueue import STAGES, Priority, StageMessage, queue_for_stage
+from tabscribe_platform.jobqueue import STAGES, StageMessage, queue_for_stage
 from tabscribe_platform.observability import inject_trace
 from tabscribe_platform.storage import ObjectStore, PresignedRequest, job_key, job_prefix
 
@@ -137,10 +137,10 @@ def create_job(
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, f"unsupported audio type {body.content_type!r}"
         )
-    if body.size_bytes > limits.max_upload_bytes:
+    max_bytes = plan_of(session, user.id, limits).limits.max_upload_bytes
+    if body.size_bytes > max_bytes:
         raise HTTPException(
-            status.HTTP_413_CONTENT_TOO_LARGE,
-            f"uploads are limited to {limits.max_upload_bytes} bytes",
+            status.HTTP_413_CONTENT_TOO_LARGE, f"uploads are limited to {max_bytes} bytes"
         )
 
     # First request from this user: remember them (the auth provider owns the account).
@@ -186,28 +186,31 @@ def submit_job(
     if job.status is not JobStatus.PENDING_UPLOAD:
         return _job_out(session, store, job)  # already submitted: nothing to do
 
+    plan = plan_of(session, user.id, limits)
     upload = store.head(job.source_key)
     if upload is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "upload the audio before submitting")
-    if upload.size > limits.max_upload_bytes:
+    if upload.size > plan.limits.max_upload_bytes:
         job.status = JobStatus.FAILED
         job.error_code = "invalid_input"
-        job.error_message = f"the upload is larger than {limits.max_upload_bytes} bytes"
+        job.error_message = f"the upload is larger than {plan.limits.max_upload_bytes} bytes"
         job.finished_at = datetime.now(UTC)
         session.commit()
         _log(job.id, "upload larger than the limit", logging.WARNING)
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, job.error_message)
 
-    if plan_of(session, user.id) is Plan.UNLIMITED:
+    per_month = plan.limits.jobs_per_month
+    if per_month is None:
         limiter.count_monthly_job(user.id)
-    elif not limiter.take_monthly_job(user.id, limits.free_jobs_per_month):
+    elif not limiter.take_monthly_job(user.id, per_month):
         _log(job.id, "monthly quota used up")
         raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            f"monthly limit of {limits.free_jobs_per_month} jobs reached",
+            status.HTTP_429_TOO_MANY_REQUESTS, f"monthly limit of {per_month} jobs reached"
         )
     job.status = JobStatus.QUEUED
     job.source_size_bytes = upload.size
+    # Fixed now: a plan that changes while the job waits doesn't change this job (TD-45).
+    job.max_duration_s = plan.limits.max_clip_s
     job.submitted_at = datetime.now(UTC)
     session.commit()
 
@@ -216,8 +219,7 @@ def submit_job(
     # The trace continues in the workers: one trace per job, rooted at this request.
     message = StageMessage(job_id=job.id, user_id=user.id, stage=first, trace=inject_trace())
     try:
-        # Paid tier (later) gets Priority.HIGH.
-        queue.enqueue(queue_for_stage(first), message, priority=Priority.NORMAL)
+        queue.enqueue(queue_for_stage(first), message, priority=plan.limits.priority)
     except Exception as exc:
         # Undo, so the client can simply submit again.
         job.status = JobStatus.PENDING_UPLOAD

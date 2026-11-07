@@ -104,6 +104,7 @@ def submit_job(
         *,
         user_id: str = s3_user,
         config: dict[str, Any] | None = None,
+        max_duration_s: int | None = None,
         **job: Any,
     ) -> uuid.UUID:
         job_id = uuid.uuid4()
@@ -126,6 +127,7 @@ def submit_job(
                     source_key=key,
                     source_content_type="audio/flac",
                     source_size_bytes=clip.stat().st_size,
+                    max_duration_s=max_duration_s,
                 )
             )
             session.commit()
@@ -288,6 +290,18 @@ def test_bad_input_fails_the_job_without_retrying(
     assert runs["normalize"].status is StageStatus.FAILED
     assert len(queue.dead_letters()) == 1
     assert notifier.sent[-1][2] is JobStatus.FAILED
+
+
+def test_the_plans_clip_limit_applies(
+    stage_worker: StageWorker, queue: RedisJobQueue, submit_job: SubmitJob, db: Engine
+) -> None:
+    # The API stores the user's plan's limit on the job (ADR-0016); the clip is longer than 1 s.
+    job_id = submit_job(max_duration_s=1)
+    assert drain(stage_worker, queue) == 1
+    job, _ = load(db, job_id)
+    assert job.status is JobStatus.FAILED
+    assert job.error_code == "invalid_input"
+    assert job.error_message is not None and "longer than the 1 s limit" in job.error_message
 
 
 @pytest.fixture

@@ -157,6 +157,8 @@ class StageWorker:
                 failure = _Failure(False, "worker stopped responding", INTERNAL_ERROR_MESSAGE)
                 return self._fail(session, delivery, job, failure, error_code="stage_failed")
             config = PipelineConfig.model_validate(job.config)
+            if job.max_duration_s is not None:  # the user's plan's limit (ADR-0016)
+                config = config.model_copy(update={"max_duration_s": float(job.max_duration_s)})
             source_key = job.source_key
             job.status = JobStatus.RUNNING
             self._set_stage(

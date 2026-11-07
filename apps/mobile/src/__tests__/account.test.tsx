@@ -33,6 +33,8 @@ beforeEach(() => {
     me: async () => ({
       user_id: 'u',
       plan: 'free',
+      plan_source: 'default',
+      limits: { jobs_per_month: 10, max_clip_s: 300, max_upload_bytes: 67108864, priority: false },
       jobs_this_month: 3,
       jobs_per_month: 10,
       terms_version: '2026-10-11',

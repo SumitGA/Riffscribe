@@ -63,6 +63,8 @@ beforeEach(() => {
   me.mockResolvedValue({
     user_id: 'user_1',
     plan: 'free',
+    plan_source: 'default',
+    limits: { jobs_per_month: 10, max_clip_s: 300, max_upload_bytes: 67108864, priority: false },
     jobs_this_month: 3,
     jobs_per_month: 10,
     terms_version: '2026-10-11',
@@ -76,6 +78,8 @@ describe('Library', () => {
     me.mockResolvedValue({
       user_id: 'u',
       plan: 'free',
+      plan_source: 'default',
+      limits: { jobs_per_month: 10, max_clip_s: 300, max_upload_bytes: 67108864, priority: false },
       jobs_this_month: 0,
       jobs_per_month: 10,
       terms_version: 'v',
@@ -101,6 +105,13 @@ describe('Library', () => {
     me.mockResolvedValue({
       user_id: 'user_1',
       plan: 'unlimited',
+      plan_source: 'admin',
+      limits: {
+        jobs_per_month: null,
+        max_clip_s: 900,
+        max_upload_bytes: 201326592,
+        priority: true,
+      },
       jobs_this_month: 23,
       jobs_per_month: 10,
       terms_version: '2026-10-11',
