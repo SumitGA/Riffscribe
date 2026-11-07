@@ -54,6 +54,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-44](#td-44-the-job-screen-polls-every-second) | The job screen polls every second | Mobile / API | Many jobs running at once, or API request rate matters |
 | [TD-45](#td-45-pro-has-a-monthly-cap) | Pro has a monthly cap | Backend / billing | Subscribers hit the cap, or the lab gets more CPU |
 | [TD-46](#td-46-plan-limits-are-fixed-when-a-job-is-submitted) | Plan limits are fixed when a job is submitted | Backend / billing | Users complain after upgrading with a job waiting |
+| [TD-47](#td-47-subscriptions-through-revenuecat-copied-into-our-database) | Subscriptions through RevenueCat, copied into our database | Backend / billing | Revenue passes RevenueCat's free tier, or an outage blocks purchases |
 
 ---
 
@@ -1467,3 +1468,34 @@ and queues it at the plan's priority; the worker uses those and never looks at t
 
 **When to revisit.** If users complain after upgrading with a job waiting: offer "try again" on jobs
 that failed only because of the clip length.
+
+## TD-47: Subscriptions through RevenueCat, copied into our database
+
+**Concept.** Selling a subscription in an app means checking purchases with Apple (StoreKit and
+App Store Server Notifications) and Google (Play Billing and real-time developer
+notifications), each with its own formats, renewals, grace periods and refunds. That can be
+built against both stores directly, or bought from a service that does it for both.
+
+**What we did.** RevenueCat does it (ADR-0016). Its webhook tells the API that a customer
+changed; the API reads the customer back from RevenueCat and keeps a copy in `subscriptions`,
+which is what plans are decided from. Every webhook is kept in `billing_events`.
+
+**Pros**
+- One SDK in the app and one webhook format for both stores; no receipt checking of our own.
+- Free below about US$2,500 of monthly revenue, then 1%.
+- Re-reading the customer on every event makes the copy right even when events arrive late,
+  twice or out of order. Jobs and `GET /me` read only our database, never RevenueCat.
+
+**Cons**
+- Another company sees purchase history (named in the privacy policy as a processor) and can
+  go down: while it is unreachable, new purchases and renewals reach the API late (RevenueCat
+  retries its webhook, and the app's sync fails until it is back).
+- The copy can be stale if a webhook is lost for good: a renewal or a cancellation shows only
+  after the next event or sync. Expiry dates are checked at read time, so access still ends on
+  time.
+- Moving off RevenueCat later means building the store integrations anyway.
+
+**When to revisit.** If revenue passes RevenueCat's free tier and the 1% matters, if an outage
+blocks purchases, or if we need billing data RevenueCat doesn't expose: talk to the stores
+directly (App Store Server API, Google Play Developer API) behind the same `Customers` interface
+in `api/revenuecat.py`.

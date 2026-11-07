@@ -5,12 +5,13 @@ from fastapi import FastAPI, HTTPException, Response, status
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from sqlalchemy import text
 
-from api import account, admin, jobs, push, versions
+from api import account, admin, billing, jobs, push, versions
 from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, LimiterDep, QueueDep, RedisDep, SessionDep
 from api.observability import metrics_response, time_requests
-from api.plans import plan_of
-from api.schemas import MeOut, PlanLimitsOut
+from api.plans import SubscriptionState, plan_of
+from api.revenuecat import PROMOTIONAL
+from api.schemas import MeOut, PlanLimitsOut, SubscriptionOut
 from tabscribe_platform.jobqueue import Priority
 from tabscribe_platform.observability import configure_logging, configure_tracing
 
@@ -27,6 +28,7 @@ app.include_router(jobs.router)
 app.include_router(push.router)
 app.include_router(versions.router)
 app.include_router(account.router)
+app.include_router(billing.router)
 app.include_router(admin.config_router)
 app.include_router(admin.router)
 app.middleware("http")(time_requests)
@@ -75,8 +77,30 @@ def me(
             max_upload_bytes=plan.limits.max_upload_bytes,
             priority=plan.limits.priority is Priority.HIGH,
         ),
+        subscription=_subscription_out(plan.subscription),
         jobs_this_month=limiter.monthly_jobs_used(user.id),
         jobs_per_month=plan.limits.jobs_per_month or limits.free_jobs_per_month,
         terms_version=account.TERMS_VERSION,
         terms_accepted=account.terms_accepted(session, user.id),
+    )
+
+
+def _subscription_out(state: SubscriptionState | None) -> SubscriptionOut | None:
+    if state is None:
+        return None
+    sub = state.row
+    return SubscriptionOut(
+        store=sub.store,
+        product_id=sub.product_id,
+        active=state.active,
+        in_trial=sub.period_type == "trial",
+        expires_at=sub.expires_at,
+        will_renew=(
+            state.active
+            and sub.unsubscribed_at is None
+            and sub.refunded_at is None
+            and sub.store != PROMOTIONAL
+        ),
+        billing_issue=sub.billing_issue_at is not None,
+        refunded=sub.refunded_at is not None,
     )

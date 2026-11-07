@@ -21,7 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Stable constraint names, so Alembic migrations can refer to them.
@@ -110,6 +110,72 @@ class User(Base):
     plan: Mapped[Plan] = mapped_column(_enum(Plan), default=Plan.FREE, server_default="free")
     plan_changed_at: Mapped[datetime | None]
     plan_changed_by: Mapped[str | None] = mapped_column(String(128))  # the admin's user ID
+
+
+class BillingEnvironment(StrEnum):
+    """Real money, or the stores' test purchases (Apple sandbox, Google Play license testers)."""
+
+    SANDBOX = "sandbox"
+    PRODUCTION = "production"
+
+
+class Subscription(Base):
+    """A user's store subscription as RevenueCat last reported it (ADR-0016): one row per
+    product the user has bought, replaced whenever the user is synced. The rows are a copy; the
+    stores and RevenueCat are the source of truth. Deleted with the user.
+    """
+
+    __tablename__ = "subscriptions"
+    __table_args__ = (UniqueConstraint("user_id", "environment", "store", "product_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    environment: Mapped[BillingEnvironment] = mapped_column(_enum(BillingEnvironment))
+    # RevenueCat's names: app_store, play_store, promotional (Pro granted in RevenueCat), ...
+    store: Mapped[str] = mapped_column(String(32))
+    # The store's product ID: pro_monthly on the App Store, pro:monthly on Google Play.
+    product_id: Mapped[str] = mapped_column(String(128))
+    # The RevenueCat entitlement this product unlocks ("pro"), or None. Whether it does so now
+    # depends on the dates below (`api.plans`).
+    entitlement: Mapped[str | None] = mapped_column(String(64))
+    period_type: Mapped[str] = mapped_column(String(16))  # normal, trial or intro
+    purchased_at: Mapped[datetime | None]
+    original_purchased_at: Mapped[datetime | None]
+    expires_at: Mapped[datetime | None]  # end of the paid period; None: never expires
+    # A failed renewal: the store retries, and during a grace period the user keeps access.
+    billing_issue_at: Mapped[datetime | None]
+    grace_period_expires_at: Mapped[datetime | None]
+    # The user turned off auto-renewal: access lasts until expires_at.
+    unsubscribed_at: Mapped[datetime | None]
+    refunded_at: Mapped[datetime | None]
+    store_transaction_id: Mapped[str | None] = mapped_column(String(128))
+    synced_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class BillingEvent(Base):
+    """Every webhook RevenueCat sent, as received (ADR-0016). The event ID makes a repeated
+    delivery a no-op. Removed with the account it is about (`user_ids`).
+    """
+
+    __tablename__ = "billing_events"
+    __table_args__ = (Index(None, "received_at"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)  # RevenueCat's event ID
+    received_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    type: Mapped[str] = mapped_column(String(64))  # INITIAL_PURCHASE, RENEWAL, EXPIRATION, ...
+    environment: Mapped[str] = mapped_column(String(16))  # as sent: SANDBOX or PRODUCTION
+    store: Mapped[str | None] = mapped_column(String(32))
+    product_id: Mapped[str | None] = mapped_column(String(128))
+    event_at: Mapped[datetime | None]
+    # The users it is about: the buyer, or both sides of a transfer. No foreign key: an event
+    # can arrive for someone without a row here yet, or who deleted their account.
+    user_ids: Mapped[list[str]] = mapped_column(ARRAY(String(128)), default=list)
+    # Set once handled; a delivery that failed (RevenueCat unreachable) is handled on its retry.
+    processed_at: Mapped[datetime | None]
+    # synced, test, other_environment, unknown_user or failed
+    outcome: Mapped[str | None] = mapped_column(String(32))
+    error: Mapped[str | None] = mapped_column(Text)
+    payload: Mapped[dict[str, Any]]
 
 
 class AdminAction(Base):

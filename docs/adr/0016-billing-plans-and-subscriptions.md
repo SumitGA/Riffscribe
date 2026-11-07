@@ -1,6 +1,7 @@
 # ADR-0016: Billing: plans, limits and store subscriptions
 
-- Status: accepted (plans and limits, 2026-11-07); subscriptions proposed, built in later steps
+- Status: accepted (plans and limits, 2026-11-07; the webhook and subscription tables,
+  2026-11-07); the app, admin billing area and legal changes are built in later steps
 - Date: 2026-11-07
 
 ## Context
@@ -53,11 +54,21 @@ Decisions taken with the operator on 2026-11-07:
   Billing, purchase checks with the stores, and one webhook format for both. Its user ID is the
   Clerk user ID, so purchases follow the account, not the phone. The SDK is a native module, so
   it ships as new store builds for both apps with one version (TD-43).
-- **Server:** a `subscriptions` table (store, product, status, period end, auto-renew, trial,
-  sandbox or production) and a `billing_events` table (every webhook, raw, deduplicated by event
-  ID). The webhook checks a shared secret and re-reads the customer from RevenueCat before it
-  changes anything, so events that arrive late or twice can't leave a wrong state. The plan
-  then comes from an active subscription or an admin grant, whichever gives more.
+- **Server** (built, `api/billing.py`, `docs/billing.md`): a `subscriptions` table (store,
+  product, entitlement, period dates, trial, billing issue, cancelled, refunded, sandbox or
+  production; migration 0010) and a `billing_events` table (every webhook, raw, deduplicated by
+  event ID). The webhook (`POST /billing/revenuecat`) checks a shared secret and re-reads the
+  customer from RevenueCat (`GET /v1/subscribers`) before it changes anything, so events that
+  arrive late or twice can't leave a wrong state; if RevenueCat is down it answers 503 and
+  RevenueCat retries. Each server counts only its own environment's purchases
+  (`BILLING_ENVIRONMENT`: staging sandbox, production by default), so a test purchase can never
+  unlock Pro in production. The plan then comes from an active subscription or an admin grant,
+  whichever gives more (a tie is the subscription: `plan_source: store`); Pro lasts through the
+  store's grace period after a failed payment and ends on a refund. `GET /me` adds the latest
+  subscription (renewal date, will it renew, trial, billing issue, refunded). The app calls
+  `POST /me/billing/sync` after a purchase or a restore so Pro doesn't wait for the webhook;
+  the webhook skips users the API doesn't know yet. Deleting an account removes its
+  subscription rows, billing events and RevenueCat customer.
 - **App:** a paywall in the app's own design (store price, period, auto-renewal wording, Terms
   and Privacy links, Restore Purchases), shown from the Account screen and when a free limit is
   reached; subscription status and a link to the store's subscription settings on the Account
@@ -89,3 +100,4 @@ Decisions taken with the operator on 2026-11-07:
   rate for subscriptions) and handle sales tax. RevenueCat is free below about US$2,500 of
   monthly revenue.
 - TD-45 records the monthly cap on Pro; TD-46 records limits being fixed at submission.
+- TD-47 records relying on RevenueCat and keeping a copy of its data.

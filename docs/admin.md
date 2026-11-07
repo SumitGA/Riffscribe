@@ -46,8 +46,8 @@ In **Users**, each person has a plan badge and a picker to change it (ADR-0016):
 
 - **Free**: 10 transcriptions a month, clips up to 5 minutes.
 - **Pro**: the paid plan's limits, 100 transcriptions a month, clips up to 15 minutes, jobs ahead
-  of free ones in the queue. Granting it here is for testers and goodwill; subscriptions will set
-  it too.
+  of free ones in the queue. Granting it here is for testers and goodwill; a store subscription
+  gives it too (docs/billing.md).
 - **Unlimited**: Pro without the monthly limit, granted here only.
 
 Picking a plan asks for confirmation and an optional note for the audit log (e.g. "tester"). It
@@ -56,4 +56,8 @@ transcriptions they made this month towards the free limit, so they may be block
 month. **Admin actions** lists every change, newest first. The app shows "Unlimited plan" in the
 Library and Account tabs; app builds from before the paywall show Pro as "Free plan" with the
 right count.
+
+The badge and the picker are the plan set here. A user with an active store subscription has
+Pro whatever the badge says (unless the badge is unlimited); `GET /me` reports
+`plan_source: store` for them. Subscriptions are not shown in this section yet (billing step 4).
 

@@ -205,6 +205,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/billing/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync My Subscription
+         * @description Re-read the caller's subscriptions from RevenueCat, after a purchase or a restore in the
+         *     app. `GET /me` then shows the plan.
+         */
+        post: operations["sync_my_subscription_me_billing_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -417,6 +438,7 @@ export interface components {
             plan: components["schemas"]["Plan"];
             plan_source: components["schemas"]["PlanSource"];
             limits: components["schemas"]["PlanLimitsOut"];
+            subscription?: components["schemas"]["SubscriptionOut"] | null;
             /** Jobs This Month */
             jobs_this_month: number;
             /** Jobs Per Month */
@@ -454,7 +476,7 @@ export interface components {
          * @description Why the user has their plan.
          * @enum {string}
          */
-        PlanSource: "default" | "admin";
+        PlanSource: "default" | "admin" | "store";
         /** PresignedRequestOut */
         PresignedRequestOut: {
             /** Method */
@@ -503,6 +525,29 @@ export interface components {
          * @enum {string}
          */
         StageStatus: "queued" | "running" | "succeeded" | "skipped" | "failed" | "cached";
+        /**
+         * SubscriptionOut
+         * @description The user's latest Pro subscription, for the Account screen. Changes go through the store
+         *     (the app links to its subscription settings), never through this API.
+         */
+        SubscriptionOut: {
+            /** Store */
+            store: string;
+            /** Product Id */
+            product_id: string;
+            /** Active */
+            active: boolean;
+            /** In Trial */
+            in_trial: boolean;
+            /** Expires At */
+            expires_at: string | null;
+            /** Will Renew */
+            will_renew: boolean;
+            /** Billing Issue */
+            billing_issue: boolean;
+            /** Refunded */
+            refunded: boolean;
+        };
         /**
          * Tuning
          * @enum {string}
@@ -957,6 +1002,24 @@ export interface operations {
         };
     };
     delete_account_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sync_my_subscription_me_billing_sync_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 import redis
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import Engine
 
 from api.auth import AuthSettings, TokenVerifier, get_token_verifier, issue_dev_token
@@ -21,10 +22,11 @@ from api.deps import (
 from api.limits import Limiter
 from api.main import app
 from api.settings import ApiSettings
-from tabscribe_platform.db import make_session_factory
+from tabscribe_platform.db import BillingEnvironment, make_session_factory
 from tabscribe_platform.jobqueue import RedisJobQueue
 from tabscribe_platform.storage import ObjectStore
 
+WEBHOOK_SECRET = "test-webhook-secret"
 AUTH = AuthSettings(issuer="https://test", dev_secret="test-secret-that-is-at-least-32-chars")
 LIMITS = ApiSettings(
     max_upload_bytes=1000,
@@ -33,6 +35,8 @@ LIMITS = ApiSettings(
     pro_jobs_per_month=4,
     job_creates_per_minute=10,
     require_terms=False,
+    revenuecat_webhook_secret=SecretStr(WEBHOOK_SECRET),
+    billing_environment=BillingEnvironment.SANDBOX,
 )
 NEW_JOB = {"instrument": "guitar", "content_type": "audio/mp4", "size_bytes": 10}
 
