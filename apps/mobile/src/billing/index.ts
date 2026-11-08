@@ -24,33 +24,46 @@ export type ProOption = {
   pkg: PurchasesPackage;
 };
 
-let configuredFor: string | null | undefined; // undefined: not configured yet
+// The account RevenueCat should act for: the signed-in Clerk user, or null when signed out.
+let currentUser: string | null = null;
 
 /** Whether this build can sell Pro (it has RevenueCat's key for this platform). */
 export function billingAvailable(): boolean {
   return revenueCatKey() !== null;
 }
 
-/** Connect RevenueCat to the signed-in user. Safe to call on every render of the session. */
-export async function startBilling(userId: string): Promise<void> {
+/**
+ * Make sure RevenueCat acts for the current user. The native SDK outlives JavaScript reloads
+ * and can be configured already, possibly as an anonymous user; a purchase made then would be
+ * an anonymous customer's, which the server can't match to the account.
+ */
+async function ensureUser(): Promise<void> {
   const apiKey = revenueCatKey();
-  if (!apiKey || configuredFor === userId) {
+  if (!apiKey || !currentUser) {
     return;
   }
-  if (configuredFor === undefined) {
-    Purchases.configure({ apiKey, appUserID: userId });
-  } else {
-    await Purchases.logIn(userId);
+  if (!(await Purchases.isConfigured())) {
+    Purchases.configure({ apiKey, appUserID: currentUser });
+    return;
   }
-  configuredFor = userId;
+  if ((await Purchases.getAppUserID()) !== currentUser) {
+    await Purchases.logIn(currentUser);
+  }
+}
+
+/** Connect RevenueCat to the signed-in user. Safe to call on every render of the session. */
+export async function startBilling(userId: string): Promise<void> {
+  currentUser = userId;
+  await ensureUser();
 }
 
 /** Disconnect the user (sign-out, account deletion): the next user starts clean. */
 export async function stopBilling(): Promise<void> {
-  if (!configuredFor) {
+  const wasSignedIn = currentUser !== null;
+  currentUser = null;
+  if (!wasSignedIn || !revenueCatKey() || !(await Purchases.isConfigured())) {
     return;
   }
-  configuredFor = null;
   try {
     await Purchases.logOut();
   } catch {
@@ -70,6 +83,7 @@ function trialText(pkg: PurchasesPackage): string | null {
 
 /** The current offering's monthly and yearly options; empty if the store has none. */
 export async function proOptions(): Promise<ProOption[]> {
+  await ensureUser();
   const offering = (await Purchases.getOfferings()).current;
   const options: ProOption[] = [];
   for (const pkg of offering?.availablePackages ?? []) {
@@ -100,6 +114,7 @@ function cancelled(error: unknown): boolean {
 
 /** Buy an option in the store's own sheet. False if the user cancelled it. */
 export async function buy(option: ProOption): Promise<boolean> {
+  await ensureUser(); // the purchase must belong to the account, never an anonymous customer
   try {
     await Purchases.purchasePackage(option.pkg);
     return true;
@@ -113,6 +128,7 @@ export async function buy(option: ProOption): Promise<boolean> {
 
 /** Restore Purchases: re-attach the store account's subscriptions to this user. */
 export async function restore(): Promise<void> {
+  await ensureUser();
   await Purchases.restorePurchases();
 }
 

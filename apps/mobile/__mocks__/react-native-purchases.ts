@@ -4,6 +4,8 @@ export const PACKAGE_TYPE = { MONTHLY: 'MONTHLY', ANNUAL: 'ANNUAL', WEEKLY: 'WEE
 
 const Purchases = {
   configure: jest.fn(),
+  isConfigured: jest.fn(async () => false),
+  getAppUserID: jest.fn(async () => '$RCAnonymousID:test'),
   logIn: jest.fn(async () => ({ customerInfo: {}, created: false })),
   logOut: jest.fn(async () => ({})),
   getOfferings: jest.fn(async () => ({ current: null, all: {} })),
