@@ -2,7 +2,9 @@
 Store require deletion in the app).
 
 `DELETE /me` removes everything the user has here (their transcriptions, score versions, push
-tokens and every stored file) and then their Clerk sign-in. It is safe to repeat: if Clerk
+tokens, subscription records and every stored file), then their RevenueCat customer and their
+Clerk sign-in. A store subscription keeps billing until it is cancelled in the store; the app
+says so before deleting. It is safe to repeat: if Clerk
 can't be reached, the app calls it again and only the Clerk step is left to do.
 """
 
@@ -18,9 +20,10 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from api.auth import CurrentUserDep
+from api.billing import CustomersDep
 from api.deps import ApiSettingsDep, SessionDep, StoreDep
 from api.schemas import AcceptTermsRequest
-from tabscribe_platform.db import AdminAction, User
+from tabscribe_platform.db import AdminAction, BillingEvent, User
 from tabscribe_platform.storage import user_prefix
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -61,13 +64,19 @@ def accept_terms(body: AcceptTermsRequest, user: CurrentUserDep, session: Sessio
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(
-    user: CurrentUserDep, session: SessionDep, store: StoreDep, settings: ApiSettingsDep
+    user: CurrentUserDep,
+    session: SessionDep,
+    store: StoreDep,
+    settings: ApiSettingsDep,
+    customers: CustomersDep,
 ) -> None:
-    # The database first (jobs, versions and push tokens cascade from the user), then files: a
-    # failure afterwards can leave unreachable files, never a user without theirs. Admin actions
-    # about the user go too: the privacy policy promises everything is deleted.
+    # The database first (jobs, versions, push tokens and subscriptions cascade from the user),
+    # then files: a failure afterwards can leave unreachable files, never a user without theirs.
+    # Admin actions and billing events about the user go too: the privacy policy promises
+    # everything is deleted.
     session.execute(delete(User).where(User.id == user.id))
     session.execute(delete(AdminAction).where(AdminAction.target_user_id == user.id))
+    session.execute(delete(BillingEvent).where(BillingEvent.user_ids.contains([user.id])))
     session.commit()
     try:
         removed = store.delete_prefix(user_prefix(user.id))
@@ -75,6 +84,16 @@ def delete_account(
         logger.exception("could not delete the account's files")
         removed = -1
     logger.info("account data deleted", extra={"objects": removed})
+
+    if customers is not None:  # the purchase history RevenueCat keeps for us
+        try:
+            customers.delete(user.id)
+        except Exception as exc:
+            logger.exception("could not delete the RevenueCat customer")
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                "your data is deleted, but removing your purchase history failed; try again",
+            ) from exc
 
     if settings.clerk_secret_key is None:  # local runs and tests: no Clerk account to delete
         return

@@ -73,7 +73,7 @@ def db(db_engine: Engine) -> Iterator[Engine]:
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE users, jobs, stage_runs, score_versions, result_cache, admin_actions"
-                " CASCADE"
+                "TRUNCATE users, jobs, stage_runs, score_versions, result_cache, admin_actions,"
+                " subscriptions, billing_events CASCADE"
             )
         )

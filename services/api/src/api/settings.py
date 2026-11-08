@@ -1,6 +1,8 @@
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from tabscribe_platform.db import BillingEnvironment
+
 
 class ApiSettings(BaseSettings):
     """API-only limits, from environment variables. Shared settings are `tabscribe_platform`'s."""
@@ -25,6 +27,18 @@ class ApiSettings(BaseSettings):
     # Uploading needs the current terms accepted (PUT /me/terms). Off only in unit tests that
     # aren't about terms.
     require_terms: bool = True
+    # Store subscriptions through RevenueCat (ADR-0016, `api.billing`). Both secrets unset:
+    # billing is off (the webhook answers 404). The secret API key (sk_..., RevenueCat >
+    # Project settings > API keys) reads customers; the webhook secret is what RevenueCat sends
+    # in the Authorization header.
+    revenuecat_secret_api_key: SecretStr | None = None
+    revenuecat_webhook_secret: SecretStr | None = None
+    # Which purchases count here: staging takes the stores' test purchases (sandbox), production
+    # only real ones. Production by default, so a forgotten setting never makes test purchases
+    # unlock Pro for free.
+    billing_environment: BillingEnvironment = BillingEnvironment.PRODUCTION
+    # The RevenueCat entitlement that means Pro.
+    revenuecat_entitlement: str = "pro"
     # Who may use the admin section (/admin): Clerk user IDs, comma-separated. Empty: nobody.
     admin_user_ids: str = ""
 

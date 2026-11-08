@@ -637,6 +637,27 @@
         ]
       }
     },
+    "/me/billing/sync": {
+      "post": {
+        "tags": [
+          "billing",
+          "me"
+        ],
+        "summary": "Sync My Subscription",
+        "description": "Re-read the caller's subscriptions from RevenueCat, after a purchase or a restore in the\napp. `GET /me` then shows the plan.",
+        "operationId": "sync_my_subscription_me_billing_sync_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "summary": "Healthz",
@@ -1149,6 +1170,16 @@
           "limits": {
             "$ref": "#/components/schemas/PlanLimitsOut"
           },
+          "subscription": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubscriptionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "jobs_this_month": {
             "type": "integer",
             "title": "Jobs This Month"
@@ -1229,7 +1260,8 @@
         "type": "string",
         "enum": [
           "default",
-          "admin"
+          "admin",
+          "store"
         ],
         "title": "PlanSource",
         "description": "Why the user has their plan."
@@ -1370,6 +1402,63 @@
           "cached"
         ],
         "title": "StageStatus"
+      },
+      "SubscriptionOut": {
+        "properties": {
+          "store": {
+            "type": "string",
+            "title": "Store"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "in_trial": {
+            "type": "boolean",
+            "title": "In Trial"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "will_renew": {
+            "type": "boolean",
+            "title": "Will Renew"
+          },
+          "billing_issue": {
+            "type": "boolean",
+            "title": "Billing Issue"
+          },
+          "refunded": {
+            "type": "boolean",
+            "title": "Refunded"
+          }
+        },
+        "type": "object",
+        "required": [
+          "store",
+          "product_id",
+          "active",
+          "in_trial",
+          "expires_at",
+          "will_renew",
+          "billing_issue",
+          "refunded"
+        ],
+        "title": "SubscriptionOut",
+        "description": "The user's latest Pro subscription, for the Account screen. Changes go through the store\n(the app links to its subscription settings), never through this API."
       },
       "Tuning": {
         "type": "string",

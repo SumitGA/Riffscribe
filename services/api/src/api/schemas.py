@@ -145,13 +145,33 @@ class PlanLimitsOut(BaseModel):
     priority: bool  # jobs go ahead of free ones in the queue
 
 
+class SubscriptionOut(BaseModel):
+    """The user's latest Pro subscription, for the Account screen. Changes go through the store
+    (the app links to its subscription settings), never through this API."""
+
+    store: str  # app_store, play_store or promotional (Pro granted by us)
+    product_id: str
+    active: bool  # it gives Pro now
+    in_trial: bool
+    # When the paid period ends: the renewal date, or the end date if it won't renew. None:
+    # never ends.
+    expires_at: datetime | None
+    will_renew: bool
+    # A renewal payment failed. While `active`, the store is still retrying (grace period); the
+    # user should update their payment method in the store.
+    billing_issue: bool
+    refunded: bool
+
+
 class MeOut(BaseModel):
     user_id: str
     plan: Plan
-    # Why the user has it: `default` (free, nobody changed it) or `admin` (set in the admin
-    # section). Store subscriptions will add their own values.
+    # Why the user has it: `default` (free, nobody changed it), `admin` (set in the admin
+    # section) or `store` (a store subscription).
     plan_source: PlanSource
     limits: PlanLimitsOut
+    # The latest Pro subscription, also after it ended; None if the user never had one.
+    subscription: SubscriptionOut | None = None
     jobs_this_month: int
     # Kept for app builds from before `limits`: the plan's monthly limit, or the free one for
     # plans without a limit (those apps don't show a count for unlimited).
