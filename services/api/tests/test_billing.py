@@ -55,7 +55,7 @@ PRO_MONTHLY = StoreSubscription(
     environment=BillingEnvironment.SANDBOX,
     store="app_store",
     product_id="pro_monthly",
-    entitlement="pro",
+    entitlement="riffscribe_pro",
     period_type="normal",
     purchased_at=NOW - timedelta(days=1),
     original_purchased_at=NOW - timedelta(days=1),
@@ -93,7 +93,7 @@ def send(
         "original_app_user_id": user_id,
         "store": "APP_STORE",
         "product_id": "pro_monthly",
-        "entitlement_ids": ["pro"],
+        "entitlement_ids": ["riffscribe_pro"],
         "event_timestamp_ms": int(NOW.timestamp() * 1000),
         "price": 4.99,
         "currency": "AUD",
@@ -351,3 +351,13 @@ def test_an_empty_secret_never_matches(api: TestClient, customers: FakeCustomers
         headers={"Authorization": "Bearer "},
     )
     assert response.status_code == 404  # billing off, not "secret matches"
+
+
+def test_another_entitlement_isnt_pro(
+    api: TestClient, db: Engine, alice: str, customers: FakeCustomers
+) -> None:
+    known_user(db, alice)
+    customers.owned[alice] = [replace(PRO_MONTHLY, entitlement="pro_legacy")]
+    send(api, alice)
+    body = me(api, alice)
+    assert body["plan"] == "free" and body["subscription"] is None

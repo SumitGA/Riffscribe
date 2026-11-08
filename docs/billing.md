@@ -36,6 +36,12 @@ store; the app says so before deleting.
 
 Menu names as of RevenueCat's November 2026 dashboard.
 
+Once per RevenueCat project (staging and production share it): the entitlement
+`riffscribe_pro` (the API's `REVENUECAT_ENTITLEMENT`; RevenueCat can't rename an entitlement)
+with every Pro product attached, and the offering `default` (current) with a Monthly and an
+Annual package. Each package has a product slot per store: fill the **App Store** and **Play
+Store** slots, not only the Test Store one RevenueCat fills in a new project.
+
 1. **Secret API key**: RevenueCat > **Project settings > API keys > + New secret API key**,
    name `riffscribe-api-staging` (or `-prod`), API version v1. Copy the `sk_...` key.
 2. **Webhook secret**: on your Mac, `openssl rand -hex 32`. Use a different one for staging and
