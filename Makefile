@@ -121,11 +121,14 @@ api-types: ## Regenerate the app's API types from the API's OpenAPI schema (afte
 	uv run --quiet python -m api.openapi $(MOBILE_DIR)/src/api/openapi.json
 	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false
 
-mobile-check: ## App: API types and licence notices current, store builds' fingerprints unchanged (TD-38), TypeScript, ESLint + Prettier, Jest, iOS + Android bundle
+mobile-check: ## App: API types and licence notices current, TypeScript, ESLint + Prettier, Jest, iOS + Android bundle, store builds' fingerprints unchanged (TD-38)
+	# The fingerprint check runs last: it fails on purpose for a native change until the new store
+	# builds are live, and everything else should still be checked meanwhile.
 	cd $(MOBILE_DIR) && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts --default-non-nullable false --check \
-		&& node scripts/licenses.js --check && node scripts/store-runtimes.js \
+		&& node scripts/licenses.js --check \
 		&& npx tsc --noEmit && CI=1 npx expo lint && npx jest --ci \
-		&& CI=1 npx expo export --platform ios --platform android --output-dir dist >/dev/null
+		&& CI=1 npx expo export --platform ios --platform android --output-dir dist >/dev/null \
+		&& node scripts/store-runtimes.js
 
 # App releases go to Android and iOS together (TD-43, docs/releasing.md).
 mobile-update: ## Over-the-air update to the production apps, Android and iOS together: MESSAGE="what changed"
