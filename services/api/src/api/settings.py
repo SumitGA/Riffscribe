@@ -1,4 +1,4 @@
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from tabscribe_platform.db import BillingEnvironment
@@ -41,6 +41,19 @@ class ApiSettings(BaseSettings):
     revenuecat_entitlement: str = "pro"
     # Who may use the admin section (/admin): Clerk user IDs, comma-separated. Empty: nobody.
     admin_user_ids: str = ""
+
+    @field_validator(
+        "clerk_secret_key", "revenuecat_secret_api_key", "revenuecat_webhook_secret", mode="before"
+    )
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        # compose passes an unset variable as "" (`${X:-}`); that must mean "not configured",
+        # never a secret that is the empty string.
+        if isinstance(value, str | SecretStr):
+            raw = value.get_secret_value() if isinstance(value, SecretStr) else value
+            if not raw.strip():
+                return None
+        return value
 
     @property
     def admins(self) -> frozenset[str]:

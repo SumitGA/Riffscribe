@@ -338,3 +338,16 @@ def test_deleting_the_account_removes_the_billing_records(
         assert session.scalars(select(Subscription)).all() == []
         assert [e.user_ids for e in session.scalars(select(BillingEvent))] == [["someone-else"]]
     assert customers.deleted == [alice]
+
+
+def test_an_empty_secret_never_matches(api: TestClient, customers: FakeCustomers) -> None:
+    from api.deps import get_api_settings
+    from api.settings import ApiSettings
+
+    app.dependency_overrides[get_api_settings] = lambda: ApiSettings(revenuecat_webhook_secret="")
+    response = api.post(
+        "/billing/revenuecat",
+        json={"event": {"id": "e1", "type": "TEST"}},
+        headers={"Authorization": "Bearer "},
+    )
+    assert response.status_code == 404  # billing off, not "secret matches"
