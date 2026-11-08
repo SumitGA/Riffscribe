@@ -1,26 +1,45 @@
 import { useClerk, useUser } from '@clerk/expo';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApi } from '@/api/provider';
 import { forgetAllTakes } from '@/audio/takes';
+import {
+  billingAvailable,
+  manageSubscription,
+  restore,
+  STORE_ACCOUNT,
+  STORE_NAME,
+  stopBilling,
+} from '@/billing';
+import {
+  hasMonthlyLimit,
+  maxClipSeconds,
+  minutes,
+  monthlyLimit,
+  planName,
+  subscriptionLine,
+} from '@/billing/plan';
 import { deviceInfo, FEEDBACK_EMAIL, feedbackMailto } from '@/feedback';
 import { disablePush, enablePush, pushState, turnOffPush } from '@/push';
 import { colors, fonts, space } from '@/theme';
 import { Button, Card, ProgressBar, Row, Text, Toggle } from '@/ui';
 
-/** Who's signed in, this month's usage, and sign out. */
+/** Who's signed in, their plan and this month's usage, Pro, and sign out. */
 export default function Account() {
   const api = useApi();
   const { user } = useUser();
   const { signOut } = useClerk();
   const queryClient = useQueryClient();
   const me = useQuery({ queryKey: ['me'], queryFn: api.me });
-  const unlimited = me.data?.plan === 'unlimited';
+  const limited = hasMonthlyLimit(me.data);
+  const subscription = me.data?.subscription ?? null;
+  const fromStore = me.data?.plan_source === 'store';
+  const canUpgrade = billingAvailable() && me.data?.plan === 'free';
 
   const email = user?.primaryEmailAddress?.emailAddress;
   const name = user?.fullName || email || 'Signed in';
@@ -52,20 +71,43 @@ export default function Account() {
     onSuccess: async () => {
       forgetAllTakes();
       await disablePush(api).catch(() => {});
+      await stopBilling();
       await signOut();
       queryClient.clear();
     },
     onError: (error) => Alert.alert("Couldn't delete your account", error.message),
   });
+  // A store subscription isn't ours to cancel: it keeps billing until the user cancels it.
+  const billingWarning =
+    subscription?.will_renew && subscription.store !== 'promotional'
+      ? `\n\nYour Pro subscription keeps renewing until you cancel it in ${STORE_NAME}. Cancel it there first.`
+      : '';
   const confirmDelete = () =>
     Alert.alert(
       'Delete your account?',
-      'This permanently deletes your account, every transcription and its versions, and the recordings kept on this phone. It can’t be undone.',
+      `This permanently deletes your account, every transcription and its versions, and the recordings kept on this phone. It can’t be undone.${billingWarning}`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => deleteAccount.mutate() },
       ],
     );
+
+  // Re-attach the store account's Pro subscription (a new phone, or reinstalling the app).
+  const restorePurchases = useMutation({
+    mutationFn: async () => {
+      await restore();
+      await api.syncBilling().catch(() => {});
+      return queryClient.fetchQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 0 });
+    },
+    onSuccess: (updated) =>
+      Alert.alert(
+        updated.plan_source === 'store' ? 'Pro restored' : 'Nothing to restore',
+        updated.plan_source === 'store'
+          ? 'Your subscription is on this account again.'
+          : `No active Riffscribe Pro subscription was found for this ${STORE_ACCOUNT}.`,
+      ),
+    onError: (error) => Alert.alert('Couldn’t restore purchases', error.message),
+  });
 
   const sendFeedback = () =>
     Linking.openURL(feedbackMailto(deviceInfo())).catch(() =>
@@ -75,6 +117,7 @@ export default function Account() {
   const onSignOut = async () => {
     // Stop this device's notifications before the account changes hands.
     await disablePush(api).catch(() => {});
+    await stopBilling();
     await signOut();
     queryClient.clear(); // the next user must not see this one's cached data
   };
@@ -100,20 +143,41 @@ export default function Account() {
 
         <Card style={styles.plan}>
           <View style={styles.planRow}>
-            <Text variant="label">{unlimited ? 'Unlimited plan' : 'Free plan'}</Text>
+            <Text variant="label" testID="plan-name">
+              {planName(me.data)}
+            </Text>
           </View>
-          {!unlimited && (
-            <ProgressBar
-              fraction={me.data ? me.data.jobs_this_month / me.data.jobs_per_month : 0}
-            />
+          {limited && (
+            <ProgressBar fraction={me.data ? me.data.jobs_this_month / monthlyLimit(me.data) : 0} />
           )}
           <Text variant="muted">
             {!me.data
               ? ' '
-              : unlimited
-                ? `${me.data.jobs_this_month} transcriptions this month · no monthly limit · up to 5 min each`
-                : `${me.data.jobs_this_month} of ${me.data.jobs_per_month} transcriptions this month · up to 5 min each`}
+              : limited
+                ? `${me.data.jobs_this_month} of ${monthlyLimit(me.data)} transcriptions this month · up to ${minutes(maxClipSeconds(me.data))} each`
+                : `${me.data.jobs_this_month} transcriptions this month · no monthly limit · up to ${minutes(maxClipSeconds(me.data))} each`}
           </Text>
+          {subscriptionLine(me.data) && (
+            <Text
+              variant="muted"
+              testID="subscription"
+              style={subscription?.active && subscription.billing_issue ? styles.warning : null}
+            >
+              {subscriptionLine(me.data)}
+            </Text>
+          )}
+          {canUpgrade && <Button title="Upgrade to Pro" onPress={() => router.push('/pro')} />}
+          {fromStore && subscription?.store !== 'promotional' && (
+            <Button
+              title="Manage subscription"
+              kind="secondary"
+              onPress={() =>
+                manageSubscription().catch(() =>
+                  Alert.alert('Couldn’t open the store', `Open ${STORE_NAME} > Subscriptions.`),
+                )
+              }
+            />
+          )}
         </Card>
 
         <Card style={styles.list}>
@@ -129,6 +193,17 @@ export default function Account() {
                 />
               )}
             </Row>
+          )}
+          {billingAvailable() && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => restorePurchases.mutate()}
+              disabled={restorePurchases.isPending}
+            >
+              <Row label="Restore purchases">
+                <ChevronRight color={colors.muted} size={18} />
+              </Row>
+            </Pressable>
           )}
           <Row label="Appearance">
             <Text variant="muted">Dark</Text>
@@ -185,5 +260,6 @@ const styles = StyleSheet.create({
   profileText: { flex: 1, gap: 2 },
   plan: { gap: space.md },
   planRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  warning: { color: colors.accent },
   list: { padding: 0 },
 });

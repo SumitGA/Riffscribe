@@ -32,3 +32,18 @@ export function clerkPublishableKey(
   }
   return env;
 }
+
+/**
+ * RevenueCat's public SDK key for this platform (RevenueCat > Project settings > API keys:
+ * `appl_...` for iOS, `goog_...` for Android). Public by design, like Clerk's: it only lets the
+ * app read offerings and make purchases for the signed-in user. Unset: the app shows no Pro
+ * purchase (development builds without billing, tests).
+ */
+export function revenueCatKey(
+  os: typeof Platform.OS = Platform.OS,
+  ios: string | undefined = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
+  android: string | undefined = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY,
+): string | null {
+  const key = os === 'ios' ? ios : os === 'android' ? android : undefined;
+  return key?.trim() || null;
+}

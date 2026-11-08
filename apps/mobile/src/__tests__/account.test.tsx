@@ -11,6 +11,14 @@ import Account from '@/app/(tabs)/account';
 jest.mock('@clerk/expo', () => ({ useClerk: jest.fn(), useUser: jest.fn() }));
 jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
 jest.mock('expo-router', () => ({ Link: ({ children }: { children: ReactNode }) => children }));
+let mockCanBuy = false;
+jest.mock('@/billing', () => ({
+  ...jest.requireActual<object>('@/billing'),
+  billingAvailable: () => mockCanBuy,
+  stopBilling: jest.fn(async () => {}),
+  manageSubscription: jest.fn(async () => {}),
+}));
+let meExtra: Record<string, unknown> = {};
 jest.mock('@/push', () => ({
   pushState: jest.fn(async () => 'unavailable'),
   enablePush: jest.fn(),
@@ -21,6 +29,8 @@ const signOut = jest.fn(async () => {});
 const deleteAccount = jest.fn(async () => {});
 
 beforeEach(() => {
+  mockCanBuy = false;
+  meExtra = {};
   jest.mocked(useClerk).mockReturnValue({ signOut } as unknown as ReturnType<typeof useClerk>);
   jest.mocked(useUser).mockReturnValue({
     user: {
@@ -39,6 +49,7 @@ beforeEach(() => {
       jobs_per_month: 10,
       terms_version: '2026-10-11',
       terms_accepted: true,
+      ...meExtra,
     }),
     deleteAccount,
   } as unknown as Api);
@@ -109,5 +120,47 @@ describe('Account', () => {
   it('links to the welcome guide', async () => {
     await renderAccount();
     expect(screen.getByRole('link', { name: 'How Riffscribe works' })).toBeTruthy();
+  });
+
+  it('offers Pro on the free plan when this build can sell it', async () => {
+    await renderAccount();
+    await screen.findByText(/3 of 10 transcriptions this month · up to 5 min each/);
+    expect(screen.queryByRole('button', { name: 'Upgrade to Pro' })).toBeNull();
+    mockCanBuy = true;
+    await renderAccount();
+    expect(await screen.findByRole('button', { name: 'Upgrade to Pro' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Restore purchases' })).toBeTruthy();
+  });
+
+  it('shows a store subscription and warns before deleting the account', async () => {
+    mockCanBuy = true;
+    meExtra = {
+      plan: 'pro',
+      plan_source: 'store',
+      limits: { jobs_per_month: 100, max_clip_s: 900, max_upload_bytes: 1, priority: true },
+      jobs_per_month: 100,
+      subscription: {
+        store: 'app_store',
+        product_id: 'pro_monthly',
+        active: true,
+        in_trial: false,
+        expires_at: '2026-12-07T10:00:00Z',
+        will_renew: true,
+        billing_issue: false,
+        refunded: false,
+      },
+    };
+    const alert = jest.spyOn(Alert, 'alert');
+    await renderAccount();
+    expect(
+      await screen.findByText(/3 of 100 transcriptions this month · up to 15 min each/),
+    ).toBeTruthy();
+    expect(screen.getByTestId('plan-name')).toHaveTextContent('Pro');
+    expect(screen.getByTestId('subscription')).toHaveTextContent('Renews on 7 Dec 2026');
+    expect(screen.getByRole('button', { name: 'Manage subscription' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Upgrade to Pro' })).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete account' }));
+    expect(alert.mock.calls.at(-1)?.[1]).toMatch(/keeps renewing until you cancel it/);
   });
 });

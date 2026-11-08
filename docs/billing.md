@@ -32,6 +32,43 @@ Deleting an account removes the user's subscription rows, their billing events a
 RevenueCat customer. The store subscription keeps billing until the user cancels it in the
 store; the app says so before deleting.
 
+## The app
+
+The paywall (`apps/mobile/src/app/pro.tsx`) opens from **Account > Upgrade to Pro** and when a
+take can't be transcribed on the free plan (the month is used up, or the recording is longer
+than 5 minutes). It shows the store's prices, the auto-renewal terms both stores require, Terms
+and Privacy links and Restore Purchases. The store's own sheet takes the payment; the app then
+calls `POST /me/billing/sync` and reads `GET /me`. The Account screen shows the plan, the
+renewal or end date, a payment problem, **Manage subscription** (the store's subscription
+settings) and **Restore purchases**; deleting the account warns that a store subscription keeps
+billing until it is cancelled in the store. The app logs in to RevenueCat with the Clerk user ID
+and logs out on sign-out.
+
+The SDK is a native module: it ships in store builds (1.1.0 onwards), never over the air. A
+build without RevenueCat's public key for its platform shows no purchase. The keys
+(`appl_...`, `goog_...`, RevenueCat > Project settings > API keys) are public by design:
+
+- Local development builds: `apps/mobile/.env.local` (see `.env.example`).
+- EAS builds: once per EAS environment (`production`, and `preview` for staging builds):
+  ```
+  cd apps/mobile
+  npx eas-cli env:create --environment production --name EXPO_PUBLIC_REVENUECAT_IOS_KEY \
+    --value appl_... --visibility plaintext
+  npx eas-cli env:create --environment production --name EXPO_PUBLIC_REVENUECAT_ANDROID_KEY \
+    --value goog_... --visibility plaintext
+  ```
+
+What Pro gives is written in the app too (`src/billing/plan.ts`, TD-48): a change to Pro's
+limits changes it, and the store listings.
+
+## Store review and TestFlight on production
+
+Apple's and Google's reviewers buy with test accounts on the production app, and so does
+TestFlight. Production ignores test purchases except for the accounts in
+`BILLING_SANDBOX_USER_IDS`: before submitting a build, put the review account's Clerk user ID
+there (Clerk production dashboard > Users > the review account), and your own if you test with
+TestFlight. Never anyone else: their test purchases would unlock Pro for free.
+
 ## Setup, per environment
 
 Menu names as of RevenueCat's November 2026 dashboard.
@@ -45,6 +82,7 @@ Menu names as of RevenueCat's November 2026 dashboard.
    REVENUECAT_SECRET_API_KEY=sk_...
    REVENUECAT_WEBHOOK_SECRET=<the hex string>
    BILLING_ENVIRONMENT=sandbox        # production on the production VM
+   BILLING_SANDBOX_USER_IDS=user_...  # production only: the review account (see above)
    ```
    then `cd /srv/riffscribe/stack && docker compose up -d api`.
 4. **The webhook**: RevenueCat > **Integrations > Webhooks > + Add webhook**:
@@ -73,7 +111,7 @@ docker compose exec postgres psql -U riffscribe -c \
 |---|---|
 | `synced` | The user's subscriptions were re-read. |
 | `test` | RevenueCat's test button. |
-| `other_environment` | A sandbox event on production, or a real one on staging. Ignored. |
+| `other_environment` | A sandbox event on production (not for an account in `BILLING_SANDBOX_USER_IDS`), or a real one on staging. Ignored. |
 | `unknown_user` | No such user here (not used the app yet, or deleted). The app's sync covers it. |
 | `failed` | RevenueCat couldn't be reached (`error` says why). RevenueCat retries. |
 

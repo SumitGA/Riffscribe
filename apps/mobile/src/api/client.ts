@@ -12,6 +12,7 @@ export type JobList = Schemas['JobList'];
 export type JobStatus = Schemas['JobStatus'];
 export type JobSummary = Schemas['JobSummary'];
 export type Me = Schemas['MeOut'];
+export type Subscription = Schemas['SubscriptionOut'];
 export type PresignedRequest = Schemas['PresignedRequestOut'];
 export type Tuning = Schemas['Tuning'];
 export type ScoreVersion = Schemas['VersionOut'];
@@ -106,6 +107,8 @@ export function createApi({ baseUrl, getToken, fetch }: ApiOptions) {
     // These answer 204 No Content: success has no body to unwrap.
     /** Deletes the account and everything in it (Play / App Store requirement). */
     deleteAccount: async (): Promise<void> => ok(await client.DELETE('/me')),
+    /** After a purchase or restore: the server re-reads the store subscription, then /me shows it. */
+    syncBilling: async (): Promise<void> => ok(await client.POST('/me/billing/sync')),
     deleteJob: async (jobId: string): Promise<void> =>
       ok(await client.DELETE('/jobs/{job_id}', jobPath(jobId))),
     registerPushToken: async (token: string, platform: 'ios' | 'android'): Promise<void> =>

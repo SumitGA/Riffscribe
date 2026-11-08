@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { Instrument, Tuning } from '@/api/client';
+import { ApiError, type Instrument, type Me, type Tuning } from '@/api/client';
 import { useApi } from '@/api/provider';
 import { type AudioClip, formatDuration, formatSize } from '@/audio/clip';
 import { LevelBars } from '@/audio/LevelBars';
@@ -22,6 +22,8 @@ import { Recorder } from '@/audio/Recorder';
 import { keepTake } from '@/audio/takes';
 import { type Step, startTranscription, uploadFile } from '@/jobs/transcribe';
 import { TermsSheet } from '@/legal/TermsSheet';
+import { billingAvailable } from '@/billing';
+import { hasMonthlyLimit, maxClipSeconds, minutes, monthlyLimit } from '@/billing/plan';
 import { askForPushOnce } from '@/push';
 import { colors, fonts, radius, space } from '@/theme';
 import { Button, Card, Chip, IconButton, Row, Segmented, Text } from '@/ui';
@@ -53,6 +55,8 @@ function stepLabel(step: Step | null): string {
 
 /** New take: choose the instrument, record or import, review, then transcribe. */
 export default function NewTake() {
+  const api = useApi();
+  const me = useQuery({ queryKey: ['me'], queryFn: api.me });
   const [instrument, setInstrument] = useState<Instrument>('guitar');
   const [tuning, setTuning] = useState<Tuning>('standard');
   const [capo, setCapo] = useState(0);
@@ -107,7 +111,7 @@ export default function NewTake() {
           </View>
         )}
       </View>
-      <Recorder onRecorded={setClip} onImport={importFile} />
+      <Recorder onRecorded={setClip} onImport={importFile} maxMs={maxClipSeconds(me.data) * 1000} />
       {pickError && <Text style={styles.error}>{pickError}</Text>}
 
       <OptionSheet
@@ -128,6 +132,36 @@ export default function NewTake() {
       />
     </SafeAreaView>
   );
+}
+
+/**
+ * Why this take can't be transcribed on the user's plan, if it can't: this month's
+ * transcriptions are used up, or the recording is longer than the plan allows. Checked before
+ * uploading (from `GET /me` and the clip's length) and again from the server's answer.
+ */
+function limitReached(
+  me: Me | undefined,
+  clip: AudioClip,
+  error: Error | null,
+): { reason: 'limit' | 'length'; message: string } | null {
+  const maxS = maxClipSeconds(me);
+  const monthly =
+    (me && hasMonthlyLimit(me) && me.jobs_this_month >= monthlyLimit(me)) ||
+    (error instanceof ApiError && error.status === 429 && /monthly limit/.test(error.message));
+  if (monthly) {
+    return {
+      reason: 'limit',
+      message: `You’ve used all ${me ? monthlyLimit(me) : ''} transcriptions this month.`,
+    };
+  }
+  const tooLong = clip.durationMs !== undefined && clip.durationMs > maxS * 1000 + 1000;
+  if (tooLong || (error instanceof ApiError && error.status === 413)) {
+    return {
+      reason: 'length',
+      message: `Your plan takes recordings up to ${minutes(maxS)}. Trim it, or record a shorter take.`,
+    };
+  }
+  return null;
 }
 
 /** Listen back, name it, and send it off. */
@@ -195,9 +229,11 @@ function Review({
   const progress = playback.duration > 0 ? playback.currentTime / playback.duration : 0;
   // Unlimited plans have no count to show.
   const remaining =
-    me.data && me.data.plan !== 'unlimited'
-      ? me.data.jobs_per_month - me.data.jobs_this_month
+    me.data && hasMonthlyLimit(me.data)
+      ? Math.max(0, monthlyLimit(me.data) - me.data.jobs_this_month)
       : undefined;
+  const block = limitReached(me.data, clip, transcribe.error);
+  const offerPro = block !== null && me.data?.plan === 'free' && billingAvailable();
 
   return (
     <KeyboardAvoidingView
@@ -282,12 +318,25 @@ function Review({
         />
       )}
       <SafeAreaView edges={['bottom']} style={styles.actions}>
-        {transcribe.isError && <Text style={styles.error}>{transcribe.error.message}</Text>}
+        {block ? (
+          <Text style={styles.error} testID="limit-message">
+            {block.message}
+          </Text>
+        ) : (
+          transcribe.isError && <Text style={styles.error}>{transcribe.error.message}</Text>
+        )}
+        {offerPro && (
+          <Button
+            title="See Pro"
+            onPress={() => router.push({ pathname: '/pro', params: { reason: block.reason } })}
+          />
+        )}
         <Button
           title={transcribe.isPending ? stepLabel(step) : 'Transcribe'}
           icon={transcribe.isPending ? undefined : <ArrowRight color={colors.onAccent} size={20} />}
+          kind={offerPro ? 'secondary' : 'primary'}
           loading={transcribe.isPending}
-          disabled={transcribe.isPending}
+          disabled={transcribe.isPending || block !== null}
           onPress={() => {
             player.pause();
             if (me.data && !me.data.terms_accepted) {

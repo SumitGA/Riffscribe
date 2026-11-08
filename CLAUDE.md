@@ -5,7 +5,7 @@ Mobile app. A user uploads or records audio and gets back editable sheet music a
 - **Goal: upload a song and get tabs for the guitar parts in it** (strummed chords, lead and riffs, fingerpicking) (ADR-0009). Built in steps: **A** make solo guitar transcription good (chords, fingering, sound; current); **B** song mode (separate the guitar from a full mix); **C** several guitars in one song, distortion, techniques.
 - Until song mode ships, uploads are **solo guitar or solo piano** recordings, max 5 min (free) or 15 min (Pro).
 - **Personal use only** (ADR-0009): a transcription is private to its uploader. No public song pages, sharing links or catalogue; uploaded audio is deleted after processing; separated stems are never downloadable. Public sharing would need publisher licensing.
-- **Plans** (ADR-0016, `api/plans.py`): free (10 jobs a month, 5 min clips), Pro (100 a month, 15 min, priority queue; store subscriptions through RevenueCat: webhook and `subscriptions` table in `api/billing.py`, `docs/billing.md`; the app's paywall is being built) and unlimited (admin grant only). Limits are API settings that `GET /me` returns.
+- **Plans** (ADR-0016, `api/plans.py`): free (10 jobs a month, 5 min clips), Pro (100 a month, 15 min, priority queue; store subscriptions through RevenueCat: webhook and `subscriptions` table in `api/billing.py`, the app's paywall in `src/app/pro.tsx` and `src/billing/`, `docs/billing.md`) and unlimited (admin grant only). Limits are API settings that `GET /me` returns.
 
 ## Tech stack (defaults — ask before changing)
 - **Mobile:** Expo (React Native, TypeScript strict), expo-router, TanStack Query, alphaTab rendered in a WebView (renders both standard notation and tab).
