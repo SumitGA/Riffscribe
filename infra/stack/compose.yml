@@ -64,6 +64,8 @@ services:
       REVENUECAT_WEBHOOK_SECRET: ${REVENUECAT_WEBHOOK_SECRET:-}
       # Which purchases count: sandbox (staging, the stores' test purchases) or production.
       BILLING_ENVIRONMENT: ${BILLING_ENVIRONMENT:-production}
+      # Production: accounts whose test purchases count (the stores' review account).
+      BILLING_SANDBOX_USER_IDS: ${BILLING_SANDBOX_USER_IDS:-}
       # Trust X-Forwarded-For from Caddy, the only thing that can reach the API.
       FORWARDED_ALLOW_IPS: "*"
     depends_on: *app-depends

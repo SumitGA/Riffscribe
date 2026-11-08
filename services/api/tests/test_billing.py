@@ -351,3 +351,28 @@ def test_an_empty_secret_never_matches(api: TestClient, customers: FakeCustomers
         headers={"Authorization": "Bearer "},
     )
     assert response.status_code == 404  # billing off, not "secret matches"
+
+
+def test_production_counts_test_purchases_only_for_the_review_account(
+    api: TestClient, db: Engine, alice: str, customers: FakeCustomers
+) -> None:
+    from api.deps import get_api_settings
+
+    reviewer = f"{alice}-reviewer"
+    production = LIMITS.model_copy(
+        update={
+            "billing_environment": BillingEnvironment.PRODUCTION,
+            "billing_sandbox_user_ids": f" {reviewer} ,other",
+        }
+    )
+    app.dependency_overrides[get_api_settings] = lambda: production
+    known_user(db, alice)
+    known_user(db, reviewer)
+    customers.owned = {alice: [PRO_MONTHLY], reviewer: [PRO_MONTHLY]}  # both sandbox
+
+    assert send(api, alice).json() == {"outcome": "other_environment"}
+    assert send(api, reviewer).json() == {"outcome": "synced"}
+    assert me(api, reviewer)["plan"] == "pro"
+    # Even synced by the app, Alice's test purchase gives nothing on production.
+    api.post("/me/billing/sync", headers=auth(alice))
+    assert me(api, alice)["plan"] == "free"
