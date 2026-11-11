@@ -41,8 +41,9 @@ class ApiSettings(BaseSettings):
     # stores' reviewers buy with sandbox accounts on the production app, and so do TestFlight
     # testers; list the review account (and your own) here, nobody else.
     billing_sandbox_user_ids: str = ""
-    # The RevenueCat entitlement that means Pro.
-    revenuecat_entitlement: str = "pro"
+    # The RevenueCat entitlement that means Pro (its identifier in RevenueCat, which can't be
+    # renamed there).
+    revenuecat_entitlement: str = "riffscribe_pro"
     # Who may use the admin section (/admin): Clerk user IDs, comma-separated. Empty: nobody.
     admin_user_ids: str = ""
 
