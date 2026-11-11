@@ -12,7 +12,8 @@ code and the same version number on both.
 | App, JavaScript only (screens, logic, assets) | Over-the-air update to both apps: `make mobile-update MESSAGE="..."` | None |
 | App, native (a native package, a config plugin, anything in `app.json`, an Expo upgrade) | New store builds for both: `make mobile-release VERSION=x.y.z`, then submit to both stores | Google and Apple |
 
-`make mobile-check` (and CI) tells the last two apart. It fails when the code's native
+`make mobile-fingerprint` (part of `make mobile-check`, and CI's `fingerprint` job) tells the
+last two apart. It fails when the code's native
 fingerprint for either platform no longer matches the build in its store
 (`apps/mobile/store-runtimes.txt`, TD-38). Green means JavaScript only: an over-the-air update
 reaches everyone. Red means a native change: it needs new store builds.
@@ -45,7 +46,8 @@ Rolling back: `npx eas-cli update:republish` the previous update group (both pla
 
 1. Bump `expo.version` in `apps/mobile/app.json` in the PR with the native change (1.0.0 to
    1.1.0 for features, 1.0.1 for fixes). Build numbers go up by themselves (EAS, remote).
-2. Merge; CI fails the fingerprint check on purpose until the new builds are live.
+2. Merge; CI's `fingerprint` job fails on purpose until the new builds are live. The server
+   images don't wait for it, so server releases carry on meanwhile.
 3. `make mobile-release VERSION=x.y.z`: one EAS build for Android (AAB) and one for iOS.
 4. Submit both: `npx eas-cli submit --platform all --latest` from `apps/mobile`, or upload
    by hand (Play Console: production release with notes; App Store Connect: new version,
