@@ -56,6 +56,7 @@ Formal decisions are in [`docs/adr/`](../adr/). This file is the plain-language 
 | [TD-46](#td-46-plan-limits-are-fixed-when-a-job-is-submitted) | Plan limits are fixed when a job is submitted | Backend / billing | Users complain after upgrading with a job waiting |
 | [TD-47](#td-47-subscriptions-through-revenuecat-copied-into-our-database) | Subscriptions through RevenueCat, copied into our database | Backend / billing | Revenue passes RevenueCat's free tier, or an outage blocks purchases |
 | [TD-48](#td-48-pros-benefits-written-into-the-app) | Pro's benefits written into the app | Mobile / billing | Pro's limits change, or several paid plans |
+| [TD-49](#td-49-android-purchases-released-without-a-sandbox-test) | Android purchases released without a sandbox test | Mobile / billing | The first real Android purchase, or any Google Play billing change |
 
 ---
 
@@ -1523,3 +1524,30 @@ plan (the Account screen, the recording limit, the monthly count) still comes fr
 
 **When to revisit.** If Pro's limits change, or there is more than one paid plan: add
 `GET /plans` (each plan's limits, from the same settings) and build the list from it.
+
+## TD-49: Android purchases released without a sandbox test
+
+**Concept.** Both stores have test purchases: Apple's sandbox testers and Google Play's license
+testers buy without being charged, and a month lasts a few minutes, so a whole subscription
+(buy, renew, cancel, expire) can be watched end to end against staging before release.
+
+**What we did.** iOS was tested that way on staging (2026-11-08). Android 1.1.0 was released
+with the unit tests only: Play Console didn't show the License testing page on our account, so
+no Google Play test purchase was made. The Google side was set up and checked piece by piece
+instead: the Play products (`pro` with base plans `monthly` and `yearly`), RevenueCat's service
+account credentials, its real-time notifications (Google's test notification arrived), and the
+products attached to the `riffscribe_pro` entitlement and the `default` offering. The server
+code is the same for both stores, and its tests cover Play's `pro:monthly` product IDs.
+
+**Pros**
+- Ships both platforms together (TD-43) without waiting on a Play Console setting we couldn't
+  find.
+
+**Cons**
+- The first real Android purchase is the first end-to-end test. If something in the Google
+  chain is wrong, a paying user may not get Pro until it's fixed (the store still charges them).
+
+**When to revisit.** Right after Android 1.1.0 is live: buy Pro on Android ourselves (refund it
+in Play Console afterwards) and watch it reach production (`billing_events`, `GET /me`). Do the
+full sandbox run before any change to Google Play billing.
+

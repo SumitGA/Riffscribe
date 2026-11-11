@@ -1,8 +1,8 @@
 # ADR-0016: Billing: plans, limits and store subscriptions
 
 - Status: accepted (plans and limits, 2026-11-07; the webhook and subscription tables,
-  2026-11-07; the app's paywall, 2026-11-08); the admin billing area and legal changes are built
-  in later steps
+  2026-11-07; the app's paywall, 2026-11-08; terms v2 and the privacy policy, 2026-11-11); the
+  admin billing area is built in a later step
 - Date: 2026-11-07
 
 ## Context
@@ -85,6 +85,10 @@ Decisions taken with the operator on 2026-11-07:
 - **Legal:** terms v2 (subscriptions, auto-renewal, cancelling, refunds, the Australian Consumer
   Law), the privacy policy (purchase history, RevenueCat as a processor), the App Store privacy
   label (Purchases) and Google Play's Data safety form (Purchase history).
+  Built: `infra/site/terms.html` (version 2026-11-11, so every user accepts it again before their
+  next upload) and `infra/site/privacy.html`. Prices at launch: A$4.99 a month, A$39.99 a year,
+  the same in both stores. Android was released after unit tests only: Google Play's sandbox
+  purchases weren't run (the iOS sandbox flow was, on staging, 2026-11-08).
 - **Testing:** webhook fixtures in the API tests; sandbox purchases (Apple sandbox testers,
   Google Play license testers) against staging, covering buying, renewing, cancelling, a failing
   card, refunds, switching monthly to yearly, restoring on a new phone, a second account on one
