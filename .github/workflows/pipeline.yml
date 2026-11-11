@@ -47,7 +47,23 @@ jobs:
           cache-dependency-path: apps/mobile/package-lock.json
       - run: npm ci
         working-directory: apps/mobile
-      - run: make mobile-check
+      - run: make mobile-test
+
+  # Red after a native change until both new store builds are live (TD-38), on purpose: it says
+  # an over-the-air update can't reach the installed apps. The images don't wait for it, so the
+  # server still deploys meanwhile.
+  fingerprint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+        working-directory: apps/mobile
+      - run: make mobile-fingerprint
 
   rust:
     runs-on: ubuntu-latest
