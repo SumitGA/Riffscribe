@@ -24,7 +24,15 @@ jest.mock('@/api/provider', () => ({ useApi: jest.fn() }));
 let termsAccepted = true;
 const acceptTerms = jest.fn(async () => {});
 jest.mock('@/push', () => ({ askForPushOnce: jest.fn(async () => {}) }));
-jest.mock('expo-router', () => ({ router: { replace: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { replace: jest.fn(), push: jest.fn() } }));
+let mockCanBuy = false;
+jest.mock('@/billing', () => ({
+  ...jest.requireActual<object>('@/billing'),
+  billingAvailable: () => mockCanBuy,
+}));
+let usedThisMonth = 3;
+let mockLongTake = false;
+const mockTake = () => (mockLongTake ? { ...take, durationMs: 6 * 60 * 1000 } : take);
 jest.mock('expo-audio', () => ({
   useAudioPlayer: () => ({ play: jest.fn(), pause: jest.fn(), seekTo: jest.fn() }),
   useAudioPlayerStatus: () => ({
@@ -40,7 +48,7 @@ jest.mock('@/audio/Recorder', () => {
   const { Pressable, Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     Recorder: ({ onRecorded }: { onRecorded: (clip: AudioClip) => void }) => (
-      <Pressable accessibilityRole="button" onPress={() => onRecorded(take)}>
+      <Pressable accessibilityRole="button" onPress={() => onRecorded(mockTake())}>
         <Text>Finish recording</Text>
       </Pressable>
     ),
@@ -51,13 +59,16 @@ jest.mock('@/jobs/transcribe', () => ({ startTranscription: jest.fn(), uploadFil
 beforeEach(() => {
   jest.clearAllMocks();
   termsAccepted = true;
+  mockCanBuy = false;
+  usedThisMonth = 3;
+  mockLongTake = false;
   jest.mocked(useApi).mockReturnValue({
     me: async () => ({
       user_id: 'u',
       plan: 'free',
       plan_source: 'default',
       limits: { jobs_per_month: 10, max_clip_s: 300, max_upload_bytes: 67108864, priority: false },
-      jobs_this_month: 3,
+      jobs_this_month: usedThisMonth,
       jobs_per_month: 10,
       terms_version: '2026-10-11',
       terms_accepted: termsAccepted,
@@ -166,5 +177,41 @@ describe('level meter', () => {
   it('keeps the peaks when shrinking a waveform', () => {
     expect(resample([0.1, 0.9, 0.2, 0.3, 0.8, 0.1], 3)).toEqual([0.9, 0.3, 0.8]);
     expect(resample([0.5], 3)).toEqual([0.5]);
+  });
+});
+
+describe('NewTake, plan limits', () => {
+  it('stops before uploading when the month is used up, and offers Pro', async () => {
+    usedThisMonth = 10;
+    mockCanBuy = true;
+    await renderNewTake();
+    await fireEvent.press(screen.getByText('Finish recording'));
+    expect(await screen.findByTestId('limit-message')).toHaveTextContent(
+      /used all 10 transcriptions this month/,
+    );
+    await fireEvent.press(screen.getByText('Transcribe'));
+    expect(startTranscription).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('See Pro'));
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/pro', params: { reason: 'limit' } });
+  });
+
+  it('says a take is too long for the plan, and offers Pro', async () => {
+    mockLongTake = true;
+    mockCanBuy = true;
+    await renderNewTake();
+    await fireEvent.press(screen.getByText('Finish recording'));
+    expect(await screen.findByTestId('limit-message')).toHaveTextContent(/up to 5 min/);
+    await fireEvent.press(screen.getByText('Transcribe'));
+    expect(startTranscription).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('See Pro'));
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/pro', params: { reason: 'length' } });
+  });
+
+  it("offers no purchase in a build that can't sell Pro", async () => {
+    usedThisMonth = 10;
+    await renderNewTake();
+    await fireEvent.press(screen.getByText('Finish recording'));
+    await screen.findByTestId('limit-message');
+    expect(screen.queryByText('See Pro')).toBeNull();
   });
 });

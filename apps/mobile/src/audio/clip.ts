@@ -11,7 +11,8 @@ export type AudioClip = {
   waveform?: number[];
 };
 
-/** The free tier's limit (CLAUDE.md); the server rejects longer audio, this stops sooner. */
+/** The free plan's limit (ADR-0016); the plan's own comes from `GET /me`. The server rejects
+ * longer audio, the recorder stops sooner. */
 export const MAX_RECORDING_MS = 5 * 60 * 1000;
 
 // What the API accepts (services/api AUDIO_TYPES), by file extension. The API stays the judge:

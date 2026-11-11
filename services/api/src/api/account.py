@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # The terms of use and privacy policy in force (infra/site/terms.html carries the same date).
 # Changing them means a new version here: every user accepts again before their next upload.
-TERMS_VERSION = "2026-10-11"
+TERMS_VERSION = "2026-11-11"
 TERMS_REQUIRED = "accept the terms of use before uploading"
 
 CLERK_API = "https://api.clerk.com/v1"

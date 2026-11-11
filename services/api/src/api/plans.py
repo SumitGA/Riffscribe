@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.revenuecat import PROMOTIONAL
@@ -83,18 +83,19 @@ def subscription_of(
     session: Session, user_id: str, settings: ApiSettings, *, now: datetime | None = None
 ) -> SubscriptionState | None:
     """The user's Pro subscription in this environment: an active one if any (the one lasting
-    longest), else the one that ended last. Promotional grants count in every environment."""
+    longest), else the one that ended last. Promotional grants count in every environment, and
+    test purchases count for the accounts in BILLING_SANDBOX_USER_IDS."""
     now = now or datetime.now(UTC)
-    rows = session.scalars(
-        select(Subscription).where(
-            Subscription.user_id == user_id,
-            Subscription.entitlement == settings.revenuecat_entitlement,
-            or_(
-                Subscription.environment == settings.billing_environment,
-                Subscription.store == PROMOTIONAL,
-            ),
+    rows = [
+        r
+        for r in session.scalars(
+            select(Subscription).where(
+                Subscription.user_id == user_id,
+                Subscription.entitlement == settings.revenuecat_entitlement,
+            )
         )
-    ).all()
+        if r.store == PROMOTIONAL or settings.counts(r.environment, user_id)
+    ]
     if not rows:
         return None
 

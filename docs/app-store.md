@@ -82,6 +82,15 @@ Acknowledgements). iPad screenshots aren't needed (`supportsTablet` is false).
   > tab, play it back, tap the pencil and then a note to edit it, or use the share icon to
   > export. Account deletion: Account tab > Delete account. Sign in with Apple is offered on
   > the sign-in screen.
+
+  From 1.1.0, add to the notes (and attach the in-app purchases to the version):
+  > Riffscribe Pro (auto-renewable subscription, monthly or yearly) raises the limits: 100
+  > transcriptions a month instead of 10, recordings up to 15 minutes instead of 5, and a faster
+  > queue. Account tab > Upgrade to Pro opens the paywall; Restore Purchases is on the paywall
+  > and in the Account tab.
+
+  Before submitting 1.1.0 or later, the review account's Clerk user ID must be in production's
+  `BILLING_SANDBOX_USER_IDS` (`docs/billing.md`): reviewers buy in the sandbox.
 - Contact: Sumit Gautam, `sumitga.playstore@gmail.com`
 
 ## App Privacy (nutrition label)

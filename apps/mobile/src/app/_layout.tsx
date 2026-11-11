@@ -4,9 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, router, Stack, ThemeProvider } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ApiProvider } from '@/api/provider';
+import { startBilling } from '@/billing';
 import { UpdateBanner } from '@/updates/UpdateBanner';
 import { clerkPublishableKey } from '@/config';
 import { colors, fonts } from '@/theme';
@@ -45,8 +46,15 @@ export default function RootLayout() {
 
 // Signed out, the sign-in screen is the only route; signed in, it's unreachable.
 function Screens() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   const fontsReady = useAppFonts();
+  // Purchases belong to the account: RevenueCat's user is the Clerk user (ADR-0016). Sign-out
+  // disconnects it (Account screen).
+  useEffect(() => {
+    if (userId) {
+      startBilling(userId).catch((error: unknown) => console.warn("couldn't start billing", error));
+    }
+  }, [userId]);
   if (!isLoaded || !fontsReady) {
     return null; // the splash screen stays up until the session and fonts are ready
   }
@@ -79,6 +87,18 @@ function Screens() {
         />
         <Stack.Screen name="jobs/[id]" options={{ headerTitle: '' }} />
         <Stack.Screen name="acknowledgements" options={{ headerTitle: 'Acknowledgements' }} />
+        <Stack.Screen
+          name="pro"
+          options={{
+            headerTitle: '',
+            presentation: 'modal',
+            headerLeft: () => (
+              <IconButton label="Close" onPress={() => router.back()}>
+                <X color={colors.text} size={22} />
+              </IconButton>
+            ),
+          }}
+        />
         <Stack.Screen
           name="welcome"
           options={{ headerShown: false, presentation: 'fullScreenModal' }}

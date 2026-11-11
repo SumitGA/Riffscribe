@@ -1,7 +1,8 @@
 # ADR-0016: Billing: plans, limits and store subscriptions
 
 - Status: accepted (plans and limits, 2026-11-07; the webhook and subscription tables,
-  2026-11-07); the app, admin billing area and legal changes are built in later steps
+  2026-11-07; the app's paywall, 2026-11-08; terms v2 and the privacy policy, 2026-11-11); the
+  admin billing area is built in a later step
 - Date: 2026-11-07
 
 ## Context
@@ -69,7 +70,10 @@ Decisions taken with the operator on 2026-11-07:
   `POST /me/billing/sync` after a purchase or a restore so Pro doesn't wait for the webhook;
   the webhook skips users the API doesn't know yet. Deleting an account removes its
   subscription rows, billing events and RevenueCat customer.
-- **App:** a paywall in the app's own design (store price, period, auto-renewal wording, Terms
+- **Store review:** reviewers and TestFlight buy with test accounts on the production app.
+  Production counts test purchases only for the accounts in `BILLING_SANDBOX_USER_IDS` (the
+  review account), so a review purchase unlocks Pro and nobody else's test purchase does.
+- **App** (built, `src/app/pro.tsx`, `src/billing/`; RevenueCat's SDK 10.16, MIT): a paywall in the app's own design (store price, period, auto-renewal wording, Terms
   and Privacy links, Restore Purchases), shown from the Account screen and when a free limit is
   reached; subscription status and a link to the store's subscription settings on the Account
   screen; account deletion warns that the store subscription must be cancelled in the store.
@@ -81,6 +85,10 @@ Decisions taken with the operator on 2026-11-07:
 - **Legal:** terms v2 (subscriptions, auto-renewal, cancelling, refunds, the Australian Consumer
   Law), the privacy policy (purchase history, RevenueCat as a processor), the App Store privacy
   label (Purchases) and Google Play's Data safety form (Purchase history).
+  Built: `infra/site/terms.html` (version 2026-11-11, so every user accepts it again before their
+  next upload) and `infra/site/privacy.html`. Prices at launch: A$4.99 a month, A$39.99 a year,
+  the same in both stores. Android was released after unit tests only: Google Play's sandbox
+  purchases weren't run (the iOS sandbox flow was, on staging, 2026-11-08).
 - **Testing:** webhook fixtures in the API tests; sandbox purchases (Apple sandbox testers,
   Google Play license testers) against staging, covering buying, renewing, cancelling, a failing
   card, refunds, switching monthly to yearly, restoring on a new phone, a second account on one
@@ -101,3 +109,4 @@ Decisions taken with the operator on 2026-11-07:
   monthly revenue.
 - TD-45 records the monthly cap on Pro; TD-46 records limits being fixed at submission.
 - TD-47 records relying on RevenueCat and keeping a copy of its data.
+- TD-48 records Pro's benefits being written into the app as well as the server's settings.

@@ -37,6 +37,10 @@ class ApiSettings(BaseSettings):
     # only real ones. Production by default, so a forgotten setting never makes test purchases
     # unlock Pro for free.
     billing_environment: BillingEnvironment = BillingEnvironment.PRODUCTION
+    # Production only: Clerk user IDs (comma-separated) whose test purchases count anyway. The
+    # stores' reviewers buy with sandbox accounts on the production app, and so do TestFlight
+    # testers; list the review account (and your own) here, nobody else.
+    billing_sandbox_user_ids: str = ""
     # The RevenueCat entitlement that means Pro (its identifier in RevenueCat, which can't be
     # renamed there).
     revenuecat_entitlement: str = "riffscribe_pro"
@@ -55,6 +59,16 @@ class ApiSettings(BaseSettings):
             if not raw.strip():
                 return None
         return value
+
+    @property
+    def sandbox_users(self) -> frozenset[str]:
+        return frozenset(i.strip() for i in self.billing_sandbox_user_ids.split(",") if i.strip())
+
+    def counts(self, environment: BillingEnvironment, user_id: str) -> bool:
+        """Whether a purchase from `environment` counts for this user on this server."""
+        if environment is self.billing_environment:
+            return True
+        return environment is BillingEnvironment.SANDBOX and user_id in self.sandbox_users
 
     @property
     def admins(self) -> frozenset[str]:

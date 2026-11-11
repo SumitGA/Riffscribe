@@ -9,7 +9,8 @@ late, repeated or out-of-order events can't leave a wrong state.
 purchase or a restore, so Pro doesn't wait for the webhook.
 
 Only purchases from this server's environment count (`BILLING_ENVIRONMENT`): staging takes the
-stores' test purchases, production only real ones.
+stores' test purchases, production only real ones, plus test purchases by the few accounts in
+`BILLING_SANDBOX_USER_IDS` (the stores' review account, which buys in the sandbox).
 """
 
 import hmac
@@ -29,7 +30,7 @@ from api.auth import CurrentUserDep
 from api.deps import ApiSettingsDep, LimiterDep, SessionDep
 from api.revenuecat import Customers, RevenueCat, RevenueCatError
 from api.settings import ApiSettings
-from tabscribe_platform.db import BillingEvent, Subscription, User
+from tabscribe_platform.db import BillingEnvironment, BillingEvent, Subscription, User
 
 router = APIRouter(tags=["billing"])
 logger = logging.getLogger(__name__)
@@ -100,9 +101,15 @@ def _handle(
     """Act on one event (inside the caller's transaction) and say what was done."""
     if event.type == "TEST":  # RevenueCat's "send test event" button
         return "test"
-    if event.environment.lower() != settings.billing_environment.value:
-        return "other_environment"
     ids = _user_ids(event)
+    try:
+        environment = BillingEnvironment(event.environment.lower())
+    except ValueError:
+        return "other_environment"
+    counted = [i for i in ids if settings.counts(environment, i)]
+    if ids and not counted:
+        return "other_environment"
+    ids = counted
     known = list(session.scalars(select(User.id).where(User.id.in_(ids)))) if ids else []
     if not known:
         # Nobody here yet (they haven't used the app since signing in) or the account was

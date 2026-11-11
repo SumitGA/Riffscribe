@@ -19,15 +19,17 @@ const METER_BARS = 40;
 const POLL_MS = 100;
 
 /**
- * Records from the microphone (AAC in .m4a) with a live level meter; stops by itself at the free
- * tier's limit. The meter's history becomes the clip's waveform for the review screen.
+ * Records from the microphone (AAC in .m4a) with a live level meter; stops by itself at the
+ * plan's limit (`maxMs`, the free plan's by default). The meter's history becomes the clip's waveform for the review screen.
  */
 export function Recorder({
   onRecorded,
   onImport,
+  maxMs = MAX_RECORDING_MS,
 }: {
   onRecorded: (clip: AudioClip) => void;
   onImport: () => void;
+  maxMs?: number;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -36,8 +38,10 @@ export function Recorder({
   const waveform = useRef<number[]>([]);
   const startedAt = useRef(0);
   const onRecordedRef = useRef(onRecorded);
+  const maxMsRef = useRef(maxMs);
   useEffect(() => {
     onRecordedRef.current = onRecorded;
+    maxMsRef.current = maxMs;
   });
 
   // Fires when recording ends, whether the user stopped it or it reached the limit.
@@ -55,7 +59,7 @@ export function Recorder({
           name: 'Recording.m4a',
           contentType: 'audio/mp4',
           sizeBytes: new File(status.url).size ?? 0,
-          durationMs: Math.min(Date.now() - startedAt.current, MAX_RECORDING_MS),
+          durationMs: Math.min(Date.now() - startedAt.current, maxMsRef.current),
           waveform: waveform.current,
         });
       }
@@ -90,7 +94,7 @@ export function Recorder({
     setLevels([]);
     setElapsedMs(0);
     startedAt.current = Date.now();
-    recorder.record({ forDuration: MAX_RECORDING_MS / 1000 });
+    recorder.record({ forDuration: maxMs / 1000 });
     setRecording(true);
   };
 
@@ -106,9 +110,7 @@ export function Recorder({
         <Text variant="timer" testID="recording-time">
           {formatDuration(elapsedMs)}
         </Text>
-        <Text variant="muted">
-          of {formatDuration(MAX_RECORDING_MS)} · single notes give the cleanest tab
-        </Text>
+        <Text variant="muted">of {formatDuration(maxMs)} · single notes give the cleanest tab</Text>
         <LevelBars levels={levels} count={METER_BARS} height={96} />
         {error && <Text style={styles.error}>{error}</Text>}
       </View>

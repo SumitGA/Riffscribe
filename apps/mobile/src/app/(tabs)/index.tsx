@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Instrument, JobStatus, JobSummary } from '@/api/client';
 import { useApi } from '@/api/provider';
+import { hasMonthlyLimit, monthlyLimit, planName } from '@/billing/plan';
 import { formatWhen, isFinished } from '@/jobs/status';
 import { colors, fonts, radius, space } from '@/theme';
 import { Card, Chip, ProgressBar, Text } from '@/ui';
@@ -45,7 +46,7 @@ export default function Library() {
     }
   }, []);
   const me = useQuery({ queryKey: ['me'], queryFn: api.me });
-  const unlimited = me.data?.plan === 'unlimited';
+  const unlimited = !hasMonthlyLimit(me.data);
   const jobs = useQuery({
     queryKey: ['jobs'],
     queryFn: () => api.listJobs(),
@@ -98,13 +99,13 @@ export default function Library() {
                         ? ' '
                         : unlimited
                           ? `${me.data.jobs_this_month} transcriptions this month`
-                          : `${me.data.jobs_this_month} of ${me.data.jobs_per_month} transcriptions`}
+                          : `${me.data.jobs_this_month} of ${monthlyLimit(me.data)} transcriptions`}
                     </Text>
-                    <Text variant="muted">{unlimited ? 'Unlimited plan' : 'Free plan'}</Text>
+                    <Text variant="muted">{planName(me.data)}</Text>
                   </View>
                   {!unlimited && (
                     <ProgressBar
-                      fraction={me.data ? me.data.jobs_this_month / me.data.jobs_per_month : 0}
+                      fraction={me.data ? me.data.jobs_this_month / monthlyLimit(me.data) : 0}
                     />
                   )}
                 </>
